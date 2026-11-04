@@ -23,7 +23,7 @@ import { parseDate, formatDate, formatMonth, monthStart, monthEnd } from '../dat
  * @typedef {{step:Step, messages:string[], prepared:PreparedFile[], choice:string, account:Account|null,
  *   form:MappingForm, formErrors:string[], files:MappedFile[], skip:Map<string,Set<number>>,
  *   periods:Map<string,PeriodInput>, planned:PlannedFile[], plan:ImportPlan|null,
- *   decisions:Map<string,'same'|'both'>, busy:boolean}} Flow
+ *   decisions:Map<string,'same'|'both'>, plannedAt:number, busy:boolean}} Flow
  */
 
 const NEW = 'new';
@@ -41,12 +41,20 @@ function blankForm() {
 function fresh() {
   return {
     step: 'pick', messages: [], prepared: [], choice: '', account: null, form: blankForm(), formErrors: [],
-    files: [], skip: new Map(), periods: new Map(), planned: [], plan: null, decisions: new Map(), busy: false,
+    files: [], skip: new Map(), periods: new Map(), planned: [], plan: null, decisions: new Map(), plannedAt: -1, busy: false,
   };
 }
 
 /** @type {Flow} */
 let flow = fresh();
+
+// Bumped on every store change. `flow.plannedAt` records its value when the plan was made, so
+// Import can tell that the data moved underneath the plan (the flow survives navigation).
+let changeCount = 0;
+/** @type {WeakSet<object>} */
+const watched = new WeakSet();
+
+const CHANGED_NOTE = 'Your data changed, so the summary has been updated. Check it and import again.';
 
 /** @returns {boolean} true while a pick is in progress (any step after choosing files) */
 export function importActive() {
@@ -60,6 +68,10 @@ export function importActive() {
  * @returns {void}
  */
 export function renderImport(root, app) {
+  if (!watched.has(app.store)) {
+    watched.add(app.store);
+    app.store.subscribe(() => { changeCount++; });
+  }
   const STEPS = {
     pick: renderPick, account: renderAccount, mismatch: renderMismatch, mapping: renderMapping,
     problems: renderProblems, period: renderPeriod, review: renderReview, summary: renderSummary,
@@ -634,6 +646,7 @@ function onPeriodContinue(app) {
   const account = /** @type {Account} */ (flow.account);
   flow.planned = planned;
   flow.plan = planImport(app.store.state, account, planned, app.tuning);
+  flow.plannedAt = changeCount;
   flow.decisions = new Map();
   go(app, flow.plan.totals.review > 0 ? 'review' : 'summary');
 }
@@ -715,15 +728,63 @@ function renderSummary(root, app) {
   );
 }
 
+/**
+ * The account to plan and commit against now. An existing account comes from the store, so a
+ * stale snapshot never overwrites it; if it had no mapping, it takes the form's name, currency,
+ * kind and mapping. A new account is the one built from the form.
+ * @param {App} app
+ * @returns {Account|null} null when an existing account has since been removed
+ */
+function currentAccount(app) {
+  const flowAccount = /** @type {Account} */ (flow.account);
+  if (flow.choice === NEW) return flowAccount;
+  const stored = app.store.state.accounts.find((a) => a.id === flowAccount.id);
+  if (!stored) return null;
+  if (stored.mapping) return stored;
+  const { name, currency, kind, mapping } = flowAccount;
+  return { ...stored, name, currency, kind, ...(mapping ? { mapping } : {}) };
+}
+
+/**
+ * The data changed since planning: plan again with the same files, skips and periods, keep the
+ * decisions that still apply, and show the result (Review if anything new needs a decision).
+ * @param {App} app
+ */
+function replan(app) {
+  const account = currentAccount(app);
+  if (!account) {
+    restart(app, [`The account ${flow.account?.name ?? ''} no longer exists. Nothing was imported.`]);
+    return;
+  }
+  flow.account = account;
+  flow.plan = planImport(app.store.state, account, flow.planned, app.tuning);
+  flow.plannedAt = changeCount;
+  const reviewFps = new Set(flow.plan.files.flatMap((pf) => pf.review.map((r) => r.row.fingerprint)));
+  flow.decisions = new Map([...flow.decisions].filter(([fp]) => reviewFps.has(fp)));
+  if (!flow.messages.includes(CHANGED_NOTE)) flow.messages = [...flow.messages, CHANGED_NOTE];
+  const undecided = [...reviewFps].some((fp) => !flow.decisions.has(fp));
+  go(app, undecided ? 'review' : 'summary');
+}
+
 /** @param {App} app */
 async function onImport(app) {
   if (flow.busy) return;
-  flow.busy = true;
+  if (changeCount !== flow.plannedAt) {
+    replan(app);
+    return;
+  }
   const state = app.store.state;
-  const account = /** @type {Account} */ (flow.account);
+  const account = currentAccount(app);
+  if (!account) {
+    replan(app);
+    return;
+  }
+  flow.busy = true;
   const firstEver = state.batches.length === 0;
   let changes;
   try {
+    // Synchronous from the check above to here, so nothing can change the state in between.
+    // The commit's own write bumps changeCount, but the flow restarts straight after it.
     changes = commitImport(state, account, /** @type {ImportPlan} */ (flow.plan), flow.decisions, flow.planned, new Date());
     await app.store.apply(changes);
   } finally {

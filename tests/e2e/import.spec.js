@@ -80,14 +80,16 @@ test('imports Bank A with a new mapping', async ({ page }) => {
   await expectNoAxeViolations(page);
 
   await fillMapping(page, BANK_A.new, 'bankA', { submit: false });
-  await expect(preview.getByRole('row').filter({ hasText: 'ACME LETTINGS' })).toContainText('-£900.00');
+  // The Amount cell of the ACME LETTINGS row, matched exactly so a sign change is caught.
+  const acmeAmount = preview.getByRole('row').filter({ hasText: 'ACME LETTINGS' }).getByRole('cell').nth(2);
+  await expect(acmeAmount).toHaveText('-£900.00');
   await expect(preview.getByRole('row')).toHaveCount(6);
   // Live: switching to a single column with the wrong sign flips the preview at once.
   await page.getByRole('radio', { name: 'One signed column' }).check();
   await page.getByLabel('Amount column').selectOption({ label: 'Debit Amount' });
-  await expect(preview.getByRole('row').filter({ hasText: 'ACME LETTINGS' })).toContainText('£900.00');
+  await expect(acmeAmount).toHaveText('£900.00');
   await page.getByLabel('Purchases are positive').check();
-  await expect(preview.getByRole('row').filter({ hasText: 'ACME LETTINGS' })).toContainText('-£900.00');
+  await expect(acmeAmount).toHaveText('-£900.00');
   expect(await overflow(page)).toBeLessThanOrEqual(0);
   await expectNoAxeViolations(page);
   await fillMapping(page, BANK_A.new, 'bankA');
@@ -342,4 +344,45 @@ test('a re-download with nothing new creates no batch', async ({ page }, testInf
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(batchRow(page, 'bank-b-2026-08-again.csv')).toHaveCount(0);
   await expect(batchRow(page, 'bank-b-2026-08.csv')).toHaveCount(1);
+});
+
+/** Batches saved in IndexedDB, read directly (the accounts list is hidden during a flow). */
+const storedBatches = (page) => page.evaluate(() => new Promise((resolve, reject) => {
+  const req = indexedDB.open('budgie');
+  req.onerror = () => reject(req.error);
+  req.onsuccess = () => {
+    const db = req.result;
+    const get = db.transaction('batches', 'readonly').objectStore('batches').getAll();
+    get.onsuccess = () => { db.close(); resolve(get.result.map((b) => ({ fileName: b.fileName, rowCount: b.rowCount }))); };
+    get.onerror = () => reject(get.error);
+  };
+}));
+
+test('re-plans when data changed after the summary', async ({ page }) => {
+  await pickFiles(page, ['bank-a-current.csv']);
+  await chooseAccount(page, BANK_A);
+  await fillMapping(page, BANK_A.new, 'bankA');
+  await confirmPeriods(page);
+  await expect(stepHeading(page, 'Summary')).toBeVisible();
+
+  // Change data through the app's own store, mid-flow: leave, dismiss Help (a settings put), come back.
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('button', { name: 'Got it' }).click();
+  await expect(page.getByRole('button', { name: 'Got it' })).toHaveCount(0);
+  await nav.getByRole('button', { name: 'Accounts' }).click();
+  await expect(stepHeading(page, 'Summary')).toBeVisible();
+
+  const rows = expected.rowCounts['bank-a-current.csv'];
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByText('Your data changed, so the summary has been updated. Check it and import again.')).toBeVisible();
+  await expect(stepHeading(page, 'Summary')).toBeVisible();
+  await expect(page.getByText(`Total: ${rows} new, 0 already imported, 0 to review`)).toBeVisible();
+  expect(await storedBatches(page)).toEqual([]);
+  await expectNoAxeViolations(page);
+
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByLabel('Choose CSV files')).toBeVisible();
+  await expect(batchRow(page, 'bank-a-current.csv')).toContainText(String(rows));
+  expect(await storedBatches(page)).toEqual([{ fileName: 'bank-a-current.csv', rowCount: rows }]);
 });
