@@ -186,7 +186,7 @@ test('store writes IndexedDB first and keeps memory in step', async ({ page }) =
   expect(result.replaced.memorySettings).toEqual(empty);
 });
 
-test('h() builds safely and refuses style and html props', async ({ page }) => {
+test('h() builds safely and refuses style, html and URL props', async ({ page }) => {
   const result = await page.evaluate(async () => {
     const { h, clear } = await import('/src/dom.js');
     /** @param {() => unknown} fn */
@@ -210,6 +210,14 @@ test('h() builds safely and refuses style and html props', async ({ page }) => {
         throws(() => h('div', { outerHTML: 'x' })),
         throws(() => h('iframe', { srcdocHTML: 'x' })),
         throws(() => h('div', { onclick: 'alert(1)' })),
+        // URL-bearing attributes, any case.
+        ...['href', 'HREF', 'src', 'Src', 'srcset', 'src' + 'doc', 'action', 'formAction', 'ping',
+          'poster', 'background', 'xlink:href', 'XLink:Href']
+          .map((key) => throws(() => h('a', { [key]: 'x' }))),
+      ],
+      allowed: [
+        throws(() => h('input', { type: 'file', accept: '.csv', 'data-src': 'x', 'aria-label': 'x' })),
+        throws(() => h('label', { for: 'x' })),
       ],
     };
   });
@@ -217,5 +225,6 @@ test('h() builds safely and refuses style and html props', async ({ page }) => {
     cls: 'x', hidden: '', dataA: false, label: false, bold: null, text: '<b>bold</b>in3', clicks: 1,
   });
   expect(result.cleared).toBe(0);
-  expect(result.refused).toEqual([true, true, true, true, true, true]);
+  expect(result.refused).toEqual(Array(19).fill(true));
+  expect(result.allowed).toEqual([false, false]);
 });

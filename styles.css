@@ -9,6 +9,7 @@
   --banner-bg: #fff4d6;
   --intro-bg: #e8f1fb;
   --focus: #0b3d91;
+  --error: #a4000f;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -65,3 +66,41 @@ h2 { margin: 0.5rem 0; font-size: 1.25rem; }
 h3 { margin: 1rem 0 0.25rem; font-size: 1.1rem; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+
+button.secondary { background: var(--surface); color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Forms */
+.field { margin: 0.75rem 0; }
+.field > label { display: block; font-weight: 600; }
+.hint { margin: 0.25rem 0 0; }
+input[type="text"], select {
+  font: inherit;
+  max-width: 100%;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+}
+input[type="text"] { width: 20rem; }
+input.short, input.date { width: 9rem; }
+input[type="file"] { max-width: 100%; }
+input[aria-invalid="true"] { border: 2px solid var(--error); }
+.choice { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; }
+.choice input { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; flex: none; }
+fieldset { border: 1px solid var(--border); border-radius: 4px; margin: 0.75rem 0; padding: 0.5rem 1rem; min-width: 0; }
+legend { font-weight: 600; padding: 0 0.25rem; overflow-wrap: anywhere; }
+.row { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.error { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
+.dropzone { border: 2px dashed var(--border); border-radius: 4px; padding: 1rem; margin: 0.5rem 0; text-align: center; }
+.dropzone.over { background: var(--intro-bg); }
+
+/* Tables */
+table { border-collapse: collapse; margin: 0.5rem 0; }
+caption { text-align: left; font-weight: 600; }
+th, td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.5rem; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.num { text-align: right; }
+.raw { white-space: pre-wrap; overflow-wrap: anywhere; }
+.scroll { overflow-x: auto; max-width: 100%; }
+.scroll th, .scroll td { white-space: nowrap; overflow-wrap: normal; }

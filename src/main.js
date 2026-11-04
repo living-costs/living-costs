@@ -8,6 +8,7 @@ import tuning from './tuning.js';
 import defaults from './default-categories.js';
 import { SCREEN_LIST, renderNav, markCurrent } from './ui/nav.js';
 import * as help from './ui/help.js';
+import * as accounts from './ui/accounts.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
 /** @typedef {{store: Store, tuning: typeof tuning, defaults: typeof defaults,
@@ -33,7 +34,7 @@ const SCREENS = {
   buckets: placeholder(label('buckets')),
   transactions: placeholder(label('transactions')),
   transfers: placeholder(label('transfers')),
-  accounts: placeholder(label('accounts')),
+  accounts: accounts.render,
   categories: placeholder(label('categories')),
   backup: placeholder(label('backup')),
 };
@@ -43,13 +44,16 @@ const navEl = /** @type {HTMLElement} */ (document.querySelector('header nav'));
 const noticesEl = /** @type {HTMLElement} */ (document.getElementById('notices'));
 
 /**
- * Show a plain error message in the notices area.
+ * Add a plain error message to the notices area, leaving other notices in place.
+ * The technical detail is secondary text.
  * @param {unknown} err
  */
 function showError(err) {
-  const message = err instanceof Error ? err.message : String(err);
-  clear(noticesEl);
-  noticesEl.append(h('p', { class: 'banner', role: 'alert' }, `Something went wrong: ${message}`));
+  const detail = err instanceof Error ? err.message : String(err);
+  noticesEl.append(h('div', { class: 'banner', role: 'alert' },
+    h('p', null, 'Something went wrong saving your changes. Nothing was saved.'),
+    h('p', { class: 'muted' }, `Details: ${detail}`),
+  ));
 }
 
 /**
@@ -122,7 +126,6 @@ function drawScreen(app) {
 }
 
 async function start() {
-  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   const store = await openStore();
   await seed(store);
   const app = createApp(store);
