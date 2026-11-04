@@ -3,6 +3,7 @@
 
 /** @import {State, Changes, Settings, Category, CategoryKind, BudgetType, Override} from './types.js' */
 import DEFAULTS from './default-categories.js';
+import { emptyState } from './changes.js';
 
 /** @typedef {{id:string,name:string,kind:CategoryKind,budgetType?:BudgetType}} Default */
 /** @typedef {{error:string}} Invalid */
@@ -62,6 +63,16 @@ export function seedDefaults(defaults, state) {
       settings: [offered(state.settings, defaults.map((d) => d.id))],
     },
   };
+}
+
+/**
+ * Everything a first visit stores, for store.replaceAll: fresh settings, and every default seeded
+ * and recorded as offered, exactly as seedDefaults does on first run.
+ * @param {Default[]} defaults
+ * @returns {Changes}
+ */
+export function firstRunChanges(defaults) {
+  return seedDefaults(defaults, emptyState());
 }
 
 /**

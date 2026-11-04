@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import {
   expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, importFiles, FIXTURE_ACCOUNTS, readStore,
 } from './helpers.js';
+import defaults from '../../src/default-categories.js';
 
 const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
 const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
@@ -263,4 +264,113 @@ test('axe passes on the Backup screen', async ({ page }) => {
   await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
   await expect(page.getByText(/^Last backup: /)).toBeVisible();
   await expectNoAxeViolations(page);
+});
+
+// --- Delete loaded data ------------------------------------------------------------------------
+
+const DELETE_CONFIRM = 'Delete all data in this browser? Save a backup first if you might want it.';
+const STORES = ['settings', 'accounts', 'batches', 'transactions', 'buckets', 'rules', 'categories', 'overrides', 'transferPairs'];
+
+/** @param {Page} page */
+const deleteButton = (page) => page.getByRole('button', { name: 'Delete loaded data', exact: true });
+
+/** Every row of every store. @param {Page} page */
+const snapshotAll = async (page) => {
+  /** @type {Record<string, unknown[]>} */
+  const all = {};
+  for (const name of STORES) all[name] = await readStore(page, name);
+  return all;
+};
+
+test('delete loaded data: declining changes nothing', async ({ page }) => {
+  await page.addInitScript(noPicker);
+  await trackCspViolations(page);
+  await page.goto('./');
+  await expect(heading(page)).toHaveText('Help');
+  await importFiles(page, { files: ['card.csv'], account: FIXTURE_ACCOUNTS.card });
+  await openScreen(page, 'Backup');
+  await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
+  await expect(page.getByText(/^Last backup: /)).toBeVisible();
+
+  await expect(page.getByRole('heading', { name: 'Delete loaded data', level: 3 })).toBeVisible();
+  await expect(page.getByText('This removes everything this app holds in this browser.', { exact: true })).toBeVisible();
+  const before = await snapshotAll(page);
+  expect(before.transactions.length).toBeGreaterThan(0);
+  expect(before.accounts.length).toBe(1);
+
+  /** @type {string[]} */
+  const dialogs = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+    await dialog.dismiss();
+  });
+  await deleteButton(page).click();
+  await expect.poll(() => dialogs.length).toBe(1);
+  expect(dialogs).toEqual([`confirm: ${DELETE_CONFIRM}`]);
+  await expect(heading(page)).toHaveText('Backup');
+  await expect(deleteButton(page)).toBeEnabled();
+  await expect(page.getByText('All data deleted.')).toHaveCount(0);
+  expect(await snapshotAll(page)).toEqual(before);
+  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
+});
+
+test('delete loaded data: accepting leaves exactly a first visit', async ({ page }) => {
+  await page.addInitScript(noPicker);
+  await trackCspViolations(page);
+  await setupFixtureApp(page);
+
+  // An override and a backup date, so every store has something to delete.
+  await openScreen(page, 'Transactions');
+  await page.getByLabel('Search transactions').fill('24/09');
+  await page.getByLabel('Counts as for AMAZON.CO.UK*115GL077M on 24/09/2026').selectOption({ label: 'Gifts' });
+  await expect.poll(async () => (await readStore(page, 'overrides')).length).toBe(1);
+  await openScreen(page, 'Backup');
+  await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
+  await expect(page.getByText(/^Last backup: /)).toBeVisible();
+  const before = await snapshotAll(page);
+  for (const name of STORES) expect(before[name].length, name).toBeGreaterThan(0);
+  expect(before.categories.length).toBeGreaterThan(defaults.length);
+
+  /** @type {string[]} */
+  const dialogs = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+    await dialog.accept();
+  });
+  await deleteButton(page).click();
+
+  await expect(heading(page)).toHaveText('Help');
+  await expect(page.getByRole('status').filter({ hasText: 'All data deleted.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Got it' })).toBeVisible();
+  expect(dialogs).toEqual([`confirm: ${DELETE_CONFIRM}`]);
+
+  /** The stores as a first visit leaves them. */
+  const expectFirstVisit = async () => {
+    const after = await snapshotAll(page);
+    for (const name of ['accounts', 'batches', 'transactions', 'buckets', 'rules', 'overrides', 'transferPairs']) {
+      expect(after[name], name).toEqual([]);
+    }
+    const categories = /** @type {{name: string, defaultId?: string, position: number}[]} */ (after.categories)
+      .toSorted((a, b) => a.position - b.position);
+    expect(categories.map((c) => c.name)).toEqual(defaults.map((d) => d.name));
+    expect(categories.map((c) => c.defaultId)).toEqual(defaults.map((d) => d.id));
+    expect(after.settings).toEqual([{
+      id: 'settings', schemaVersion: 1, offeredDefaultIds: defaults.map((d) => d.id), helpDismissed: false,
+    }]);
+  };
+  await expectFirstVisit();
+  await expect(page.locator('#defaults-notice')).toHaveCount(0);
+  await expectNoAxeViolations(page);
+
+  // In memory too: the screens show no data and no backup.
+  await openScreen(page, 'Backup');
+  await expect(page.getByText('Not backed up yet.', { exact: true })).toBeVisible();
+  await openScreen(page, 'Accounts');
+  await expect(page.getByRole('button', { name: /^Undo / })).toHaveCount(0);
+
+  // And after a reload, which must not seed the defaults a second time.
+  await page.reload();
+  await expect(heading(page)).toHaveText('Help');
+  await expectFirstVisit();
+  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
 });

@@ -1,15 +1,17 @@
-// Backup screen: save a backup file, and restore one after checking it. Restoring replaces
-// everything in this browser, after the user confirms.
+// Backup screen: save a backup file, restore one after checking it, and delete loaded data.
+// Restoring and deleting replace everything this app holds in this browser, after the user confirms.
 
 /** @import {App} from '../main.js' */
 import { h } from '../dom.js';
 import { formatLocalDate } from '../dates.js';
 import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
+import { firstRunChanges } from '../categories.js';
 import { field } from './form.js';
 import { whileSaving } from './saving.js';
 
 const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
 const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
+const DELETE_CONFIRM = 'Delete all data in this browser? Save a backup first if you might want it.';
 
 /** @type {{status: string, errors: string[]}} */
 let view = { status: '', errors: [] };
@@ -46,6 +48,13 @@ export function render(root, app) {
     h('h3', null, 'Restore'),
     h('p', null, 'Restoring replaces everything this app holds in this browser. Afterwards, add your statements again on the Accounts screen.'),
     field('Restore from backup', input),
+    h('h3', null, 'Delete loaded data'),
+    h('p', null, 'This removes everything this app holds in this browser.'),
+    h('div', { class: 'actions' },
+      h('button', {
+        type: 'button', 'data-saves': true, 'data-focus-key': 'backup-delete',
+        onClick: () => deleteAll(app, root, heading),
+      }, 'Delete loaded data')),
   );
   if (view.errors.length) {
     root.append(h('div', { class: 'banner', role: 'alert' },
@@ -164,17 +173,36 @@ function restore(app, root, input, focusTo) {
     await app.store.replaceAll(restoreChanges(result.data, app.store.state.settings));
     reset();
     app.navigate('help');
-    showRestored();
+    showNotice('Backup restored. Import your statements again to see your transactions.');
   }, focusTo);
 }
 
-/** A short success notice above the screen, with a button to dismiss it. */
-function showRestored() {
+/**
+ * After confirmation, replace everything with exactly what a first visit stores, then show Help.
+ * @param {App} app
+ * @param {HTMLElement} root
+ * @param {HTMLElement} focusTo
+ */
+function deleteAll(app, root, focusTo) {
+  return whileSaving(root, async () => {
+    if (!window.confirm(DELETE_CONFIRM)) return;
+    await app.store.replaceAll(firstRunChanges(app.defaults));
+    reset();
+    app.navigate('help');
+    showNotice('All data deleted.');
+  }, focusTo);
+}
+
+/**
+ * A short success notice above the screen, with a button to dismiss it. It replaces the last one.
+ * @param {string} text
+ */
+function showNotice(text) {
   const notices = document.getElementById('notices');
   if (!notices) return;
-  notices.querySelector('#restore-notice')?.remove();
-  const notice = h('div', { class: 'banner', role: 'status', id: 'restore-notice' },
-    h('p', null, 'Backup restored. Import your statements again to see your transactions.'),
+  notices.querySelector('#backup-notice')?.remove();
+  const notice = h('div', { class: 'banner', role: 'status', id: 'backup-notice' },
+    h('p', null, text),
     h('div', { class: 'actions' },
       h('button', { type: 'button', class: 'secondary', onClick: () => notice.remove() }, 'Dismiss')));
   notices.append(notice);

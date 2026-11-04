@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyState, applyToState } from '../../src/changes.js';
 import defaults from '../../src/default-categories.js';
 import {
-  seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults,
+  seedDefaults, firstRunChanges, pendingDefaults, acceptDefaults, dismissDefaults,
   createCategory, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
 } from '../../src/categories.js';
 
@@ -38,6 +38,22 @@ test('seeding does nothing when categories exist or anything was offered', () =>
   const ownOnly = emptyState();
   ownOnly.categories = [{ id: 'x', name: 'Mine', kind: 'spend', budgetType: 'fixed', position: 0 }];
   assert.deepEqual(seedDefaults(defaults, ownOnly), {});
+});
+
+test('first-run changes are the seeding a first visit gets, from an empty state', () => {
+  const changes = firstRunChanges(defaults);
+  assert.deepEqual(Object.keys(changes), ['put']);
+  assert.deepEqual(Object.keys(changes.put ?? {}).sort(), ['categories', 'settings']);
+  assert.deepEqual(changes.put?.settings, [{ ...emptyState().settings, offeredDefaultIds: defaults.map((d) => d.id) }]);
+  const s = emptyState();
+  applyToState(s, changes);
+  const first = seeded();
+  /** @param {{id: string}[]} list */
+  const withoutIds = (list) => list.map(({ id: _id, ...rest }) => rest);
+  assert.deepEqual(withoutIds(s.categories), withoutIds(first.categories));
+  assert.deepEqual(s.settings, first.settings);
+  assert.equal('lastBackupAt' in s.settings, false);
+  assert.equal(s.settings.helpDismissed, false);
 });
 
 test('a 26th default is pending; dismissing records it and adds nothing', () => {

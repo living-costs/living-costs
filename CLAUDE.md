@@ -71,6 +71,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Default categories from the owner-editable `src/default-categories.js`. New entries are offered once to existing users, and their choices are never overwritten
 - Monthly budget view
 - Plain JSON backup and restore
+- Delete loaded data, to start afresh
 - A simple list of uncategorised items for later updates
 
 ### Out of scope for now
