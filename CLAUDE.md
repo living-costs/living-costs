@@ -4,12 +4,15 @@ Browser-only web app that imports bank and credit card CSV statements, groups re
 
 Three users, on macOS and Chrome. Typical use: 12 months of statements from three or four accounts, then periodic updates. Keep it very simple and do not add features outside this file without asking.
 
+The approved design is `docs/superpowers/specs/2026-11-04-budgie-design.md`. It holds the detail. This file holds the rules.
+
 ## Working rules
 
 - The owner is an experienced programmer. Be direct.
 - Do not install software with brew, npm, or anything else. Explain why it is needed and ask the owner to install it.
+- Dev-only tooling is allowed and never ships: Playwright with `@axe-core/playwright`, `node:test`, and `tsc --checkJs --noEmit`. The owner runs `npm install`. Claude never does. Installs use `npm ci --ignore-scripts` from a committed lockfile.
 - Any suggested library or application must be actively maintained, or clearly flagged if not.
-- Never read, request, or commit real statements or backups. Use only made-up data. The owner tests real files in the browser, outside this repo.
+- Real statements live in `fixtures/` (gitignored). Claude may read them locally with the owner's consent, to learn formats. Nothing from them (rows, names, merchants, amounts, account numbers or filenames) goes into code, tests, docs or commits. Committed test fixtures in `tests/fixtures/` are synthetic. Never request or commit backups.
 
 ## Privacy and security rules
 
@@ -43,11 +46,13 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 
 ### Hosting
 
-- Static files on GitHub Pages: `index.html`, ES modules, one stylesheet, and no build step.
+- Hosting is the final phase. Build and check everything locally first. The dedicated origin, remote, branch protection and deploy come when the owner is ready.
+- Static files on GitHub Pages: `index.html`, ES modules under `src/`, one stylesheet, and no build step.
 - Use a dedicated origin (a custom subdomain, or a GitHub organisation hosting only this app). Project sites under one `username.github.io` share an origin and could read this app's IndexedDB.
 - Protect `main` and limit write access, because anyone who can push changes the code all users run.
 - Add real statement and backup filename patterns to `.gitignore`.
 - Add a GitHub Actions source check that fails on banned patterns, including `fetch(`, `XMLHttpRequest`, `innerHTML`, `eval(`, `http://`, and `https://`. Allow documented exceptions only, such as the CSP or test fixtures.
+- The deploy job never runs `npm`. It copies `index.html`, `styles.css` and `src/` and publishes them. Checks run in separate jobs that the deploy depends on. Third-party Actions are pinned by commit SHA.
 
 ## Scope
 
@@ -60,8 +65,10 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Text normalisation and buckets, ranked by total value
 - Manual bucket merging
 - User-assigned categories, remembered for future imports
-- Transfer and card repayment handling
-- Per-transaction overrides
+- Transfer and card repayment handling, including cards whose statements aren't imported
+- Per-transaction overrides: move to another category, or split across several categories (for example an Amazon order)
+- Amount rules: text plus an exact amount, with an expected frequency. Extra matches are flagged, not assigned
+- Default categories from the owner-editable `src/default-categories.js`. New entries are offered once to existing users, and their choices are never overwritten
 - Monthly budget view
 - Plain JSON backup and restore
 - A simple list of uncategorised items for later updates
@@ -83,14 +90,26 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Keep the raw transaction text alongside normalised values.
 - Every transaction records its import batch ID.
 
-Starting model, to be adjusted as needed:
+```
+Account        { id, name, currency, kind: bank | card | placeholder, mappingId?, repaymentBucketIds[] }
+Mapping        { id, headerSignature, dateColumn, dateFormat, descriptionColumn, typeColumn?,
+                 accountIdColumn?,
+                 amount: { single: column, signFlipped: bool } | { debit: column, credit: column } }
+Batch          { id, importId, accountId, fileName, fileHash, importedAt, rowCount, coversFrom, coversTo }
+Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currency,
+                 rawText, rawType?, bucketId }
+Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[] }
+Rule           { id, pattern, matchType, amountMinor?, expected?: { count, period: week | month | year },
+                 bucketId, normaliserVersion }
+Category       { id, name, kind: spend | income | contribution | transfer | ignore, budgetType?, defaultId? }
+Override       { fingerprint, categoryId? , splits?: [{ amountMinor, categoryId }], unusualDismissed? }
+TransferPair   { fingerprintA, fingerprintB, status: confirmed | rejected }
+Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
+```
 
-```
-Transaction  { id, accountId, batchId, date, amountMinor, currency, rawText, bucketId, categoryOverride? }
-Bucket       { id, key, displayName, categoryId?, categorySource, exampleRawTexts[] }
-Rule         { pattern, matchType, bucketId, normaliserVersion }
-Category     { id, name, kind: spend | income | transfer | ignore }
-```
+Field names may change. `src/types.js` is the current model.
+
+All windows and thresholds live in the owner-editable `src/tuning.js`. Code never hard-codes them.
 
 ### Normalisation
 
@@ -108,23 +127,25 @@ Category     { id, name, kind: spend | income | transfer | ignore }
 - For overlapping date ranges, match on account, amount, and a date window of a few days, then rank by text similarity. Ask the user about ambiguous matches and never delete automatically. Identical purchases can be genuine.
 - Changing a bucket's category applies to past transactions but preserves manual overrides.
 - Automatic suggestions never overwrite a user's choice.
+- Repayments to a card whose statements aren't imported count as spending in a '*Card* (not itemised)' category, until that card's statements are imported and the repayments are confirmed as transfer pairs.
+- Money another person pays into an account you track goes in a `contribution` category. It reduces your share of living costs and isn't income.
 
 ### Budget
 
-Budget type is set by hand on a bucket or category, with per-transaction overrides:
+Budget type is set by hand on the category only. A per-transaction override changes the category or splits the transaction, and never changes budget type.
 
 | Type | Treatment |
 |---|---|
-| Fixed monthly | Current recurring amount |
-| Variable | Median month, plus typical range |
-| Irregular or annual | Annual total divided by 12 |
-| One-off | Shown separately, outside the baseline |
+| `fixed`: Fixed monthly | Current recurring amount |
+| `variable`: Variable | Median month, plus typical range |
+| `annual`: Irregular or annual | Annual total divided by 12 |
+| `oneoff`: One-off (a category of this type) | Shown separately, outside the baseline |
 
 Exclude incomplete months from calculations.
 
 ### Backup
 
-- Back up only the work that is hard to recreate: account setup and CSV mappings, buckets, rules, categories, transfer decisions, and per-transaction overrides.
+- Back up only the work that is hard to recreate: account setup and CSV mappings, buckets, amount rules, categories and offered defaults, transfer decisions, and fingerprint-keyed overrides, including splits and flag decisions.
 - Everything else can be rebuilt by re-importing the original CSVs.
 - Use plain JSON with a schema version.
 - Save with `showSaveFilePicker()`, falling back to a normal download. Chrome may block a Google Drive folder under `~/Library/CloudStorage`, so test this on macOS.
@@ -145,6 +166,7 @@ Exclude incomplete months from calculations.
 - Check that the totals reconcile with the made-up input.
 - In DevTools, load the app, import a sample CSV, and create a backup. After the initial page load, the Network tab should show no requests.
 - Load the page, switch DevTools to offline, and confirm the app still works.
+- Every check runs locally: `npm test`, `npm run types`, `npm run banned` and `npm run e2e`, or all of them with `npm run check`.
 
 ## Needed from the owner
 

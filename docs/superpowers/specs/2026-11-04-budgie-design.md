@@ -1,7 +1,7 @@
 # Budgie design
 
 Date: 2026-11-04
-Status: draft, awaiting owner approval
+Status: approved by the owner, 2026-11-04
 
 This document builds on `CLAUDE.md`, which stays the source of truth for the privacy and security rules, CSP, hosting and verification. Where this design changes `CLAUDE.md`, the change is listed in [Changes to CLAUDE.md](#changes-to-claudemd). Updating `CLAUDE.md` to match is the first task of the plan.
 
