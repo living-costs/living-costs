@@ -4,28 +4,40 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Plain substrings, checked line by line.
 const LITERALS = [
   'XMLHttpRequest', 'WebSocket', 'EventSource', 'sendBeacon',
-  'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write',
-  'new Function', 'http://', 'https://', 'window.open',
-  'location.assign', 'location.replace', 'location.href', 'srcdoc',
-  "setAttribute('style'", 'RTCPeerConnection',
+  'innerHTML', 'outerHTML', 'insertAdjacentHTML',
+  'new Function', 'http://', 'https://',
+  'srcdoc', "setAttribute('style'", 'RTCPeerConnection',
 ];
 
-// 'fetch(' and 'eval(' are regexes (not literals) so that `fetch (x)` is caught
-// while `prefetch(` and `myeval(` are not. They keep the old labels.
+// Regexes run over the whole file (so a call split across lines is caught); \s spans
+// newlines. The reported line is the one where the match starts. The `fetch(`, `eval(`
+// and dotted names are regexes so whitespace is tolerated and `prefetch(`/`myeval(`
+// are not matched. They keep their old labels.
+// Protocol-relative = two of / or \ (browsers treat \ as / in http(s) URLs).
+const PR = String.raw`[\/\\]{2}`;
 const REGEXES = [
-  { re: /\bfetch\s*\(/, name: 'fetch(' },
-  { re: /\beval\s*\(/, name: 'eval(' },
-  { re: /\bimport\s*\(/, name: 'import(' },
-  { re: /\blocation\s*=(?![=>])/, name: 'location =' },
+  { re: /\bfetch\s*\(/g, name: 'fetch(' },
+  { re: /\beval\s*\(/g, name: 'eval(' },
+  { re: /\bimport\s*\(/g, name: 'import(' },
+  { re: /window\s*\.\s*open/g, name: 'window.open' },
+  { re: /document\s*\.\s*write/g, name: 'document.write' },
+  { re: /location\s*\.\s*assign/g, name: 'location.assign' },
+  { re: /location\s*\.\s*replace/g, name: 'location.replace' },
+  { re: /location\s*\.\s*href/g, name: 'location.href' },
+  // Bare open(): not after a word character or a dot (so indexedDB.open and foo.open pass).
+  { re: /(?<![\w$])(?<!\.\s*)open\s*\(/g, name: 'open(' },
+  { re: /navigation\s*\.\s*navigate/g, name: 'navigation.navigate' },
+  { re: /\blocation\s*\+?=(?![=>])/g, name: 'location =' },
   // CSS @import needs a following quote or url(, so JSDoc `@import {X} from` is not flagged.
-  { re: /@import\s*(["']|url\()/, name: '@import' },
-  { re: /(href|src)\s*=\s*["']?\/\//, name: 'protocol-relative URL' },
-  { re: /\burl\(\s*["']?\s*\/\//, name: 'protocol-relative URL' },
+  { re: /@import\s*(["']|url\()/gi, name: '@import' },
+  { re: new RegExp(String.raw`(href|src|srcset|ping)\s*=\s*["']?\s*${PR}`, 'gi'), name: 'protocol-relative URL' },
+  { re: new RegExp(String.raw`\burl\(\s*["']?\s*${PR}`, 'gi'), name: 'protocol-relative URL' },
   // Static imports/exports; `from` alone also covers multi-line import lists.
-  { re: /\bfrom\s*["']\/\//, name: 'protocol-relative URL' },
-  { re: /\bimport\s*["']\/\//, name: 'protocol-relative URL' },
+  { re: new RegExp(String.raw`\bfrom\s*["']\s*${PR}`, 'g'), name: 'protocol-relative URL' },
+  { re: new RegExp(String.raw`\bimport\s*["']\s*${PR}`, 'g'), name: 'protocol-relative URL' },
 ];
 
 /** Documented exceptions: {file, pattern, reason}. Empty on purpose. */
@@ -55,16 +67,28 @@ export function scan(root, exceptions = EXCEPTIONS) {
 
   const findings = [];
   for (const file of files) {
-    const lines = fs.readFileSync(path.join(root, file), 'utf8').split(/\r?\n/);
-    lines.forEach((text, i) => {
-      const hits = new Set();
-      for (const lit of LITERALS) if (text.includes(lit)) hits.add(lit);
-      for (const { re, name } of REGEXES) if (re.test(text)) hits.add(name);
-      for (const pattern of hits) {
-        if (exceptions.some((e) => e.file === file && e.pattern === pattern)) continue;
-        findings.push({ file, line: i + 1, pattern });
-      }
+    const content = fs.readFileSync(path.join(root, file), 'utf8');
+    const seen = new Set();
+    const found = [];
+    const add = (line, pattern) => {
+      const key = `${line}\0${pattern}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      if (exceptions.some((e) => e.file === file && e.pattern === pattern)) return;
+      found.push({ file, line, pattern });
+    };
+    content.split(/\r?\n/).forEach((text, i) => {
+      for (const lit of LITERALS) if (text.includes(lit)) add(i + 1, lit);
     });
+    for (const { re, name } of REGEXES) {
+      for (const m of content.matchAll(re)) {
+        let line = 1;
+        for (let k = content.indexOf('\n'); k !== -1 && k < m.index; k = content.indexOf('\n', k + 1)) line++;
+        add(line, name);
+      }
+    }
+    found.sort((x, y) => x.line - y.line);
+    findings.push(...found);
   }
   return findings;
 }
