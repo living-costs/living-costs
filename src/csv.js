@@ -32,6 +32,7 @@ export function parseCsv(text) {
   /** @type {string[]} */
   let header = [];
   let haveHeader = false;
+  let headerFailed = false;
   /** @type {{rowNumber: number, cells: string[]}[]} */
   const rows = [];
   /** @type {{rowNumber: number, message: string}[]} */
@@ -50,11 +51,18 @@ export function parseCsv(text) {
     cells.push(field);
     const blank = cells.length === 1 && cells[0] === '' && !sawQuote;
     if (!blank) {
-      if (badQuote) {
+      if (!haveHeader) {
+        haveHeader = true; // first non-blank record is the header, whatever happens
+        if (badQuote) {
+          headerFailed = true;
+          errors.push({ rowNumber, message: 'Unexpected text after closing quote' });
+        } else {
+          header = cells;
+        }
+      } else if (headerFailed) {
+        // no usable header: later records are unusable
+      } else if (badQuote) {
         errors.push({ rowNumber, message: 'Unexpected text after closing quote' });
-      } else if (!haveHeader) {
-        header = cells;
-        haveHeader = true;
       } else if (cells.length !== header.length) {
         errors.push({ rowNumber, message: `Expected ${header.length} fields, found ${cells.length}` });
       } else {

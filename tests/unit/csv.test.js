@@ -72,3 +72,17 @@ test('wrong cell count goes to errors, not rows', () => {
 test('empty input', () => {
   assert.deepEqual(parseCsv(''), { header: [], rows: [], errors: [] });
 });
+
+test('bad-quote header refuses the whole file', () => {
+  const r = parseCsv('"a"x,b\n1,2\n');
+  assert.deepEqual(r.header, []);
+  assert.deepEqual(r.rows, []);
+  assert.deepEqual(r.errors, [{ rowNumber: 1, message: 'Unexpected text after closing quote' }]);
+});
+
+test('unterminated-quote header gives empty header and an error', () => {
+  const r = parseCsv('"a,b\n1,2\n');
+  assert.deepEqual(r.header, []);
+  assert.deepEqual(r.rows, []);
+  assert.deepEqual(r.errors, [{ rowNumber: 1, message: 'Unterminated quote' }]);
+});
