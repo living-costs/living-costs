@@ -1,5 +1,5 @@
-// Transfers screen: suggested transfer pairs to confirm or reject, confirmed pairs with Undo, and
-// cards you don't import, which are placeholder accounts, with a form to add one.
+// Transfers screen: suggested transfer pairs to confirm or reject, confirmed and rejected pairs
+// with Undo, and cards you don't import, which are placeholder accounts, with a form to add one.
 //
 // A suggestion's From side is the money out and its To side the money in. Confirm all confirms
 // exactly the suggestions on screen when it is clicked, in one save. After a row's action removes
@@ -45,7 +45,14 @@ export function render(root, app) {
     h('h2', { tabindex: '-1' }, 'Transfers'),
     h('p', null, 'Money moving between your own accounts is neither spending nor income. Confirmed transfers are left out of every total.'),
     suggestedSection(app),
-    confirmedSection(app),
+    decidedSection(app, {
+      status: 'confirmed', id: 'confirmed', title: 'Confirmed transfers',
+      intro: 'Undo puts a pair back into your totals, and it may be suggested again.',
+    }),
+    decidedSection(app, {
+      status: 'rejected', id: 'rejected', title: 'Not transfers',
+      intro: 'Undo forgets that a pair is not a transfer, so it may be suggested again.',
+    }),
     cardsSection(app));
 }
 
@@ -171,16 +178,21 @@ function suggestedSection(app) {
 }
 
 /**
+ * A table of decided pairs with one status, each with an Undo button that forgets the decision.
+ * Confirmed transfers and Not transfers share it.
  * @param {App} app
+ * @param {{status: TransferPair['status'], id: string, title: string, intro: string}} opts
+ *   id: prefix for the heading id and focus key (`<id>-heading`).
  * @returns {HTMLElement}
  */
-function confirmedSection(app) {
+function decidedSection(app, { status, id, title, intro }) {
   const state = app.store.state;
-  const heading = h('h3', { id: 'confirmed-heading', tabindex: '-1', 'data-focus-key': 'confirmed-heading' }, 'Confirmed transfers');
-  const section = h('section', { 'aria-labelledby': 'confirmed-heading' }, heading);
+  const headingId = `${id}-heading`;
+  const heading = h('h3', { id: headingId, tabindex: '-1', 'data-focus-key': headingId }, title);
+  const section = h('section', { 'aria-labelledby': headingId }, heading);
   const byFingerprint = new Map(state.transactions.map((t) => [t.fingerprint, t]));
   /** @type {{pair: TransferPair, a: Transaction|undefined, b: Transaction|undefined, date: string}[]} */
-  const rows = [...state.transferPairs.values()].filter((p) => p.status === 'confirmed').map((pair) => {
+  const rows = [...state.transferPairs.values()].filter((p) => p.status === status).map((pair) => {
     const a = byFingerprint.get(pair.fingerprintA);
     const b = byFingerprint.get(pair.fingerprintB);
     return { pair, a, b, date: a?.date ?? b?.date ?? '' };
@@ -192,9 +204,9 @@ function confirmedSection(app) {
   const accounts = new Map(state.accounts.map((a) => [a.id, a.name]));
   const keys = rows.map((r) => `transfer-undo-${r.pair.key}`);
   section.append(
-    h('p', { class: 'muted' }, `${plural(rows.length, 'pair', 'pairs')}. Undo puts a pair back into your totals, and it may be suggested again.`),
-    h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': 'confirmed-heading' },
-      h('table', { 'aria-labelledby': 'confirmed-heading' },
+    h('p', { class: 'muted' }, `${plural(rows.length, 'pair', 'pairs')}. ${intro}`),
+    h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': headingId },
+      h('table', { 'aria-labelledby': headingId },
         h('thead', null, headerRow('Undo')),
         h('tbody', null, ...rows.map(({ pair, a, b }, i) => {
           const t = a ?? b;
@@ -206,7 +218,7 @@ function confirmedSection(app) {
               type: 'button', class: 'secondary', 'data-saves': true, 'data-focus-key': keys[i],
               'aria-label': `Undo ${pairWords(a, b, accounts)}`,
               onClick: () => whileSaving(row, () => app.store.apply(unpair(pair.key)),
-                byKey(section, nextFocus(keys, i, 'confirmed-heading')) ?? heading),
+                byKey(section, nextFocus(keys, i, headingId)) ?? heading),
             }, 'Undo')));
           return row;
         })))));

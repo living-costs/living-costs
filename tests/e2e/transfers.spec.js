@@ -15,6 +15,8 @@ const screenHeading = (page) => page.locator('#screen h2');
 const suggested = (page) => page.getByRole('table', { name: 'Suggested transfers' });
 /** @param {import('@playwright/test').Page} page */
 const confirmed = (page) => page.getByRole('table', { name: 'Confirmed transfers' });
+/** @param {import('@playwright/test').Page} page */
+const notTransfers = (page) => page.getByRole('table', { name: 'Not transfers' });
 /** Body rows of a table (the header row has no cells). */
 const bodyRows = (table) => table.getByRole('row').filter({ has: table.page().getByRole('cell') });
 
@@ -84,6 +86,35 @@ test('reject one', async ({ page }) => {
   await expect(bodyRows(suggested(page))).toHaveCount(expected.transferPairs - 2);
   await expect(bodyRows(suggested(page)).filter({ hasText: text ?? '' })).toHaveCount(0);
   await expect(bodyRows(confirmed(page))).toHaveCount(1);
+});
+
+test('not a transfer, then undo, suggests the pair again', async ({ page }) => {
+  const notSection = page.getByRole('region', { name: 'Not transfers', exact: true });
+  await expect(notSection.getByText('None yet.')).toBeVisible();
+  const first = bodyRows(suggested(page)).first();
+  const cells = await first.getByRole('cell').allTextContents();
+  const label = /** @type {string} */ (await first.getByRole('button', { name: /^Not a transfer/ }).getAttribute('aria-label'));
+  const words = label.replace(/^Not a transfer: /, '');
+  await first.getByRole('button', { name: /^Not a transfer/ }).click();
+  await expect(bodyRows(suggested(page))).toHaveCount(expected.transferPairs - 1);
+
+  // It is listed under Not transfers, in the same columns as Confirmed transfers.
+  await expect(bodyRows(notTransfers(page))).toHaveCount(1);
+  const row = bodyRows(notTransfers(page)).first();
+  await expect(row.getByRole('cell')).toHaveText([...cells.slice(0, 7), 'Undo']);
+  await expect(notTransfers(page).getByRole('columnheader')).toHaveText([
+    'From date', 'From account', 'From description', 'Amount', 'To date', 'To account', 'To description', 'Undo',
+  ]);
+  await expectNoAxeViolations(page);
+
+  // Undo forgets the decision, so the pair is suggested again.
+  await row.getByRole('button', { name: `Undo ${words}`, exact: true }).click();
+  await expect(notTransfers(page)).toHaveCount(0);
+  await expect(notSection.getByText('None yet.')).toBeVisible();
+  await expect(bodyRows(suggested(page))).toHaveCount(expected.transferPairs);
+  await expect(bodyRows(suggested(page)).first().getByRole('cell')).toHaveText([...cells.slice(0, 7), /Confirm/]);
+  await expect(page.getByRole('heading', { name: 'Not transfers' })).toBeFocused();
+  expect(await readStore(page, 'transferPairs')).toEqual([]);
 });
 
 test('placeholder', async ({ page }) => {
