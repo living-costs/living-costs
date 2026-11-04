@@ -1,4 +1,4 @@
-// App entry: open the store, seed defaults on first run, build the nav and route.
+// App entry: take the one-tab lock, open the store, seed defaults on first run, build the nav and route.
 
 /** @import {Store} from './store.js' */
 import { openStore } from './store.js';
@@ -165,14 +165,55 @@ async function start() {
   });
 }
 
-window.addEventListener('unhandledrejection', (event) => showError(event.reason));
-window.addEventListener('error', (event) => showError(event.error ?? event.message));
-
-start().catch((err) => {
+/**
+ * Show that Budgie could not start, in place of the screen.
+ * @param {unknown} err
+ */
+function failed(err) {
   clear(screenEl);
   const message = err instanceof Error ? err.message : String(err);
   screenEl.append(
     h('h2', { tabindex: '-1' }, 'Budgie could not start'),
     h('p', null, `Saved data could not be opened: ${message}`),
   );
-});
+}
+
+const WAITING = 'Budgie is already open in another tab. Close it and this tab will load automatically.';
+
+/**
+ * Start while holding the 'budgie' Web Lock, so only one tab works on the saved data at a time:
+ * two tabs would each keep their own copy of it and overwrite each other. The lock is held until
+ * the tab closes. A tab that has to wait says so, and starts when the lock is granted. Without
+ * Web Locks, start now.
+ */
+function startAlone() {
+  if (!navigator.locks) {
+    start().catch(failed);
+    return;
+  }
+  let granted = false;
+  const waiting = h('p', null, WAITING);
+  navigator.locks.request('budgie', () => {
+    granted = true;
+    waiting.remove();
+    start().catch(failed);
+    // Never settles, so the lock is held for the page's lifetime.
+    return new Promise(() => {});
+  }).catch(() => {
+    // The lock could not be requested at all: start as if there were no Web Locks.
+    if (granted) return;
+    granted = true;
+    waiting.remove();
+    start().catch(failed);
+  });
+  // Show the message only while this tab's request is actually waiting, so a tab that gets the
+  // lock straight away never shows it.
+  navigator.locks.query().then(({ pending }) => {
+    if (!granted && pending?.some((l) => l.name === 'budgie')) screenEl.append(waiting);
+  }, () => {});
+}
+
+window.addEventListener('unhandledrejection', (event) => showError(event.reason));
+window.addEventListener('error', (event) => showError(event.error ?? event.message));
+
+startAlone();
