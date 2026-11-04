@@ -57,7 +57,7 @@ export function scan(root) {
   return findings;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (process.argv[1] && fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(process.argv[1])) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const findings = scan(root);
   for (const f of findings) console.log(`${f.file}:${f.line}: ${f.pattern}`);
