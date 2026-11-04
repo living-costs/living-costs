@@ -47,12 +47,12 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 ### Hosting
 
 - Hosting is the final phase. Build and check everything locally first. The dedicated origin, remote, branch protection and deploy come when the owner is ready.
-- Static files on GitHub Pages: `index.html`, ES modules under `src/`, one stylesheet, and no build step.
+- Static files on GitHub Pages: `index.html`, ES modules under `src/`, one stylesheet, `favicon.svg`, and no build step.
 - Use a dedicated origin (a custom subdomain, or a GitHub organisation hosting only this app). Project sites under one `username.github.io` share an origin and could read this app's IndexedDB.
 - Protect `main` and limit write access, because anyone who can push changes the code all users run.
 - Add real statement and backup filename patterns to `.gitignore`.
 - Add a GitHub Actions source check that fails on banned patterns, including `fetch(`, `XMLHttpRequest`, `innerHTML`, `eval(`, `http://`, and `https://`. Allow documented exceptions only, such as the CSP or test fixtures.
-- The deploy job never runs `npm`. It copies `index.html`, `styles.css` and `src/` and publishes them. Checks run in separate jobs that the deploy depends on. Third-party Actions are pinned by commit SHA.
+- The deploy job never runs `npm`. It copies `index.html`, `styles.css`, `favicon.svg` and `src/` and publishes them. Checks run in separate jobs that the deploy depends on. Third-party Actions are pinned by commit SHA.
 
 ## Scope
 

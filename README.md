@@ -71,3 +71,7 @@ npm run serve    # http://localhost:4173/
 ```
 
 `CLAUDE.md` holds the project rules, including the privacy and security rules every change must follow. Test fixtures in `tests/fixtures/` are made up. Never commit real statements or backups.
+
+## Credits
+
+The favicon is the "bird" emoji from [Noto Emoji](https://github.com/googlefonts/noto-emoji) by Google, used under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

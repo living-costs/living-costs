@@ -10,6 +10,7 @@ const TYPES = {
   '.js': 'text/javascript',
   '.css': 'text/css',
   '.html': 'text/html; charset=utf-8',
+  '.svg': 'image/svg+xml',
 };
 
 const server = http.createServer((req, res) => {
@@ -26,7 +27,8 @@ const server = http.createServer((req, res) => {
   if (pathname.includes('..') || pathname.includes('\0')) return notFound();
   if (pathname === '/') pathname = '/index.html';
   const allowed =
-    pathname === '/index.html' || pathname === '/styles.css' || pathname.startsWith('/src/');
+    pathname === '/index.html' || pathname === '/styles.css' || pathname === '/favicon.svg' ||
+    pathname.startsWith('/src/');
   if (!allowed) return notFound();
   const file = path.join(root, pathname);
   if (!file.startsWith(root + path.sep)) return notFound();

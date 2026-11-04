@@ -84,7 +84,9 @@ const POSITIVE = [
   ['import (', 'src/r.js', 'import (m)', hit('src/r.js', 'import(')],
   ['import tab', 'src/r.js', 'await import\t(m)', hit('src/r.js', 'import(')],
   ['href //', 'index.html', '<a href=//h/x>', hit('index.html', 'protocol-relative URL')],
-  ['src quoted //', 'index.html', '<script src = "//h/x.js">', hit('index.html', 'protocol-relative URL')],
+  ['src quoted //', 'index.html', '<script src = "//h/x.js">', [
+    { file: 'index.html', line: 1, pattern: '<script' }, { file: 'index.html', line: 1, pattern: 'protocol-relative URL' },
+  ]],
   ['location = u', 'src/r.js', 'location = u', hit('src/r.js', 'location =')],
   ['window.location = u', 'src/r.js', 'window.location = u', hit('src/r.js', 'location =')],
   ['document.location=u', 'src/r.js', 'document.location=u', hit('src/r.js', 'location =')],
@@ -154,6 +156,15 @@ const POSITIVE = [
     { file: 'src/p.js', line: 1, pattern: 'srcdoc' }, { file: 'src/p.js', line: 1, pattern: 'URL property =' },
   ]],
   ['.href +=', 'src/p.js', 'link.href += q;', hit('src/p.js', 'URL property =')],
+  // Script elements in markup, SVG or code.
+  ['<script in svg', 'favicon.svg', '<svg><script>alert(1)</script></svg>', hit('favicon.svg', '<script')],
+  ['<SCRIPT in svg', 'favicon.svg', '<svg><SCRIPT href="x.js"/></svg>', hit('favicon.svg', '<script')],
+  ['<svg:script', 'favicon.svg', '<svg:svg><svg:script>x</svg:script></svg:svg>', hit('favicon.svg', '<script')],
+  ['<script split', 'favicon.svg', '<svg>\n<script\n  type="x">', hitAt('favicon.svg', 2, '<script')],
+  ['<script in html', 'index.html', '<script src="src/other.js"></script>', hit('index.html', '<script')],
+  ['<script in js', 'src/s.js', "const t = '<script>';", hit('src/s.js', '<script')],
+  ['https in svg', 'favicon.svg', '<svg><image href="https://h/x.png"/></svg>', hit('favicon.svg', 'https://')],
+  ['protocol-relative in svg', 'favicon.svg', '<svg><image href="//h/x.png"/></svg>', hit('favicon.svg', 'protocol-relative URL')],
   ['chained .src =', 'src/p.js', 'a.b[0].img.src = u;', hit('src/p.js', 'URL property =')],
 ];
 
@@ -192,6 +203,8 @@ const NEGATIVE = [
   ['hrefs = x', 'src/n.js', 'state.hrefs = x;'],
   ['.source = x', 'src/n.js', 'r.source = x;'],
   ['.pinged = x', 'src/n.js', 'r.pinged = x;'],
+  ['<scripts', 'src/n.js', "const t = '<scripts>';"],
+  ['</script> alone', 'favicon.svg', '<svg></script></svg>'],
 ];
 
 for (const [label, file, content] of NEGATIVE) {
@@ -214,11 +227,16 @@ const FOOTER =
   `<a href="${SOURCE}" target="_blank" rel="noopener noreferrer">Source code</a></p></footer>`;
 
 const DOWNLOAD = 'link.href = url;';
+const MAIN_SCRIPT = '<script type="module" src="src/main.js">';
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
-test('shipped EXCEPTIONS are the two footer links and the backup download link, each exact', () => {
+test('shipped EXCEPTIONS are the footer links, the entry script, the SVG namespace and the backup download link, each exact', () => {
   assert.deepEqual(
     EXCEPTIONS.map((e) => [e.file, e.pattern, e.match]),
-    [['index.html', 'https://', AGPL], ['index.html', 'https://', SOURCE], ['src/ui/backup.js', 'URL property =', DOWNLOAD]],
+    [
+      ['index.html', 'https://', AGPL], ['index.html', 'https://', SOURCE], ['index.html', '<script', MAIN_SCRIPT],
+      ['favicon.svg', 'http://', SVG_NS], ['src/ui/backup.js', 'URL property =', DOWNLOAD],
+    ],
   );
   for (const e of EXCEPTIONS) assert.ok(e.reason.length > 10);
 });
@@ -266,4 +284,37 @@ test('the backup download exception exempts only that exact statement in that fi
 test('the shipped tree has no URL property assignment besides the backup download', () => {
   const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..');
   assert.deepEqual(scan(root, []).filter((f) => f.pattern === 'URL property =').map((f) => f.file), ['src/ui/backup.js']);
+});
+
+test('the entry module script passes in index.html, and no other script does', () => {
+  assert.deepEqual(scan(makeDir({ 'index.html': `${MAIN_SCRIPT}</script>` })), []);
+  const two = `${MAIN_SCRIPT}</script>\n<script type="module" src="src/main.js" async></script>`;
+  assert.deepEqual(scan(makeDir({ 'index.html': two })), hitAt('index.html', 2, '<script'));
+  assert.deepEqual(scan(makeDir({ 'index.html': '<script>x()</script>' })), hit('index.html', '<script'));
+  // The same tag in the favicon still fails.
+  assert.deepEqual(scan(makeDir({ 'favicon.svg': `<svg>${MAIN_SCRIPT}</script></svg>` })), hit('favicon.svg', '<script'));
+});
+
+test('favicon.svg is scanned; only its exact SVG namespace is allowed', () => {
+  const svg = `<svg xmlns="${SVG_NS}" viewBox="0 0 128 128"><path d="M0 0z"/></svg>`;
+  assert.deepEqual(scan(makeDir({ 'favicon.svg': svg })), []);
+  const xlink = svg.replace('viewBox', 'xmlns:xlink="http://www.w3.org/1999/xlink" viewBox');
+  assert.deepEqual(scan(makeDir({ 'favicon.svg': xlink })), hit('favicon.svg', 'http://'));
+  const longer = svg.replace(SVG_NS, `${SVG_NS}/evil`);
+  assert.deepEqual(scan(makeDir({ 'favicon.svg': longer })), hit('favicon.svg', 'http://'));
+  const https = svg.replace('<path', '<image href="https://h.example/x.png"/><path');
+  assert.deepEqual(scan(makeDir({ 'favicon.svg': https })), hit('favicon.svg', 'https://'));
+  const other = svg.replace('<path', '<image href="http://h.example/x.png"/><path');
+  assert.deepEqual(scan(makeDir({ 'favicon.svg': other })), hit('favicon.svg', 'http://'));
+  // The namespace exception is for favicon.svg only.
+  assert.deepEqual(scan(makeDir({ 'index.html': svg })), hit('index.html', 'http://'));
+  assert.deepEqual(scan(makeDir({ 'src/a.svg.js': `const ns = '${SVG_NS}';` })), hit('src/a.svg.js', 'http://'));
+});
+
+test('the shipped favicon has nothing but the allowed namespace, and no style or script', () => {
+  const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+  const text = fs.readFileSync(path.join(root, 'favicon.svg'), 'utf8');
+  assert.deepEqual(scan(root).filter((f) => f.file === 'favicon.svg'), []);
+  assert.ok(text.startsWith(`<svg xmlns="${SVG_NS}" viewBox="0 0 128 128">`));
+  assert.doesNotMatch(text, /style|script|href|url\(|<\?xml|<!--|\bon\w+\s*=/i);
 });

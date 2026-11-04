@@ -38,13 +38,13 @@ Everything listed as out of scope in `CLAUDE.md`, plus:
 
 Two threats drive the stack: a **compromised package**, and **keeping users' trust**. The code in the repo must be exactly what users run.
 
-- **No build step and no runtime dependencies.** The site is `index.html`, plain ES modules under `src/`, and one stylesheet. The CSV parser, normaliser and a small DOM-building helper are written in-house. The banned-pattern check in CI covers every line that ships.
+- **No build step and no runtime dependencies.** The site is `index.html`, plain ES modules under `src/`, one stylesheet, and `favicon.svg`. The CSV parser, normaliser and a small DOM-building helper are written in-house. The banned-pattern check in CI covers every line that ships.
 - **Dev tooling never reaches users.** (Claude's call)
   - Tests: Playwright with `@axe-core/playwright` for end-to-end and accessibility, and `node:test` for unit tests. `node:test` is built into Node, so it needs no package.
   - Types: JSDoc annotations checked by `tsc --checkJs --noEmit`. `tsc` reports errors only and never writes files.
   - Installs: `npm ci --ignore-scripts` from a committed lockfile.
   - The owner runs `npm install`. Claude never does.
-- **The deploy job never runs `npm`.** (Claude's call) It checks out the commit, copies the site files (`index.html`, `styles.css`, `src/`) into the Pages artifact, and publishes them. Tests, type checks and the banned-pattern check run in separate jobs, which the deploy depends on and branch protection requires. A compromised dev package can break CI, but it can't change what ships. Third-party GitHub Actions are pinned by commit SHA.
+- **The deploy job never runs `npm`.** (Claude's call) It checks out the commit, copies the site files (`index.html`, `styles.css`, `favicon.svg`, `src/`) into the Pages artifact, and publishes them. Tests, type checks and the banned-pattern check run in separate jobs, which the deploy depends on and branch protection requires. A compromised dev package can break CI, but it can't change what ships. Third-party GitHub Actions are pinned by commit SHA.
 - **Hosting comes later (owner's decision).** Development happens locally first, with no git remote. The dedicated origin, GitHub repo, `CNAME`, branch protection and deploy job are a final phase, started when the owner is ready. Until then:
   - Every check runs locally from `package.json` scripts: unit tests, `tsc`, the banned-pattern check (a dev-only Node script), and Playwright.
   - The GitHub Actions workflows are written but first run once the remote exists.

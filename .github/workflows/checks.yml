@@ -1,5 +1,5 @@
 # Checks on every push and pull request; deploy to GitHub Pages from main once they all pass.
-# The deploy job never runs npm: it publishes index.html, styles.css and src/ as they are.
+# The deploy job never runs npm: it publishes index.html, styles.css, favicon.svg and src/ as they are.
 # Every action is pinned by full commit SHA, with its release tag in the comment.
 name: checks
 
@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: mkdir _site && cp -R index.html styles.css src _site/
+      - run: mkdir _site && cp -R index.html styles.css favicon.svg src _site/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site

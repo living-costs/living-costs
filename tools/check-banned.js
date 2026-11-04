@@ -1,5 +1,5 @@
 // Fails on patterns that the privacy rules in CLAUDE.md forbid in shipped code.
-// Scans index.html, styles.css and src/**. Tests and tools are not scanned.
+// Scans index.html, styles.css, favicon.svg and src/**. Tests and tools are not scanned.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +30,9 @@ const REGEXES = [
   // Bare open(): not after a word character or a dot (so indexedDB.open and foo.open pass).
   { re: /(?<![\w$])(?<!\.\s*)open\s*\(/g, name: 'open(' },
   { re: /navigation\s*\.\s*navigate/g, name: 'navigation.navigate' },
+  // A script element, in any shipped file (SVG can carry script too), with or without a
+  // namespace prefix. The match runs to the end of the start tag, so an exception can name it.
+  { re: /<(?:[\w-]+:)?script\b[^>]*>?/gi, name: '<script' },
   { re: /\blocation\s*\+?=(?![=>])/g, name: 'location =' },
   // CSS @import needs a following quote or url(, so JSDoc `@import {X} from` is not flagged.
   { re: /@import\s*(["']|url\()/gi, name: '@import' },
@@ -69,6 +72,18 @@ export const EXCEPTIONS = [
     reason: 'Page footer link to the source code. Approved by the owner; the only source link.',
   },
   {
+    file: 'index.html',
+    pattern: '<script',
+    match: '<script type="module" src="src/main.js">',
+    reason: "The app's one entry module, same-origin; everything else loads from it as a static import.",
+  },
+  {
+    file: 'favicon.svg',
+    pattern: 'http://',
+    match: 'http://www.w3.org/2000/svg',
+    reason: 'The SVG namespace on the root element. It is an identifier, never fetched; the favicon needs it to render.',
+  },
+  {
     file: 'src/ui/backup.js',
     pattern: 'URL property =',
     match: 'link.href = url;',
@@ -95,7 +110,7 @@ function listFiles(root, rel, out) {
  */
 export function scan(root, exceptions = EXCEPTIONS) {
   const files = [];
-  for (const name of ['index.html', 'styles.css']) {
+  for (const name of ['index.html', 'styles.css', 'favicon.svg']) {
     if (fs.existsSync(path.join(root, name))) files.push(name);
   }
   if (fs.existsSync(path.join(root, 'src'))) listFiles(root, 'src', files);

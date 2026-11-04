@@ -10,6 +10,10 @@ const SCREENS = [
   'Help', 'Typical month', 'Categorise', 'Buckets', 'Transactions', 'Transfers', 'Accounts', 'Categories', 'Backup',
 ];
 
+// Full Chromium (new headless), as users run Chrome, not Playwright's headless shell: the shell
+// never fetches a favicon, so a sweep there would not cover it.
+test.use({ channel: 'chromium' });
+
 const WHOLE_YEAR = /** @type {[string, string]} */ (['01/11/2025', '31/10/2026']);
 
 /** @param {Page} page */
@@ -22,8 +26,14 @@ test('no requests after load', async ({ page }) => {
   // No file picker, so saving the backup falls back to a download.
   await page.addInitScript(() => { delete (/** @type {any} */ (window)).showSaveFilePicker; });
   await trackCspViolations(page);
+  const favicon = page.waitForResponse((r) => new URL(r.url()).pathname === '/favicon.svg');
   await page.goto('./');
   await expect(heading(page)).toHaveText('Help');
+  // Chrome fetches the favicon just after `load`. Start tracking only once it has, so that
+  // fetch is part of the page load; any later re-fetch is still caught below.
+  const icon = await favicon;
+  expect(icon.status()).toBe(200);
+  expect(icon.headers()['content-type']).toBe('image/svg+xml');
   const requests = trackRequests(page);
 
   // The six main fixture files.
