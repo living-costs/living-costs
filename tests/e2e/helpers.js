@@ -185,15 +185,15 @@ export async function openScreen(page, name) {
 }
 
 /**
- * On the Buckets screen, set one bucket's category and wait until the save has redrawn the list
- * (the select is replaced), so the next change is not dropped as a second save in flight.
+ * On the Buckets screen, set one bucket's category and wait until it is saved in IndexedDB, so the
+ * next change is not dropped as a second save in flight.
  */
 export async function setBucketCategory(page, bucketName, categoryName) {
-  const select = () => page.getByRole('combobox', { name: `Category for ${bucketName}`, exact: true });
-  const before = await select().elementHandle();
-  await select().selectOption({ label: categoryName });
-  await page.waitForFunction((el) => !el?.isConnected, before);
-  await expect(select().locator('option:checked')).toHaveText(categoryName);
+  const categoryId = (await readStore(page, 'categories')).find((c) => c.name === categoryName)?.id;
+  expect(categoryId, `a category named ${categoryName}`).toBeTruthy();
+  await page.getByRole('combobox', { name: `Category for ${bucketName}`, exact: true }).selectOption({ label: categoryName });
+  await expect.poll(async () => (await readStore(page, 'buckets'))
+    .find((b) => b.displayName === bucketName)?.categoryId).toBe(categoryId);
 }
 
 /** Wait until a store holds `n` rows. */

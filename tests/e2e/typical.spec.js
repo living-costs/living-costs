@@ -87,8 +87,11 @@ test('bars are decorative and sized against the largest row', async () => {
   const bars = page.locator('#screen span.bar');
   expect(await bars.count()).toBeGreaterThan(0);
   for (const bar of await bars.all()) await expect(bar).toHaveAttribute('aria-hidden', 'true');
-  const widths = await row('Living costs', 'Housing (rent or mortgage)').locator('span.bar').evaluate((el) => el.style.width);
-  expect(widths).toBe('100%');
+  const width = (category) => row('Living costs', category).locator('span.bar').evaluate((el) => el.style.width);
+  expect(await width('Housing (rent or mortgage)')).toBe('100%');
+  // Groceries £737.84 of Housing £900.00 is 81.98%, rounded to 82%.
+  expect(await width('Groceries')).toBe('82%');
+  expect(await width('Eating out')).toBe('2%'); // £14.00 of £900.00 is 1.56%
 });
 
 test('uncategorised line leads to Categorise', async () => {

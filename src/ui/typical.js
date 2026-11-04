@@ -138,7 +138,7 @@ function rowsTable(id, title, rows, money) {
         h('thead', null, h('tr', null,
           h('th', { scope: 'col' }, 'Category'), h('th', { scope: 'col' }, 'Type'),
           h('th', { scope: 'col', class: 'num' }, 'Per month'), h('th', { scope: 'col', class: 'num' }, 'Per year'),
-          h('td', null))),
+          h('th', { scope: 'col' }, h('span', { class: 'visually-hidden' }, 'Share of largest')))),
         h('tbody', null, ...rows.map((r) => h('tr', null,
           h('th', { scope: 'row' }, r.name),
           h('td', null, typeText(r, money)),
