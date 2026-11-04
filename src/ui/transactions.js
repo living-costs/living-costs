@@ -57,7 +57,7 @@ export function renderTransactionList(root, app, filters) {
 
   const countEl = h('p', { 'aria-live': 'polite' });
   const results = h('div');
-  const update = () => drawResults(app, results, countEl, v, fixed);
+  const update = () => drawResults(app, results, countEl, v, fixed, p);
   /**
    * @param {'query'|'bucketId'|'from'|'to'} key
    * @returns {(e: Event) => void}
@@ -78,7 +78,7 @@ export function renderTransactionList(root, app, filters) {
     countEl,
     results);
   update();
-  appendSplitDialog(root, app);
+  appendSplitDialog(root, app, p);
 }
 
 /**
@@ -88,8 +88,9 @@ export function renderTransactionList(root, app, filters) {
  * @param {HTMLElement} countEl
  * @param {View} v
  * @param {string|undefined} fixed
+ * @param {string} prefix the list's prefix for ids and focus keys
  */
-function drawResults(app, results, countEl, v, fixed) {
+function drawResults(app, results, countEl, v, fixed, prefix) {
   const state = app.store.state;
   const found = searchTransactions(state.transactions, v.query,
     { bucketId: fixed ?? (v.bucketId || undefined), from: v.from || undefined, to: v.to || undefined },
@@ -109,9 +110,9 @@ function drawResults(app, results, countEl, v, fixed) {
     h('td', null, accounts.get(t.accountId) ?? ''),
     h('td', null, h('span', { class: 'raw' }, t.rawText)),
     h('td', { class: 'num' }, formatMoney(t.amountMinor, t.currency)),
-    h('td', null, countsAsCell(app, t, ctx, cats)));
+    h('td', null, countsAsCell(app, t, ctx, cats, prefix)));
   results.replaceChildren(h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-label': 'Matching transactions' },
-    h('table', { 'aria-label': 'Matching transactions' },
+    h('table', null,
       h('thead', null, h('tr', null,
         h('th', { scope: 'col' }, 'Date'), h('th', { scope: 'col' }, 'Account'), h('th', { scope: 'col' }, 'Description'),
         h('th', { scope: 'col', class: 'num' }, 'Amount'), h('th', { scope: 'col' }, 'Counts as'))),

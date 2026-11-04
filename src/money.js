@@ -30,16 +30,34 @@ export function parseAmount(text, exponent) {
 }
 
 /**
+ * Minor units as an exact unsigned plain decimal, such as 40.00 (exponent 2) or 1234 (exponent 0).
+ * @param {number} minor
+ * @param {number} exponent
+ * @returns {string}
+ */
+export function decimalString(minor, exponent) {
+  const digits = String(Math.abs(minor)).padStart(exponent + 1, '0');
+  return exponent === 0 ? digits : `${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
+}
+
+/**
+ * Drop a £ typed before an amount, keeping any sign before it: "£60.69" to "60.69", "-£5" to "-5".
+ * @param {string} text
+ * @returns {string}
+ */
+export function withoutCurrencySymbol(text) {
+  return String(text).trim().replace(/^([+-]?)£/, '$1');
+}
+
+/**
  * Format minor units as currency text, built from an exact decimal string.
  * @param {number} minor
  * @param {string} currency
  * @returns {string}
  */
 export function formatMoney(minor, currency) {
-  const exp = currencyExponent(currency);
   const neg = minor < 0;
-  const digits = String(Math.abs(minor)).padStart(exp + 1, '0');
-  const dec = exp === 0 ? digits : `${digits.slice(0, -exp)}.${digits.slice(-exp)}`;
+  const dec = decimalString(minor, currencyExponent(currency));
   const nf = new Intl.NumberFormat('en-GB', { style: 'currency', currency });
   // The string overload of format() is exact; the typings only list number|bigint.
   return nf.format(/** @type {any} */ (neg ? `-${dec}` : dec));
@@ -52,7 +70,7 @@ export function formatMoney(minor, currency) {
  * @returns {number|null}
  */
 export function parseMoneyQuery(text, exponent) {
-  const t = String(text).trim().replace(/^([+-]?)£/, '$1');
+  const t = withoutCurrencySymbol(text);
   if (t === '' || t.toLowerCase() === 'null') return null;
   const r = parseAmount(t, exponent);
   if ('error' in r || r.minor === null) return null;

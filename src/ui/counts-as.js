@@ -10,7 +10,7 @@ import { h } from '../dom.js';
 import { resolve } from '../resolve.js';
 import { orderedCategories } from '../categories.js';
 import { setCategoryOverride, setSplit, resetOverride } from '../overrides.js';
-import { parseAmount, formatMoney, currencyExponent } from '../money.js';
+import { parseAmount, formatMoney, currencyExponent, decimalString, withoutCurrencySymbol } from '../money.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
 import { focusKey, valueOf, field } from './form.js';
@@ -29,7 +29,7 @@ const SOURCE_TEXT = { transfer: 'transfer', split: 'split', override: 'override'
  * `checked` is set on Save split, so a missing amount or category then shows an error.
  * @typedef {{amount: string, categoryId: string, checked: boolean}} DraftPart
  */
-/** @typedef {{txnId: string, parts: DraftPart[], error: string}} SplitDraft */
+/** @typedef {{prefix: string, txnId: string, parts: DraftPart[], error: string}} SplitDraft */
 
 /** The split dialog's draft. It survives redraws, and is null when no dialog is showing. */
 let draft = /** @type {SplitDraft|null} */ (null);
@@ -41,30 +41,22 @@ const blankPart = () => ({ amount: '', categoryId: '', checked: false });
 const isBlank = (p) => p.amount.trim() === '' && p.categoryId === '';
 
 /**
+ * The row's select's data-focus-key. `prefix` is the list's own, so two lists don't clash.
+ * @param {string} prefix
  * @param {Transaction} t
  * @returns {string}
  */
-const selectKey = (t) => `counts-${t.id}`;
+const selectKey = (prefix, t) => `${prefix}-counts-${t.id}`;
 
 /**
- * Minor units as a plain unsigned decimal, such as 40.00, for an input's value.
- * @param {number} minor
- * @param {number} exp
- * @returns {string}
- */
-function plainAmount(minor, exp) {
-  const digits = String(Math.abs(minor)).padStart(exp + 1, '0');
-  return exp === 0 ? digits : `${digits.slice(0, -exp)}.${digits.slice(-exp)}`;
-}
-
-/**
- * Parse an amount typed without a sign. Empty is {minor: null}.
+ * Parse an amount typed without a sign, accepting a leading £ as search does. Empty is
+ * {minor: null}; any other text that is not an amount, such as "null", is an error.
  * @param {string} text
  * @param {number} exp
  * @returns {{minor: number|null} | {error: string}}
  */
 function parseUnsigned(text, exp) {
-  const s = text.trim();
+  const s = withoutCurrencySymbol(text);
   if (s === '') return { minor: null };
   const example = exp === 0 ? '12' : `12.${'5'.padEnd(exp, '0')}`;
   const r = /^[+-]/.test(s) ? null : parseAmount(s, exp);
@@ -79,11 +71,12 @@ function parseUnsigned(text, exp) {
  * @param {Transaction} t
  * @param {ResolveContext} ctx
  * @param {Category[]} cats in order
+ * @param {string} prefix the list's prefix for ids and focus keys
  * @returns {HTMLElement}
  */
-export function countsAsCell(app, t, ctx, cats) {
+export function countsAsCell(app, t, ctx, cats, prefix) {
   const r = resolve(t, ctx);
-  const sourceId = `source-${t.id}`;
+  const sourceId = `${prefix}-source-${t.id}`;
   const sourceEl = h('span', { class: 'source muted', id: sourceId }, SOURCE_TEXT[r.source]);
   if (r.source === 'transfer') return h('div', { class: 'counts-as' }, h('span', null, 'Transfer'), sourceEl);
 
@@ -93,8 +86,8 @@ export function countsAsCell(app, t, ctx, cats) {
   const cell = h('div', { class: 'counts-as' });
   const select = h('select', {
     'aria-label': `Counts as for ${t.rawText} on ${formatDate(t.date)}`,
-    'aria-describedby': sourceId, 'data-focus-key': selectKey(t),
-    onChange: (/** @type {Event} */ e) => choose(app, t, valueOf(e), selected, cell, select),
+    'aria-describedby': sourceId, 'data-focus-key': selectKey(prefix, t),
+    onChange: (/** @type {Event} */ e) => choose(app, t, valueOf(e), selected, cell, select, prefix),
   },
   ...cats.map((c) => h('option', { value: c.id, selected: c.id === selected }, c.name)),
   h('option', { value: BUCKET, selected: selected === BUCKET }, `Use bucket's category (${bucketCategory?.name ?? 'none'})`),
@@ -113,18 +106,25 @@ export function countsAsCell(app, t, ctx, cats) {
  * @param {string|null} selected what the row has now
  * @param {HTMLElement} cell
  * @param {HTMLElement} select
+ * @param {string} prefix
  */
-function choose(app, t, value, selected, cell, select) {
+function choose(app, t, value, selected, cell, select, prefix) {
   if (value === SPLIT) {
-    startSplit(app, t);
+    startSplit(app, t, prefix);
     return;
   }
   if (value === selected) return;
-  whileSaving(cell, () => {
+  whileSaving(cell, async () => {
     const now = app.store.state;
-    return app.store.apply(value === BUCKET
-      ? resetOverride(now, t.fingerprint)
-      : setCategoryOverride(now, t.fingerprint, value));
+    try {
+      await app.store.apply(value === BUCKET
+        ? resetOverride(now, t.fingerprint)
+        : setCategoryOverride(now, t.fingerprint, value));
+    } catch (err) {
+      // Nothing was saved: redraw so the select shows what the row still has.
+      app.rerender();
+      throw err;
+    }
   }, select);
 }
 
@@ -132,28 +132,30 @@ function choose(app, t, value, selected, cell, select) {
  * Show the split dialog for a transaction, prefilled with its current parts if it is split.
  * @param {App} app
  * @param {Transaction} t
+ * @param {string} prefix
  */
-function startSplit(app, t) {
+function startSplit(app, t, prefix) {
   const state = app.store.state;
   const exp = currencyExponent(t.currency);
   const known = new Set(state.categories.map((c) => c.id));
   const splits = state.overrides.get(t.fingerprint)?.splits ?? [];
   const parts = splits.length > 0
-    ? splits.map((s) => ({ amount: plainAmount(s.amountMinor, exp), categoryId: known.has(s.categoryId) ? s.categoryId : '', checked: false }))
+    ? splits.map((s) => ({ amount: decimalString(s.amountMinor, exp), categoryId: known.has(s.categoryId) ? s.categoryId : '', checked: false }))
     : [blankPart(), blankPart()];
-  draft = { txnId: t.id, parts, error: '' };
+  draft = { prefix, txnId: t.id, parts, error: '' };
   app.rerender();
   focusKey('split-amount-0');
 }
 
 /**
- * Append the split dialog to `root` and show it, if one is in progress. A list of transactions
- * calls this once after its rows, so the dialog survives a redraw of the screen.
+ * Append the split dialog to `root` and show it, if one was started from the list with this
+ * prefix. A list calls this once after its rows, so the dialog survives a redraw of the screen.
  * @param {HTMLElement} root
  * @param {App} app
+ * @param {string} prefix the list's prefix, as given to countsAsCell
  */
-export function appendSplitDialog(root, app) {
-  if (!draft) return;
+export function appendSplitDialog(root, app, prefix) {
+  if (!draft || draft.prefix !== prefix) return;
   const d = draft;
   const t = app.store.state.transactions.find((x) => x.id === d.txnId);
   if (!t) {
@@ -182,19 +184,19 @@ function splitDialog(app, t, d) {
   let saved = false;
 
   const dialog = h('dialog', {
-    class: 'split-dialog', 'aria-labelledby': 'split-heading', 'aria-describedby': 'split-txn',
+    class: 'split-dialog', 'aria-labelledby': `${d.prefix}-split-heading`, 'aria-describedby': `${d.prefix}-split-txn`,
     // Escape and Cancel both end here. A save sets `saved` first, so this does nothing then.
     onClose: () => {
       if (saved || draft !== d) return;
       draft = null;
       app.rerender();
-      focusKey(selectKey(t));
+      focusKey(selectKey(d.prefix, t));
     },
   });
 
   /** @type {{amount: HTMLElement, amountError: HTMLElement, category: HTMLElement, categoryError: HTMLElement}[]} */
   let refs = [];
-  const remainingEl = h('p', { id: 'split-remaining', 'aria-live': 'polite' });
+  const remainingEl = h('p', { id: `${d.prefix}-split-remaining`, 'aria-live': 'polite' });
   const errorEl = h('p', { class: 'error', role: 'alert' });
   const saveButton = /** @type {HTMLButtonElement} */ (h('button', { type: 'submit', 'data-saves': true, 'data-focus-key': 'split-save' }, 'Save split'));
 
@@ -293,7 +295,7 @@ function splitDialog(app, t, d) {
     saved = true;
     draft = null;
     /** @type {HTMLDialogElement} */ (dialog).close();
-    focusKey(selectKey(t));
+    focusKey(selectKey(d.prefix, t));
     try {
       await app.store.apply(result);
     } catch (err) {
@@ -307,8 +309,8 @@ function splitDialog(app, t, d) {
   const fill = () => {
     refs = [];
     dialog.replaceChildren(
-      h('h3', { id: 'split-heading' }, 'Split transaction'),
-      h('p', { id: 'split-txn' }, `${formatDate(t.date)} · `, h('span', { class: 'raw' }, t.rawText),
+      h('h3', { id: `${d.prefix}-split-heading` }, 'Split transaction'),
+      h('p', { id: `${d.prefix}-split-txn` }, `${formatDate(t.date)} · `, h('span', { class: 'raw' }, t.rawText),
         ` · ${formatMoney(total, t.currency)} ${sign < 0 ? 'out' : 'in'}`),
       h('form', {
         novalidate: true,

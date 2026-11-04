@@ -62,7 +62,7 @@ test('lists transactions with filters and the first 200', async ({ page }) => {
   const inSep = txns.filter((t) => t.date >= '2026-09-01' && t.date <= '2026-09-30').length;
   await expect(countLine(page)).toHaveText(`Showing ${inSep} of ${inSep}.`);
 
-  // Typing keeps focus and text, and a search survives a store change and a revisit.
+  // Typing keeps focus and text, and the search is still there after leaving the screen.
   await search(page).pressSequentially('amazon');
   await expect(search(page)).toBeFocused();
   await expect(search(page)).toHaveValue('amazon');
@@ -98,7 +98,11 @@ test('find by amount and split', async ({ page }) => {
   await part(2).getByLabel('Amount').fill('20.6x');
   await expect(part(2).getByText('Enter an amount, such as 12.50.')).toBeVisible();
   await expect(save).toBeDisabled();
-  await part(2).getByLabel('Amount').fill('20.69');
+  // "null" is not an amount (and not a blank part); a leading £ is accepted, as in search.
+  await part(2).getByLabel('Amount').fill('null');
+  await expect(part(2).getByText('Enter an amount, such as 12.50.')).toBeVisible();
+  await expect(save).toBeDisabled();
+  await part(2).getByLabel('Amount').fill('£20.69');
   await expect(part(2).getByText('Enter an amount, such as 12.50.')).toHaveCount(0);
   // Every part needs a category.
   await save.click();
@@ -229,4 +233,35 @@ test('a confirmed transfer shows Transfer with no select', async ({ page }) => {
   await expect(source(page, AMAZON)).toHaveText('transfer');
   await expect(row(page, AMAZON)).toContainText('Transfer');
   await expect(page.getByLabel(AMAZON_LABEL)).toHaveCount(0);
+});
+
+test('cancelling on a split row leaves the split unchanged', async ({ page }) => {
+  await find(page, '£60.69');
+  const select = page.getByLabel(AMAZON_LABEL);
+  await select.selectOption({ label: 'Split…' });
+  const dialog = splitDialog(page);
+  const part = (n) => dialog.getByRole('group', { name: `Part ${n}` });
+  await part(1).getByLabel('Amount').fill('40.00');
+  await part(1).getByLabel('Category').selectOption({ label: 'Household maintenance' });
+  await part(2).getByLabel('Amount').fill('20.69');
+  await part(2).getByLabel('Category').selectOption({ label: 'Gifts' });
+  await dialog.getByRole('button', { name: 'Save split' }).click();
+  await expect(source(page, AMAZON)).toHaveText('split');
+  const before = await readStore(page, 'overrides');
+
+  await page.getByLabel(AMAZON_LABEL).selectOption({ label: 'Split…' });
+  await expect(part(1).getByLabel('Amount')).toHaveValue('40.00');
+  await part(1).getByLabel('Amount').fill('30.00');
+  await part(1).getByLabel('Category').selectOption({ label: 'Groceries' });
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel(AMAZON_LABEL)).toBeFocused();
+  await expect(source(page, AMAZON)).toHaveText('split');
+  await expect(page.getByLabel(AMAZON_LABEL).locator('option:checked')).toHaveText('Split…');
+  expect(await readStore(page, 'overrides')).toEqual(before);
+
+  // Reopening shows the saved parts, not the cancelled edits.
+  await page.getByLabel(AMAZON_LABEL).selectOption({ label: 'Split…' });
+  await expect(part(1).getByLabel('Amount')).toHaveValue('40.00');
+  await expect(part(1).getByLabel('Category').locator('option:checked')).toHaveText('Household maintenance');
 });

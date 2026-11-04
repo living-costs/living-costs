@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { currencyExponent, parseAmount, formatMoney, parseMoneyQuery, divRound } from '../../src/money.js';
+import {
+  currencyExponent, parseAmount, formatMoney, parseMoneyQuery, divRound, decimalString, withoutCurrencySymbol,
+} from '../../src/money.js';
 
 test('parseAmount valid at exponent 2', () => {
   const cases = [['46', 4600], ['1.2', 120], ['.51', 51], ['+12.58', 1258], ['-1234.56', -123456], [' 7.00 ', 700], ['-0.05', -5]];
@@ -53,4 +55,22 @@ test('divRound', () => {
   assert.equal(divRound(29900, 12), 2492);
   assert.equal(divRound(5, -2), -3);
   assert.equal(divRound(0, 5), 0);
+});
+
+test('decimalString is exact and unsigned', () => {
+  assert.equal(decimalString(4000, 2), '40.00');
+  assert.equal(decimalString(-2069, 2), '20.69');
+  assert.equal(decimalString(5, 2), '0.05');
+  assert.equal(decimalString(0, 2), '0.00');
+  assert.equal(decimalString(1234, 0), '1234');
+  assert.equal(decimalString(-7, 0), '7');
+  assert.equal(decimalString(0, 0), '0');
+  assert.equal(decimalString(12345, 3), '12.345');
+});
+
+test('withoutCurrencySymbol drops a leading £ and keeps the sign', () => {
+  assert.equal(withoutCurrencySymbol(' £60.69 '), '60.69');
+  assert.equal(withoutCurrencySymbol('-£5'), '-5');
+  assert.equal(withoutCurrencySymbol('60.69'), '60.69');
+  assert.equal(withoutCurrencySymbol('60£'), '60£');
 });
