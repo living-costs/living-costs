@@ -5,16 +5,27 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const LITERALS = [
-  'fetch(', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'sendBeacon',
+  'XMLHttpRequest', 'WebSocket', 'EventSource', 'sendBeacon',
   'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write',
-  'eval(', 'new Function', 'http://', 'https://', 'window.open',
+  'new Function', 'http://', 'https://', 'window.open',
   'location.assign', 'location.replace', 'location.href', 'srcdoc',
-  "setAttribute('style'",
+  "setAttribute('style'", 'RTCPeerConnection',
 ];
 
+// 'fetch(' and 'eval(' are regexes (not literals) so that `fetch (x)` is caught
+// while `prefetch(` and `myeval(` are not. They keep the old labels.
 const REGEXES = [
+  { re: /\bfetch\s*\(/, name: 'fetch(' },
+  { re: /\beval\s*\(/, name: 'eval(' },
   { re: /\bimport\s*\(/, name: 'import(' },
+  { re: /\blocation\s*=(?![=>])/, name: 'location =' },
+  // CSS @import needs a following quote or url(, so JSDoc `@import {X} from` is not flagged.
+  { re: /@import\s*(["']|url\()/, name: '@import' },
   { re: /(href|src)\s*=\s*["']?\/\//, name: 'protocol-relative URL' },
+  { re: /\burl\(\s*["']?\s*\/\//, name: 'protocol-relative URL' },
+  // Static imports/exports; `from` alone also covers multi-line import lists.
+  { re: /\bfrom\s*["']\/\//, name: 'protocol-relative URL' },
+  { re: /\bimport\s*["']\/\//, name: 'protocol-relative URL' },
 ];
 
 /** Documented exceptions: {file, pattern, reason}. Empty on purpose. */
@@ -31,9 +42,10 @@ function listFiles(root, rel, out) {
 
 /**
  * @param {string} root
+ * @param {{file: string, pattern: string, reason: string}[]} [exceptions]
  * @returns {{file: string, line: number, pattern: string}[]}
  */
-export function scan(root) {
+export function scan(root, exceptions = EXCEPTIONS) {
   const files = [];
   for (const name of ['index.html', 'styles.css']) {
     if (fs.existsSync(path.join(root, name))) files.push(name);
@@ -45,11 +57,11 @@ export function scan(root) {
   for (const file of files) {
     const lines = fs.readFileSync(path.join(root, file), 'utf8').split(/\r?\n/);
     lines.forEach((text, i) => {
-      const hits = [];
-      for (const lit of LITERALS) if (text.includes(lit)) hits.push(lit);
-      for (const { re, name } of REGEXES) if (re.test(text)) hits.push(name);
+      const hits = new Set();
+      for (const lit of LITERALS) if (text.includes(lit)) hits.add(lit);
+      for (const { re, name } of REGEXES) if (re.test(text)) hits.add(name);
       for (const pattern of hits) {
-        if (EXCEPTIONS.some((e) => e.file === file && e.pattern === pattern)) continue;
+        if (exceptions.some((e) => e.file === file && e.pattern === pattern)) continue;
         findings.push({ file, line: i + 1, pattern });
       }
     });
