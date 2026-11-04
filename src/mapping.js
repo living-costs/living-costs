@@ -9,7 +9,7 @@ import { parseDate } from './dates.js';
 /** @typedef {{minor:number}|{error:string}} AmountResult */
 
 /** @param {string} name */
-const norm = (name) => name.replace(/﻿/g, '').trim().toLowerCase();
+const norm = (name) => name.replace(/\uFEFF/g, '').trim().toLowerCase();
 
 /**
  * @param {string[]} header
@@ -79,6 +79,9 @@ function debitCreditAmount(debit, credit, exp) {
 }
 
 /**
+ * Maps rows to signed transactions. If any column the mapping names is missing from the header or
+ * appears more than once, nothing is mapped: it returns no rows or identifiers and one error per
+ * problem, with rowNumber 1 (the header).
  * @param {Mapping} mapping
  * @param {string[]} header
  * @param {{rowNumber:number,cells:string[]}[]} rows
@@ -87,6 +90,18 @@ function debitCreditAmount(debit, credit, exp) {
  */
 export function applyMapping(mapping, header, rows, currency) {
   const names = header.map(norm);
+  /** @type {RowError[]} */
+  const headerErrors = [];
+  const seen = new Set();
+  for (const col of mappedColumns(mapping)) {
+    const key = norm(col);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const count = names.filter((n) => n === key).length;
+    if (count === 0) headerErrors.push({ rowNumber: 1, message: `Missing column: ${col}` });
+    else if (count > 1) headerErrors.push({ rowNumber: 1, message: `Column appears twice: ${col}` });
+  }
+  if (headerErrors.length > 0) return { rows: [], identifiers: [], errors: headerErrors };
   /** @param {string|undefined} col */
   const idx = (col) => (col === undefined ? -1 : names.indexOf(norm(col)));
   const a = mapping.amount;

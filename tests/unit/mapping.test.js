@@ -102,3 +102,32 @@ test('columns are matched case-insensitively', () => {
   assert.equal(r.rows[0].amountMinor, -500);
   assert.equal(r.rows[0].rawText, '<b>x</b>');
 });
+
+test('refuses a header missing a mapped column', () => {
+  const rows = [row(2, ['01/02/2025', 'A', '1.00'])];
+  const cases = [
+    ['Details', ['Date', 'Type', 'Debit', 'Credit', 'Account'], 'Missing column: Details'],
+    ['Type', ['Date', 'Details', 'Debit', 'Credit', 'Account'], 'Missing column: Type'],
+    ['Account', ['Date', 'Details', 'Type', 'Debit', 'Credit'], 'Missing column: Account'],
+  ];
+  for (const [, h, message] of cases) {
+    const r = applyMapping(dc, /** @type {string[]} */ (h), rows, 'GBP');
+    assert.deepEqual(r, { rows: [], identifiers: [], errors: [{ rowNumber: 1, message }] });
+  }
+});
+
+test('refuses a header with a duplicated mapped column', () => {
+  const h = ['Date', 'Details', 'Type', 'Debit', 'debit ', 'Credit', 'Account'];
+  const r = applyMapping(dc, h, [row(2, ['01/02/2025', 'A', '', '1.00', '', '', ''])], 'GBP');
+  assert.deepEqual(r, { rows: [], identifiers: [], errors: [{ rowNumber: 1, message: 'Column appears twice: Debit' }] });
+});
+
+test('mapping without type or account columns works on a header without them', () => {
+  const h = ['Date', 'Details', 'Debit', 'Credit'];
+  /** @type {Mapping} */
+  const m = { headerSignature: headerSignature(h), dateColumn: 'Date', dateFormat: 'DD/MM/YYYY',
+    descriptionColumn: 'Details', amount: { debit: 'Debit', credit: 'Credit' } };
+  const r = applyMapping(m, h, [row(2, ['01/02/2025', 'A', '1.00', ''])], 'GBP');
+  assert.equal(r.rows.length, 1);
+  assert.deepEqual(r.errors, []);
+});
