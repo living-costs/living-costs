@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { headerSignature, missingColumns, applyMapping } from '../../src/mapping.js';
+import { headerSignature, missingColumns, applyMapping, mappingProblems } from '../../src/mapping.js';
 
 /** @import {Mapping} from '../../src/types.js' */
 
@@ -130,4 +130,10 @@ test('mapping without type or account columns works on a header without them', (
   const r = applyMapping(m, h, [row(2, ['01/02/2025', 'A', '1.00', ''])], 'GBP');
   assert.equal(r.rows.length, 1);
   assert.deepEqual(r.errors, []);
+});
+
+test('mappingProblems lists missing and duplicated mapped columns, once each', () => {
+  assert.deepEqual(mappingProblems(dc, header), []);
+  assert.deepEqual(mappingProblems(dc, ['Date', 'Debit', 'debit ', 'Credit', 'Account', 'Type']),
+    ['Missing column: Details', 'Column appears twice: Debit']);
 });

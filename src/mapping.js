@@ -40,6 +40,29 @@ export function missingColumns(mapping, header) {
   return mappedColumns(mapping).filter((c) => !have.has(norm(c)));
 }
 
+/**
+ * Why a mapping can't be applied to a header: one message per mapped column that is missing
+ * (`Missing column: X`) or appears more than once (`Column appears twice: X`). Empty when it fits.
+ * @param {Mapping} mapping
+ * @param {string[]} header
+ * @returns {string[]}
+ */
+export function mappingProblems(mapping, header) {
+  const names = header.map(norm);
+  /** @type {string[]} */
+  const problems = [];
+  const seen = new Set();
+  for (const col of mappedColumns(mapping)) {
+    const key = norm(col);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const count = names.filter((n) => n === key).length;
+    if (count === 0) problems.push(`Missing column: ${col}`);
+    else if (count > 1) problems.push(`Column appears twice: ${col}`);
+  }
+  return problems;
+}
+
 /** @param {number} n */
 const noNegZero = (n) => (n === 0 ? 0 : n);
 
@@ -89,19 +112,11 @@ function debitCreditAmount(debit, credit, exp) {
  * @returns {{rows: MappedRow[], errors: RowError[], identifiers: string[]}}
  */
 export function applyMapping(mapping, header, rows, currency) {
-  const names = header.map(norm);
-  /** @type {RowError[]} */
-  const headerErrors = [];
-  const seen = new Set();
-  for (const col of mappedColumns(mapping)) {
-    const key = norm(col);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const count = names.filter((n) => n === key).length;
-    if (count === 0) headerErrors.push({ rowNumber: 1, message: `Missing column: ${col}` });
-    else if (count > 1) headerErrors.push({ rowNumber: 1, message: `Column appears twice: ${col}` });
+  const problems = mappingProblems(mapping, header);
+  if (problems.length > 0) {
+    return { rows: [], identifiers: [], errors: problems.map((message) => ({ rowNumber: 1, message })) };
   }
-  if (headerErrors.length > 0) return { rows: [], identifiers: [], errors: headerErrors };
+  const names = header.map(norm);
   /** @param {string|undefined} col */
   const idx = (col) => (col === undefined ? -1 : names.indexOf(norm(col)));
   const a = mapping.amount;
