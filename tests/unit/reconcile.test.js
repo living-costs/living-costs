@@ -6,6 +6,7 @@ import { analysisWindow } from '../../src/coverage.js';
 import { buildContext, resolve } from '../../src/resolve.js';
 import { monthOf, monthRange } from '../../src/dates.js';
 import { typicalMonth } from '../../src/typical.js';
+import { bucketCounts, monthlyFigure } from '../../src/progress.js';
 import { expected } from './pipeline.js';
 import { fixtureState } from './helpers/fixture-state.js';
 
@@ -171,4 +172,18 @@ test('totals add up from the rows', () => {
   assert.equal(tm.totals.contributions, sum(tm.contribution));
   assert.equal(tm.totals.share, tm.totals.living - tm.totals.contributions);
   assert.equal(tm.totals.leftOver, tm.totals.income - tm.totals.share);
+});
+
+test('the categorise card monthly figure follows D1: Bank B buckets divide by its 3 months', () => {
+  const window = analysisWindow(state, tuning);
+  assert.equal(window.accountMonths.get('B').size, 3);
+  const counts = bucketCounts(state, tuning);
+  /** @param {string} key */
+  const figure = (key) => monthlyFigure(counts.get(state.buckets.find((b) => b.keys.includes(key)).id), window.accountMonths);
+  // A N OTHER pays 55000 a month into B; the typical month's fixed row agrees.
+  assert.deepEqual(figure('A N OTHER'), { perMonth: 55000, months: 3 });
+  assert.equal(rowNamed('Contributions from others').perMonth, 55000);
+  // SAINSBURYS S/MKT: 134550 over B's 3 months.
+  assert.deepEqual(figure('SAINSBURYS S/MKT'), { perMonth: 44850, months: 3 });
+  assert.equal(-Object.values(expected.monthlyTotalsByAccount.Groceries.B).reduce((s, v) => s + v, 0), 134550);
 });

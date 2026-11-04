@@ -7,14 +7,14 @@
 /** @import {BucketCount} from '../progress.js' */
 import { h } from '../dom.js';
 import { analysisWindow } from '../coverage.js';
-import { bucketCounts, cardQueue, progress } from '../progress.js';
+import { bucketCounts, cardQueue, progress, monthlyFigure } from '../progress.js';
 import { relatedBuckets, unusualTransactions, repeatingAmounts } from '../insights.js';
 import { createAmountRule, resolveFlag } from '../rules.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
 import { orderedCategories } from '../categories.js';
 import { setCategoryOverride, dismissUnusual } from '../overrides.js';
 import { combine } from '../changes.js';
-import { formatMoney, divRound } from '../money.js';
+import { formatMoney } from '../money.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
 import { focusKey, plural, valueOf, field, emptyDraft, categoryForm } from './form.js';
@@ -203,20 +203,23 @@ function card(app, bucket, counts) {
 }
 
 /**
- * "£X over N months · M transactions · about £Y a month", from the counted transactions.
+ * "£X over N months · M transactions · about £Y a month", from the counted transactions. Each
+ * account counts over its own months (D1), so "over N months" is left out when the bucket's
+ * accounts count different numbers of months.
  * @param {App} app
  * @param {BucketCount|undefined} count
  * @returns {string}
  */
 function summaryText(app, count) {
   if (!count) return 'None of its transactions fall in the months being counted.';
-  const n = analysisWindow(app.store.state, app.tuning).months.length;
-  const months = `over ${plural(n, 'month', 'months')}`;
+  const { accountMonths } = analysisWindow(app.store.state, app.tuning);
+  const { perMonth, months: n } = monthlyFigure(count, accountMonths);
+  const months = n === null ? '' : ` over ${plural(n, 'month', 'months')}`;
   const txns = plural(count.txns.length, 'transaction', 'transactions');
   const currency = soleCurrency(count.txns);
-  if (!currency) return `${txns} ${months}`;
-  const monthly = n > 0 ? ` · about ${formatMoney(divRound(count.absTotal, n), currency)} a month` : '';
-  return `${formatMoney(count.absTotal, currency)} ${months} · ${txns}${monthly}`;
+  if (!currency) return `${txns}${months}`;
+  const monthly = n !== 0 ? ` · about ${formatMoney(perMonth, currency)} a month` : '';
+  return `${formatMoney(count.absTotal, currency)}${months} · ${txns}${monthly}`;
 }
 
 /**

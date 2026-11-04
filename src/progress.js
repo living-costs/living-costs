@@ -10,6 +10,7 @@
 import { analysisWindow } from './coverage.js';
 import { buildContext, resolve } from './resolve.js';
 import { monthOf } from './dates.js';
+import { divRound } from './money.js';
 
 /** @typedef {{windowMonths:number, coverageGapDays:number}} ProgressTuning */
 /** @typedef {{absTotal:number, txns:Transaction[]}} BucketCount */
@@ -103,4 +104,27 @@ export function cardQueue(state, tuning, skipped) {
     .sort((a, b) => total(b) - total(a)
       || (a.displayName < b.displayName ? -1 : a.displayName > b.displayName ? 1 : 0)
       || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * About how much a bucket comes to a month, by D1: each account's absolute counted total divided
+ * by the number of months that account counts, rounded with divRound, then summed. An account
+ * counting no months contributes nothing. `months` is the month count when every contributing
+ * account has the same one, otherwise null. Sums across currencies, like `absTotal`.
+ * @param {BucketCount} count
+ * @param {Map<string, Set<string>>} accountMonths from analysisWindow
+ * @returns {{perMonth:number, months:number|null}}
+ */
+export function monthlyFigure(count, accountMonths) {
+  /** @type {Map<string, number>} */
+  const byAccount = new Map();
+  for (const t of count.txns) byAccount.set(t.accountId, (byAccount.get(t.accountId) ?? 0) + Math.abs(t.amountMinor));
+  let perMonth = 0;
+  const counts = new Set();
+  for (const [accountId, total] of byAccount) {
+    const n = accountMonths.get(accountId)?.size ?? 0;
+    counts.add(n);
+    if (n > 0) perMonth += divRound(total, n);
+  }
+  return { perMonth, months: counts.size === 1 ? [...counts][0] : null };
 }

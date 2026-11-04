@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../src/changes.js';
-import { countedTransactions, progress, cardQueue } from '../../src/progress.js';
+import { countedTransactions, progress, cardQueue, monthlyFigure } from '../../src/progress.js';
 import tuning from '../../src/tuning.js';
 
 let n = 0;
@@ -117,4 +117,19 @@ test('empty state', () => {
   assert.deepEqual(countedTransactions(s, tuning), []);
   assert.deepEqual(progress(s, tuning), { categorisedAbs: 0, totalAbs: 0, bucketsLeft: 0 });
   assert.deepEqual(cardQueue(s, tuning, new Set()), []);
+});
+
+test('monthlyFigure divides each account by its own month count (D1) and sums', () => {
+  const t = (accountId, amountMinor) => ({ ...txn('x', amountMinor), accountId });
+  const accountMonths = new Map([['a1', new Set(['2026-09', '2026-10'])], ['a2', new Set(['2026-10'])], ['a3', new Set()]]);
+  // a1: 3000 over 2 months = 1500. a2: 1001 over 1 month = 1001.
+  assert.deepEqual(monthlyFigure({ absTotal: 4001, txns: [t('a1', -1000), t('a1', -2000), t('a2', 1001)] }, accountMonths),
+    { perMonth: 2501, months: null });
+  // One account: its month count is shared, so it is given.
+  assert.deepEqual(monthlyFigure({ absTotal: 3001, txns: [t('a1', -1000), t('a1', -2001)] }, accountMonths),
+    { perMonth: 1501, months: 2 });
+  // An account counting no months contributes nothing.
+  assert.deepEqual(monthlyFigure({ absTotal: 1500, txns: [t('a3', -500), t('a2', -1000)] }, accountMonths),
+    { perMonth: 1000, months: null });
+  assert.deepEqual(monthlyFigure({ absTotal: 500, txns: [t('a3', -500)] }, accountMonths), { perMonth: 0, months: 0 });
 });
