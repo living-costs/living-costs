@@ -7,7 +7,8 @@ import { formatLocalDate } from '../dates.js';
 import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
 import { firstRunChanges } from '../categories.js';
 import { field } from './form.js';
-import { whileSaving } from './saving.js';
+import { whileSaving, isSaving } from './saving.js';
+import { resetImport } from './import.js';
 
 const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
 const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
@@ -172,6 +173,7 @@ function restore(app, root, input, focusTo) {
     }
     await app.store.replaceAll(restoreChanges(result.data, app.store.state.settings));
     reset();
+    resetImport();
     app.navigate('help');
     showNotice('Backup restored. Import your statements again to see your transactions.');
   }, focusTo);
@@ -179,15 +181,17 @@ function restore(app, root, input, focusTo) {
 
 /**
  * After confirmation, replace everything with exactly what a first visit stores, then show Help.
+ * The confirm comes first (as Undo's does), so declining leaves focus on the button.
  * @param {App} app
  * @param {HTMLElement} root
  * @param {HTMLElement} focusTo
  */
-function deleteAll(app, root, focusTo) {
-  return whileSaving(root, async () => {
-    if (!window.confirm(DELETE_CONFIRM)) return;
+async function deleteAll(app, root, focusTo) {
+  if (isSaving() || !window.confirm(DELETE_CONFIRM)) return;
+  await whileSaving(root, async () => {
     await app.store.replaceAll(firstRunChanges(app.defaults));
     reset();
+    resetImport();
     app.navigate('help');
     showNotice('All data deleted.');
   }, focusTo);

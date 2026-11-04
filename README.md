@@ -74,4 +74,4 @@ npm run serve    # http://localhost:4173/
 
 ## Credits
 
-The favicon is the "bird" emoji from [Noto Emoji](https://github.com/googlefonts/noto-emoji) by Google, used under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+The favicon is adapted from the "bird" emoji in [Noto Emoji](https://github.com/googlefonts/noto-emoji) by Google, used under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

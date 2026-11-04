@@ -178,7 +178,7 @@ function failed(err) {
   );
 }
 
-const WAITING = 'Already open in another tab. Close it and this tab will load automatically.';
+const WAITING = 'This app is already open in another tab. Close that tab and this one will load automatically.';
 
 /**
  * Start while holding the 'living-costs' Web Lock, so only one tab works on the saved data at a time:

@@ -59,6 +59,11 @@ const watched = new WeakSet();
 
 const CHANGED_NOTE = 'Your data changed, so the summary has been updated. Check it and import again.';
 
+/** Drop any half-finished import, so the Accounts screen starts at the file picker. */
+export function resetImport() {
+  flow = fresh();
+}
+
 /** @returns {boolean} true while a pick is in progress (any step after choosing files) */
 export function importActive() {
   return flow.step !== 'pick';

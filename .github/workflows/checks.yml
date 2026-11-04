@@ -58,6 +58,7 @@ jobs:
           node-version: 22
       - run: npm ci --ignore-scripts
       # CI=true (set by GitHub) makes playwright.config.js start its own server.
+      # The privacy spec runs on full Chromium (channel: 'chromium'), so don't add --only-shell.
       - run: npx playwright install --with-deps chromium && npm run e2e
 
   deploy:

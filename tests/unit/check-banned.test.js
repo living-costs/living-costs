@@ -66,6 +66,9 @@ test('CLI still scans when run through a symlinked directory', () => {
 const hitAt = (file, line, pattern) => [{ file, line, pattern }];
 const hit = (file, pattern) => hitAt(file, 1, pattern);
 
+/** Both the Object.assign and the URL key findings, on one line. */
+const assignAndKey = (file, line) => [{ file, line, pattern: 'Object.assign URL' }, { file, line, pattern: 'URL key' }];
+
 // The attribute names h() refuses that take a URL, as setAttribute would be given them.
 const URL_ATTRS = ['href', 'src', 'srcset', 'action', 'formaction', 'formAction', 'ping', 'poster', 'background', 'xlink:href'];
 
@@ -168,7 +171,7 @@ const POSITIVE = [
     [`setAttributeNS(ns, "${name}"`, 'src/a.js', `el.setAttributeNS(ns, "${name}", u);`, hit('src/a.js', 'setAttributeNS URL')],
     [`['${name}'] =`, 'src/a.js', `el['${name}'] = u;`, hit('src/a.js', 'URL property =')],
     [`["${name}"]=`, 'src/a.js', `el["${name}"]=u`, hit('src/a.js', 'URL property =')],
-    [`Object.assign {${name}: u}`, 'src/a.js', `Object.assign(el, { '${name}': u });`, hit('src/a.js', 'Object.assign URL')],
+    [`Object.assign {${name}: u}`, 'src/a.js', `Object.assign(el, { '${name}': u });`, assignAndKey('src/a.js', 1)],
   ]),
   ['setAttribute upper case', 'src/a.js', "el.setAttribute('HREF', u);", hit('src/a.js', 'setAttribute URL')],
   ['setAttribute backtick', 'src/a.js', 'el.setAttribute(`src`, u);', hit('src/a.js', 'setAttribute URL')],
@@ -178,13 +181,30 @@ const POSITIVE = [
   ['[] += ', 'src/a.js', "el['href'] += q;", hit('src/a.js', 'URL property =')],
   ['[ spaced ] =', 'src/a.js', "a[0][ 'formAction' ] ??= u;", hit('src/a.js', 'URL property =')],
   ['[] = split', 'src/a.js', "x;\nel['src']\n  = u;", hitAt('src/a.js', 2, 'URL property =')],
-  ['Object.assign unquoted key', 'src/a.js', 'Object.assign(el, { href: u });', hit('src/a.js', 'Object.assign URL')],
-  ['Object.assign later key', 'src/a.js', "Object.assign(h('a'), { title: t, src: u });", hit('src/a.js', 'Object.assign URL')],
+  ['Object.assign unquoted key', 'src/a.js', 'Object.assign(el, { href: u });', assignAndKey('src/a.js', 1)],
+  ['Object.assign later key', 'src/a.js', "Object.assign(h('a'), { title: t, src: u });", assignAndKey('src/a.js', 1)],
   ['Object.assign shorthand', 'src/a.js', 'Object.assign(el, { href });', hit('src/a.js', 'Object.assign URL')],
   ['Object.assign shorthand first', 'src/a.js', 'Object.assign(el, { ping, title });', hit('src/a.js', 'Object.assign URL')],
-  ['Object.assign computed key', 'src/a.js', "Object.assign(el, { ['poster']: u });", hit('src/a.js', 'Object.assign URL')],
-  ['Object . assign split', 'src/a.js', 'x;\nObject\n  .assign(el, {\n  srcset: u,\n});', hitAt('src/a.js', 2, 'Object.assign URL')],
-  ['Object.assign second source', 'src/a.js', 'Object.assign(el, { title: t }, { action: u });', hit('src/a.js', 'Object.assign URL')],
+  ['Object.assign computed key', 'src/a.js', "Object.assign(el, { ['poster']: u });", assignAndKey('src/a.js', 1)],
+  ['Object . assign split', 'src/a.js', 'x;\nObject\n  .assign(el, {\n  srcset: u,\n});', [
+    { file: 'src/a.js', line: 2, pattern: 'Object.assign URL' }, { file: 'src/a.js', line: 4, pattern: 'URL key' },
+  ]],
+  ['Object.assign second source', 'src/a.js', 'Object.assign(el, { title: t }, { action: u });', assignAndKey('src/a.js', 1)],
+  // Any object-literal key named a URL attribute, in or out of Object.assign.
+  ...URL_ATTRS.map((name) => [`key ${name}:`, 'src/a.js', `const o = { '${name}': u };`, hit('src/a.js', 'URL key')]),
+  ['unquoted key', 'src/a.js', 'const o = { title: t, href: u };', hit('src/a.js', 'URL key')],
+  ['double-quoted key', 'src/a.js', 'const o = { "src" : u };', hit('src/a.js', 'URL key')],
+  ['computed key', 'src/a.js', "const o = { ['ping']: u };", hit('src/a.js', 'URL key')],
+  ['key on its own line', 'src/a.js', 'const o = {\n  title: t,\n  POSTER: u,\n};', hitAt('src/a.js', 3, 'URL key')],
+  ['Object.assign evasion with ; in a string', 'src/a.js', "Object.assign(el, { title: 'a;b', href: u });", hit('src/a.js', 'URL key')],
+  // Inline event handlers in markup.
+  ['onload in html', 'index.html', '<body onload="go()">', hit('index.html', 'event handler attribute')],
+  ['ONCLICK in html', 'index.html', '<a\n  ONCLICK = "go()">', hitAt('index.html', 2, 'event handler attribute')],
+  ['onload in svg', 'favicon.svg', '<svg onload="go()"></svg>', hit('favicon.svg', 'event handler attribute')],
+  ['onbegin in svg split', 'favicon.svg', '<svg>\n<set\tonbegin=x/></svg>', hitAt('favicon.svg', 2, 'event handler attribute')],
+  // Any namespace prefix on a script element.
+  ['<a.b:script', 'favicon.svg', '<svg><a.b:script>x</a.b:script></svg>', hit('favicon.svg', '<script')],
+  ['<é:script', 'favicon.svg', '<svg><é:script>x</é:script></svg>', hit('favicon.svg', '<script')],
   ['<script in svg', 'favicon.svg', '<svg><script>alert(1)</script></svg>', hit('favicon.svg', '<script')],
   ['<SCRIPT in svg', 'favicon.svg', '<svg><SCRIPT href="x.js"/></svg>', hit('favicon.svg', '<script')],
   ['<svg:script', 'favicon.svg', '<svg:svg><svg:script>x</svg:script></svg:svg>', hit('favicon.svg', '<script')],
@@ -253,8 +273,21 @@ const NEGATIVE = [
   ['Object.assign hrefs key', 'src/n.js', 'Object.assign(a, { hrefs: x, srcs: y });'],
   ['Object.assign href as call argument', 'src/n.js', 'Object.assign(a, { label: f(x, href) });'],
   ['Object.assign no literal', 'src/n.js', 'Object.assign(store.state, emptyState());'],
-  ['Object.assign then a later literal', 'src/n.js', 'Object.assign(a, b);\nconst o = { href: u };'],
+  ['Object.assign then a later shorthand literal', 'src/n.js', 'Object.assign(a, b);\nconst o = { href };'],
   ['Object.assign target named href', 'src/n.js', 'Object.assign(href, b);'],
+  // Near-misses for URL keys and event handlers.
+  ['hrefs: key', 'src/n.js', 'const o = { hrefs: x };'],
+  ['source: key', 'src/n.js', 'const o = { source: x, sources: y };'],
+  ['transactions: key', 'src/n.js', 'const o = { transactions: x, actions: y };'],
+  ['data-href key', 'src/n.js', "const o = { 'data-href': x };"],
+  ['href as a value', 'src/n.js', 'const o = { title: href };'],
+  ['css text in a string', 'src/n.js', "const c = 'background: red';"],
+  ['dotted .href:', 'src/n.js', 'const o = { a: x.href };'],
+  ['const oneOf =', 'src/n.js', 'const oneOf = (list) => list;'],
+  ['oneOffs = in js', 'src/n.js', 'let oneOffs = [];'],
+  ['button onClick prop', 'src/n.js', "h('button', { onClick: go }, 'Go');"],
+  ['onload word in html text', 'index.html', '<p>Runs on load.</p>'],
+  ['noopener in html', 'index.html', '<a rel="noopener noreferrer">x</a>'],
   ['</script> alone', 'favicon.svg', '<svg></script></svg>'],
 ];
 

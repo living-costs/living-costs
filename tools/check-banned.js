@@ -33,8 +33,11 @@ const REGEXES = [
   { re: /(?<![\w$])(?<!\.\s*)open\s*\(/g, name: 'open(' },
   { re: /navigation\s*\.\s*navigate/g, name: 'navigation.navigate' },
   // A script element, in any shipped file (SVG can carry script too), with or without a
-  // namespace prefix. The match runs to the end of the start tag, so an exception can name it.
-  { re: /<(?:[\w-]+:)?script\b[^>]*>?/gi, name: '<script' },
+  // namespace prefix of any characters. The match runs to the end of the start tag, so an
+  // exception can name it.
+  { re: /<(?:[^\s<>/:]+:)?script\b[^>]*>?/gi, name: '<script' },
+  // An inline event-handler attribute, in markup only (in code, `oneOf =` would match).
+  { re: /\son[a-z]+\s*=/gi, name: 'event handler attribute', files: /\.(?:html|svg)$/ },
   { re: /\blocation\s*\+?=(?![=>])/g, name: 'location =' },
   // CSS @import needs a following quote or url(, so JSDoc `@import {X} from` is not flagged.
   { re: /@import\s*(["']|url\()/gi, name: '@import' },
@@ -69,9 +72,19 @@ const REGEXES = [
     re: new RegExp(String.raw`\bObject\s*\.\s*assign\s*\([^;]*?[{,]\s*\[?\s*(["'\`]?)${URL_ATTR}\1\s*\]?\s*[:,}]`, 'gi'),
     name: 'Object.assign URL',
   },
+  // Any object-literal key named a URL attribute, quoted, computed or not, followed by `:`, in
+  // code. Not after a word character, `.`, `-`, `:` or a quote, so `hrefs:`, `x.href`,
+  // `data-href` and CSS text in a string pass. h() refuses these props, so src/ has no need of them.
+  {
+    re: new RegExp(String.raw`(?<![\w$.\-:'"\`])(["'\`]?)${URL_ATTR}\1\s*\]?\s*:`, 'gi'),
+    name: 'URL key',
+    files: /\.js$/,
+  },
 ];
 
 /**
+ * Each REGEXES entry runs on every scanned file, or, with `files`, only on paths it matches.
+ *
  * Documented exceptions: {file, pattern, match?, reason}. Without `match`, every finding of
  * `pattern` in `file` is exempt (too broad for URLs; avoid). With `match`, only a finding
  * whose matched text equals it exactly is exempt. For `http://` and `https://` the matched
@@ -155,7 +168,8 @@ export function scan(root, exceptions = EXCEPTIONS) {
         }
       }
     });
-    for (const { re, name } of REGEXES) {
+    for (const { re, name, files: only } of REGEXES) {
+      if (only && !only.test(file)) continue;
       for (const m of content.matchAll(re)) {
         let line = 1;
         for (let k = content.indexOf('\n'); k !== -1 && k < m.index; k = content.indexOf('\n', k + 1)) line++;

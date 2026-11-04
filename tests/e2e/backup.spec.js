@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import {
   expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, importFiles, FIXTURE_ACCOUNTS, readStore,
+  pickFiles,
 } from './helpers.js';
 import defaults from '../../src/default-categories.js';
 
@@ -309,6 +310,7 @@ test('delete loaded data: declining changes nothing', async ({ page }) => {
   expect(dialogs).toEqual([`confirm: ${DELETE_CONFIRM}`]);
   await expect(heading(page)).toHaveText('Backup');
   await expect(deleteButton(page)).toBeEnabled();
+  await expect(deleteButton(page)).toBeFocused();
   await expect(page.getByText('All data deleted.')).toHaveCount(0);
   expect(await snapshotAll(page)).toEqual(before);
   expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
@@ -373,4 +375,41 @@ test('delete loaded data: accepting leaves exactly a first visit', async ({ page
   await expect(heading(page)).toHaveText('Help');
   await expectFirstVisit();
   expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
+});
+
+/**
+ * Start an import on Accounts and leave it at the account step, then go to Backup.
+ * @param {Page} page
+ */
+async function leaveImportHalfDone(page) {
+  await pickFiles(page, ['card.csv']);
+  await expect(page.getByRole('group', { name: 'Which account is this?' })).toBeVisible();
+  await openScreen(page, 'Backup');
+}
+
+/** Accounts shows the file picker, with no import in progress. @param {Page} page */
+async function expectNoImportInProgress(page) {
+  await openScreen(page, 'Accounts');
+  await expect(page.getByLabel('Choose CSV files')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Which account is this?' })).toHaveCount(0);
+}
+
+test('delete loaded data clears a half-finished import', async ({ page }) => {
+  await page.goto('./');
+  await expect(heading(page)).toHaveText('Help');
+  await leaveImportHalfDone(page);
+  page.on('dialog', (dialog) => dialog.accept());
+  await deleteButton(page).click();
+  await expect(heading(page)).toHaveText('Help');
+  await expectNoImportInProgress(page);
+});
+
+test('restore clears a half-finished import', async ({ page }) => {
+  await page.goto('./');
+  await expect(heading(page)).toHaveText('Help');
+  await leaveImportHalfDone(page);
+  page.on('dialog', (dialog) => dialog.accept());
+  await restoreInput(page).setInputFiles(jsonFile('empty.json', emptyBackup()));
+  await expect(heading(page)).toHaveText('Help');
+  await expectNoImportInProgress(page);
 });

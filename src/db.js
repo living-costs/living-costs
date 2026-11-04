@@ -40,7 +40,7 @@ export function openDb() {
       resolve(db);
     };
     req.onerror = () => reject(req.error);
-    req.onblocked = () => reject(new Error('Already open in another tab. Close it and reload.'));
+    req.onblocked = () => reject(new Error('This app is already open in another tab. Close that tab and this one will load automatically.'));
   });
 }
 
