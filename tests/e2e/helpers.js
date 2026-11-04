@@ -134,3 +134,19 @@ export async function importFiles(page, opts) {
   else await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByLabel('Choose CSV files')).toBeVisible();
 }
+
+// --- Categorise card -------------------------------------------------------------------------
+
+/** The categorise card's heading (the bucket name). */
+export const cardHeading = (page) => page.locator('#card-heading');
+
+/** On the Categorise screen, click Skip for now until the card heading is `name`. Fails after 100 clicks. */
+export async function skipToCard(page, name) {
+  const heading = cardHeading(page);
+  for (let i = 0; i < 100; i++) {
+    await expect(heading).toBeVisible();
+    if ((await heading.textContent()) === name) return;
+    await page.getByRole('button', { name: 'Skip for now' }).click();
+  }
+  throw new Error(`No card for ${name} after 100 skips`);
+}

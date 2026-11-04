@@ -9,6 +9,7 @@ import { SCREEN_LIST, renderNav, markCurrent } from './ui/nav.js';
 import * as help from './ui/help.js';
 import * as accounts from './ui/accounts.js';
 import * as categories from './ui/categories.js';
+import * as categorise from './ui/categorise.js';
 import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
@@ -31,7 +32,7 @@ const label = (name) => SCREEN_LIST.find((s) => s.name === name)?.label ?? name;
 const SCREENS = {
   help: help.render,
   typical: placeholder(label('typical')),
-  categorise: placeholder(label('categorise')),
+  categorise: categorise.render,
   buckets: placeholder(label('buckets')),
   transactions: placeholder(label('transactions')),
   transfers: placeholder(label('transfers')),

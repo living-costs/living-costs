@@ -1,0 +1,232 @@
+import { test, expect } from '@playwright/test';
+import {
+  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading,
+} from './helpers.js';
+
+const BANK_A = { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' };
+const SALARY = 'EXAMPLE EMPLOYER LTD SALARY';
+
+/** @param {import('@playwright/test').Page} page */
+const screenHeading = (page) => page.locator('#screen h2');
+/** @param {import('@playwright/test').Page} page */
+const card = (page) => page.locator('#card');
+/** @param {import('@playwright/test').Page} page */
+const progressLine = (page) => page.locator('#categorise-progress');
+/** A card section by its heading. */
+const section = (page, name) => card(page).getByRole('region', { name, exact: true });
+/** The card's "£X over N months · M transactions · …" line. */
+const summary = (page) => page.locator('#card-summary');
+
+/** @param {string} text */
+const bucketsLeft = (text) => Number(/· (\d+) buckets? left$/.exec(text)?.[1]);
+/** @param {string} text */
+const txnCount = (text) => Number(/· (\d+) transactions?/.exec(text)?.[1]);
+
+async function openCategorise(page) {
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Categorise' }).click();
+  await expect(screenHeading(page)).toHaveText('Categorise');
+  await expect(cardHeading(page)).toBeVisible();
+}
+
+/** Read a store from IndexedDB. */
+const readStore = (page, name) => page.evaluate((storeName) => new Promise((resolve, reject) => {
+  const req = indexedDB.open('budgie');
+  req.onerror = () => reject(req.error);
+  req.onsuccess = () => {
+    const db = req.result;
+    const all = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+    all.onsuccess = () => { db.close(); resolve(all.result); };
+    all.onerror = () => reject(all.error);
+  };
+}), name);
+
+test.beforeEach(async ({ page }) => {
+  await trackCspViolations(page);
+  await page.goto('./');
+  await expect(screenHeading(page)).toHaveText('Help');
+  await importFiles(page, { files: ['bank-a-current.csv'], account: BANK_A });
+});
+
+test.afterEach(async ({ page }) => {
+  expect(await page.evaluate(() => window.__csp)).toEqual([]);
+});
+
+test('largest first', async ({ page }) => {
+  await openCategorise(page);
+  await expect(cardHeading(page)).toHaveText(SALARY);
+  await expect(summary(page)).toHaveText('£30,000.00 over 12 months · 12 transactions · about £2,500.00 a month');
+  await expect(progressLine(page)).toHaveText(/^£0\.00 of £[\d,]+\.\d\d categorised \(0%\) · \d+ buckets left$/);
+  const buttons = card(page).getByRole('group', { name: 'Category' }).getByRole('button');
+  await expect(buttons.first()).toHaveText('1 Salary');
+  await expect(buttons.nth(9)).toHaveText('0 Takeaway');
+  await expect(buttons.nth(10)).toHaveText('Transport');
+  await expect(buttons.last()).toHaveText('New category…');
+});
+
+test('number key assigns', async ({ page }) => {
+  await openCategorise(page);
+  const before = await progressLine(page).textContent();
+  await card(page).focus();
+  await page.keyboard.press('1');
+  await expect(cardHeading(page)).not.toHaveText(SALARY);
+  await expect(progressLine(page)).toHaveText(/^£30,000\.00 of /);
+  expect(bucketsLeft(await progressLine(page).textContent())).toBe(bucketsLeft(before) - 1);
+  const salary = (await readStore(page, 'buckets')).find((b) => b.displayName === SALARY);
+  const categories = await readStore(page, 'categories');
+  expect(categories.find((c) => c.id === salary.categoryId)?.name).toBe('Salary');
+});
+
+test('focus stays in the card after a number key', async ({ page }) => {
+  await openCategorise(page);
+  await card(page).focus();
+  await page.keyboard.press('1');
+  await expect(cardHeading(page)).toHaveText('ACME LETTINGS');
+  await expect(card(page)).toBeFocused();
+  await page.keyboard.press('1');
+  await expect(cardHeading(page)).not.toHaveText('ACME LETTINGS');
+  const acme = (await readStore(page, 'buckets')).find((b) => b.displayName === 'ACME LETTINGS');
+  expect(acme.categoryId).toBeTruthy();
+});
+
+test('keys inactive outside card', async ({ page }) => {
+  await openCategorise(page);
+  const before = await progressLine(page).textContent();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Categorise' }).focus();
+  await page.keyboard.press('1');
+  await page.waitForTimeout(300);
+  await expect(cardHeading(page)).toHaveText(SALARY);
+  await expect(progressLine(page)).toHaveText(before);
+  expect((await readStore(page, 'buckets')).filter((b) => b.categoryId)).toEqual([]);
+});
+
+test('category buttons, Skip for now and Stop here', async ({ page }) => {
+  await openCategorise(page);
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await expect(cardHeading(page)).toHaveText('ACME LETTINGS');
+  await card(page).getByRole('button', { name: /Housing/ }).click();
+  await expect(cardHeading(page)).not.toHaveText('ACME LETTINGS');
+  await expect(cardHeading(page)).not.toHaveText(SALARY);
+  await page.getByRole('button', { name: 'Stop here' }).click();
+  await expect(screenHeading(page)).toHaveText('Typical month');
+});
+
+test('new category from the card, and keys typed into its form do nothing', async ({ page }) => {
+  await openCategorise(page);
+  await page.getByRole('button', { name: 'New category…' }).click();
+  const name = card(page).getByLabel('Name', { exact: true });
+  await expect(name).toBeFocused();
+  await name.pressSequentially('Wages 1');
+  await expect(cardHeading(page)).toHaveText(SALARY);
+  await card(page).getByLabel('Kind', { exact: true }).selectOption({ label: 'Income' });
+  await card(page).getByLabel('Budget type', { exact: true }).selectOption({ label: 'Fixed' });
+  await card(page).getByRole('button', { name: 'Add and use' }).click();
+  await expect(cardHeading(page)).toHaveText('ACME LETTINGS');
+  const categories = await readStore(page, 'categories');
+  const wages = categories.find((c) => c.name === 'Wages 1');
+  expect(wages).toMatchObject({ kind: 'income', budgetType: 'fixed' });
+  const salary = (await readStore(page, 'buckets')).find((b) => b.displayName === SALARY);
+  expect(salary.categoryId).toBe(wages.id);
+});
+
+test('amount rule', async ({ page }) => {
+  await openCategorise(page);
+  await skipToCard(page, 'PAYPAL PAYMENT');
+  const item = section(page, 'Repeating amounts').getByRole('listitem').filter({ hasText: '£2.99, 13 times, monthly' });
+  await item.getByRole('button', { name: 'Make this its own bucket' }).click();
+  await expect(card(page).getByLabel('Times per month')).toHaveValue('1');
+  await card(page).getByLabel('Bucket name').fill('Google One storage');
+  await card(page).getByRole('button', { name: 'Make bucket' }).click();
+
+  await expect(cardHeading(page)).toHaveText('PAYPAL PAYMENT');
+  const flagged = section(page, 'Flagged');
+  await expect(flagged.getByRole('listitem')).toHaveCount(1);
+  await expect(flagged.getByRole('listitem')).toContainText('20/10/2026');
+  await expect(flagged).toContainText('Matched Google One storage, but it already had a payment this month.');
+  await flagged.getByRole('button', { name: 'It belongs there' }).click();
+  await expect(flagged).toHaveCount(0);
+
+  const buckets = await readStore(page, 'buckets');
+  const google = buckets.find((b) => b.displayName === 'Google One storage');
+  const txns = (await readStore(page, 'transactions')).filter((t) => t.bucketId === google.id);
+  expect(txns).toHaveLength(13);
+  expect(txns.every((t) => t.flaggedRuleId === undefined)).toBe(true);
+});
+
+test('amount rule form needs a name and a whole count', async ({ page }) => {
+  await openCategorise(page);
+  await skipToCard(page, 'PAYPAL PAYMENT');
+  const item = section(page, 'Repeating amounts').getByRole('listitem').filter({ hasText: '£2.99, 13 times, monthly' });
+  await item.getByRole('button', { name: 'Make this its own bucket' }).click();
+  await card(page).getByLabel('Bucket name').fill('   ');
+  await card(page).getByRole('button', { name: 'Make bucket' }).click();
+  await expect(card(page).getByText('Enter a bucket name.')).toBeVisible();
+  await card(page).getByLabel('Bucket name').fill('Google One storage');
+  await card(page).getByLabel('Times per month').fill('0');
+  await card(page).getByRole('button', { name: 'Make bucket' }).click();
+  await expect(card(page).getByText('Enter a whole number, 1 or more.')).toBeVisible();
+  expect(await readStore(page, 'rules')).toEqual([]);
+});
+
+test('unusual', async ({ page }) => {
+  await openCategorise(page);
+  await skipToCard(page, 'TESCO STORES');
+  const unusual = section(page, 'Unusual amounts');
+  const row = unusual.getByRole('listitem').filter({ hasText: '£650.00' });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText('13/06/2026');
+  await row.getByRole('button', { name: "It's normal" }).click();
+  await expect(unusual).toHaveCount(0);
+  const overrides = await readStore(page, 'overrides');
+  expect(overrides).toHaveLength(1);
+  expect(overrides[0].unusualDismissed).toBe(true);
+});
+
+test('unusual: move to another category', async ({ page }) => {
+  await openCategorise(page);
+  await skipToCard(page, 'TESCO STORES');
+  const row = section(page, 'Unusual amounts').getByRole('listitem').filter({ hasText: '£650.00' });
+  await row.getByRole('button', { name: 'Move to another category…' }).click();
+  await row.getByLabel('Move to').selectOption({ label: 'Big one-offs' });
+  await row.getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(section(page, 'Unusual amounts')).toHaveCount(0);
+  const [override] = await readStore(page, 'overrides');
+  const categories = await readStore(page, 'categories');
+  expect(categories.find((c) => c.id === override.categoryId)?.name).toBe('Big one-offs');
+});
+
+test('merge from related', async ({ page }) => {
+  await importFiles(page, {
+    files: ['bank-a-current-2026-10-reexport.csv'], account: { existing: 'Bank A current' }, review: 'both',
+  });
+  await openCategorise(page);
+  await skipToCard(page, 'TESCO STORES');
+  const count = txnCount(await summary(page).textContent());
+  const related = section(page, 'Looks related');
+  await expect(related.getByRole('listitem')).toHaveCount(1);
+  await expect(related.getByRole('listitem')).toContainText('TESCO STORE');
+  await related.getByRole('button', { name: 'Merge into this' }).click();
+  await expect(related).toHaveCount(0);
+  await expect(cardHeading(page)).toHaveText('TESCO STORES');
+  expect(txnCount(await summary(page).textContent())).toBe(count + 1);
+  const tesco = (await readStore(page, 'buckets')).filter((b) => b.keys.some((k) => k.startsWith('TESCO')));
+  expect(tesco).toHaveLength(1);
+  expect(tesco[0].keys.sort()).toEqual(['TESCO STORE', 'TESCO STORES']);
+});
+
+test('axe passes on the card', async ({ page }) => {
+  await openCategorise(page);
+  await expectNoAxeViolations(page);
+  await page.getByRole('button', { name: 'New category…' }).click();
+  await expectNoAxeViolations(page);
+  // TESCO STORES comes before PAYPAL PAYMENT in the queue.
+  await skipToCard(page, 'TESCO STORES');
+  await section(page, 'Unusual amounts').getByRole('button', { name: 'Move to another category…' }).click();
+  await expectNoAxeViolations(page);
+  await skipToCard(page, 'PAYPAL PAYMENT');
+  await section(page, 'Repeating amounts').getByRole('button', { name: 'Make this its own bucket' }).first().click();
+  await expectNoAxeViolations(page);
+  await card(page).getByLabel('Bucket name').fill('Google One storage');
+  await card(page).getByRole('button', { name: 'Make bucket' }).click();
+  await expect(section(page, 'Flagged')).toBeVisible();
+  await expectNoAxeViolations(page);
+});

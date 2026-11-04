@@ -109,3 +109,12 @@ th, td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.5rem; text-a
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .inline-form .name-input { width: 14rem; }
 .inline-form .error { white-space: normal; }
+
+/* Categorise card */
+.category-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.category-buttons .key { font-weight: bold; }
+.plain-list { list-style: none; padding: 0; margin: 0.25rem 0; }
+.plain-list > li { padding: 0.25rem 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.plain-list > li p { margin: 0.25rem 0; }
+.plain-list .row-actions { margin-top: 0.25rem; }
+.card-form { margin: 0.5rem 0; }
