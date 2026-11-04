@@ -134,6 +134,19 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
 - **Undo** removes a batch's transactions, or every batch from one multi-file import. Fingerprint-keyed decisions stay dormant.
 - **Accounts-by-month table:** accounts as rows and months as columns. Each cell shows covered, partial or missing, with the transaction count. Placeholder accounts show "not itemised". Coverage comes from each batch's declared covered period. A gap of up to `coverageGapDays` between consecutive batches in one account counts as covered, since banks' export boundaries don't always line up.
 
+## Extending formats
+
+Import has two stages with a plain boundary between them:
+
+1. **Reading the file:** the CSV parser turns bytes into a header row plus string rows. It knows nothing about banks.
+2. **Mapping the rows:** the saved mapping turns string rows into transactions. Each bank's format is **data** (a mapping the user makes in the UI), not code.
+
+How new formats fit in:
+
+- **A new bank with ordinary CSV** needs no code change.
+- **A new quirk** needs a new option in the mapping, a synthetic fixture that reproduces it, and tests. Examples are another date format, amounts written like `1,234.56` or `(12.00)`, or a separate DR/CR column. Each such option is a small, separate parse function, so adding one doesn't touch the others.
+- **PDF, if ever needed,** would be another reader at stage 1, feeding the same mapping step. Nothing is built for it now, and PDF stays out of scope as in `CLAUDE.md`. Reading PDFs in the browser would probably need a third-party library, which would collide with the no-runtime-dependencies rule, so it would be a separate decision.
+
 ## Tuning values
 
 Every window and threshold lives in one data-only module, `src/tuning.js`, which the owner edits and pushes in the same way as `src/default-categories.js`. Code reads these names and never hard-codes the numbers. The values below are the starting ones (Claude's call).
