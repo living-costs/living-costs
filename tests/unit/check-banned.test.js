@@ -186,6 +186,45 @@ test('findings matching an exception are dropped, others kept', () => {
   assert.deepEqual(scan(dir, [{ file: 'src/a.js', pattern: 'eval(', reason: 'test' }]).length, 2);
 });
 
-test('shipped EXCEPTIONS list is empty', () => {
-  assert.deepEqual(EXCEPTIONS, []);
+const AGPL = 'https://www.gnu.org/licenses/agpl-3.0.html';
+const SOURCE = 'https://github.com/living-costs/living-costs';
+const FOOTER =
+  `<footer class="site-footer"><p>Copyright 2026. <a href="${AGPL}" target="_blank" rel="noopener noreferrer">AGPL-3.0</a>. ` +
+  `<a href="${SOURCE}" target="_blank" rel="noopener noreferrer">Source code</a></p></footer>`;
+
+test('shipped EXCEPTIONS are exactly the two footer links, each naming its literal URL', () => {
+  assert.deepEqual(
+    EXCEPTIONS.map((e) => [e.file, e.pattern, e.match]),
+    [['index.html', 'https://', AGPL], ['index.html', 'https://', SOURCE]],
+  );
+  for (const e of EXCEPTIONS) assert.ok(e.reason.length > 10);
+});
+
+test('the two exact footer URLs pass in index.html', () => {
+  assert.deepEqual(scan(makeDir({ 'index.html': FOOTER })), []);
+});
+
+test('any other https URL in index.html still fails', () => {
+  const third = FOOTER + `\n<a href="https://example.com/x">x</a>`;
+  assert.deepEqual(scan(makeDir({ 'index.html': third })), hitAt('index.html', 2, 'https://'));
+  const changed = FOOTER.replace('agpl-3.0.html', 'agpl-3.0.txt');
+  assert.deepEqual(scan(makeDir({ 'index.html': changed })), hitAt('index.html', 1, 'https://'));
+  const prefix = FOOTER.replace(SOURCE + '"', SOURCE + '/evil"');
+  assert.deepEqual(scan(makeDir({ 'index.html': prefix })), hitAt('index.html', 1, 'https://'));
+});
+
+test('a bad URL on the same line as a good one is still reported', () => {
+  const dir = makeDir({ 'index.html': `<a href="${AGPL}">a</a> <a href="https://evil.example/">b</a>` });
+  assert.deepEqual(scan(dir), hitAt('index.html', 1, 'https://'));
+});
+
+test('an index.html exception does not exempt the same URL in src/', () => {
+  const dir = makeDir({ 'index.html': FOOTER, 'src/a.js': `const u = '${AGPL}';` });
+  assert.deepEqual(scan(dir), hitAt('src/a.js', 1, 'https://'));
+});
+
+test('an exception with a match field exempts only that literal text', () => {
+  const dir = makeDir({ 'src/a.js': "x = 'https://ok.example/a'; y = 'https://ok.example/ab';" });
+  const ex = [{ file: 'src/a.js', pattern: 'https://', match: 'https://ok.example/a', reason: 'test only' }];
+  assert.deepEqual(scan(dir, ex), hitAt('src/a.js', 1, 'https://'));
 });

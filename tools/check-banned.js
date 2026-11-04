@@ -40,8 +40,29 @@ const REGEXES = [
   { re: new RegExp(String.raw`\bimport\s*["']\s*${PR}`, 'g'), name: 'protocol-relative URL' },
 ];
 
-/** Documented exceptions: {file, pattern, reason}. Empty on purpose. */
-export const EXCEPTIONS = [];
+/**
+ * Documented exceptions: {file, pattern, match?, reason}. Without `match`, every finding of
+ * `pattern` in `file` is exempt (too broad for URLs; avoid). With `match`, only a finding
+ * whose matched text equals it exactly is exempt. For `http://` and `https://` the matched
+ * text is the whole URL, up to the next whitespace, quote, backtick, `<` or `>`.
+ */
+export const EXCEPTIONS = [
+  {
+    file: 'index.html',
+    pattern: 'https://',
+    match: 'https://www.gnu.org/licenses/agpl-3.0.html',
+    reason: 'Page footer link to the AGPL-3.0 licence. Approved by the owner; the only licence link.',
+  },
+  {
+    file: 'index.html',
+    pattern: 'https://',
+    match: 'https://github.com/living-costs/living-costs',
+    reason: 'Page footer link to the source code. Approved by the owner; the only source link.',
+  },
+];
+
+const URL_LITERALS = new Set(['http://', 'https://']);
+const urlAt = (text, i) => text.slice(i).match(/^[^\s"'`<>]*/)[0];
 
 function listFiles(root, rel, out) {
   const full = path.join(root, rel);
@@ -54,7 +75,7 @@ function listFiles(root, rel, out) {
 
 /**
  * @param {string} root
- * @param {{file: string, pattern: string, reason: string}[]} [exceptions]
+ * @param {{file: string, pattern: string, match?: string, reason: string}[]} [exceptions]
  * @returns {{file: string, line: number, pattern: string}[]}
  */
 export function scan(root, exceptions = EXCEPTIONS) {
@@ -70,21 +91,25 @@ export function scan(root, exceptions = EXCEPTIONS) {
     const content = fs.readFileSync(path.join(root, file), 'utf8');
     const seen = new Set();
     const found = [];
-    const add = (line, pattern) => {
+    const add = (line, pattern, matched) => {
       const key = `${line}\0${pattern}`;
       if (seen.has(key)) return;
+      if (exceptions.some((e) => e.file === file && e.pattern === pattern && (e.match === undefined || e.match === matched))) return;
       seen.add(key);
-      if (exceptions.some((e) => e.file === file && e.pattern === pattern)) return;
       found.push({ file, line, pattern });
     };
     content.split(/\r?\n/).forEach((text, i) => {
-      for (const lit of LITERALS) if (text.includes(lit)) add(i + 1, lit);
+      for (const lit of LITERALS) {
+        for (let at = text.indexOf(lit); at !== -1; at = text.indexOf(lit, at + 1)) {
+          add(i + 1, lit, URL_LITERALS.has(lit) ? urlAt(text, at) : lit);
+        }
+      }
     });
     for (const { re, name } of REGEXES) {
       for (const m of content.matchAll(re)) {
         let line = 1;
         for (let k = content.indexOf('\n'); k !== -1 && k < m.index; k = content.indexOf('\n', k + 1)) line++;
-        add(line, name);
+        add(line, name, m[0]);
       }
     }
     found.sort((x, y) => x.line - y.line);

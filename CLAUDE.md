@@ -20,7 +20,7 @@ Transaction data must never leave the browser.
 
 - No network code: no `fetch`, XHR, WebSockets, `EventSource`, `sendBeacon`, or dynamic imports. Never build a URL from user data.
 - No runtime dependencies. Use a small, tested in-house CSV parser.
-- No external resources or links: no CDNs, analytics, remote fonts, or remote icons.
+- No external resources or links: no CDNs, analytics, remote fonts, or remote icons. The only exception is the page footer's two links, to the AGPL-3.0 licence on gnu.org and to the source code on GitHub, both opening in a new tab with `rel="noopener noreferrer"`. Any other link needs the owner's approval.
 - Treat all CSV and backup content as untrusted. Render with `textContent`. Never use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, or `eval`.
 - Validate backup files and their schema version on restore.
 - App-level rules are the main protection. The CSP is a backstop.
