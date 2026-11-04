@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations } from './helpers.js';
+import { expectNoAxeViolations, trackCspViolations, readStore } from './helpers.js';
 
 const DEFAULTS_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/default-categories.js');
 
@@ -36,18 +36,6 @@ async function withExtraDefaults(page, entries) {
     status: 200, contentType: 'text/javascript', body,
   }));
 }
-
-/** Read a store from IndexedDB. */
-const readStore = (page, name) => page.evaluate((storeName) => new Promise((resolve, reject) => {
-  const req = indexedDB.open('budgie');
-  req.onerror = () => reject(req.error);
-  req.onsuccess = () => {
-    const db = req.result;
-    const all = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
-    all.onsuccess = () => { db.close(); resolve(all.result); };
-    all.onerror = () => reject(all.error);
-  };
-}), name);
 
 /** Put rows into an IndexedDB store (test setup only; the app reads it on the next load). */
 const putRows = (page, name, rows) => page.evaluate(({ storeName, items }) => new Promise((resolve, reject) => {

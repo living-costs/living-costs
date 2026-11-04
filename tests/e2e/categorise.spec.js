@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading,
+  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading, readStore,
 } from './helpers.js';
 
 const BANK_A = { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' };
@@ -27,18 +27,6 @@ async function openCategorise(page) {
   await expect(screenHeading(page)).toHaveText('Categorise');
   await expect(cardHeading(page)).toBeVisible();
 }
-
-/** Read a store from IndexedDB. */
-const readStore = (page, name) => page.evaluate((storeName) => new Promise((resolve, reject) => {
-  const req = indexedDB.open('budgie');
-  req.onerror = () => reject(req.error);
-  req.onsuccess = () => {
-    const db = req.result;
-    const all = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
-    all.onsuccess = () => { db.close(); resolve(all.result); };
-    all.onerror = () => reject(all.error);
-  };
-}), name);
 
 test.beforeEach(async ({ page }) => {
   await trackCspViolations(page);
@@ -88,15 +76,51 @@ test('focus stays in the card after a number key', async ({ page }) => {
   expect(acme.categoryId).toBeTruthy();
 });
 
+/**
+ * Press `2` on the card, wait for the next card, and return the category name the SALARY bucket
+ * got. If an earlier key had assigned SALARY, this `2` would land on the next bucket (or be
+ * ignored while that save is in flight), so SALARY would not get the second category.
+ */
+async function pressTwoOnCard(page) {
+  await card(page).focus();
+  await page.keyboard.press('2');
+  await expect(cardHeading(page)).not.toHaveText(SALARY);
+  const salary = (await readStore(page, 'buckets')).find((b) => b.displayName === SALARY);
+  return (await readStore(page, 'categories')).find((c) => c.id === salary.categoryId)?.name;
+}
+
 test('keys inactive outside card', async ({ page }) => {
   await openCategorise(page);
-  const before = await progressLine(page).textContent();
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Categorise' }).focus();
   await page.keyboard.press('1');
-  await page.waitForTimeout(300);
-  await expect(cardHeading(page)).toHaveText(SALARY);
-  await expect(progressLine(page)).toHaveText(before);
-  expect((await readStore(page, 'buckets')).filter((b) => b.categoryId)).toEqual([]);
+  expect(await pressTwoOnCard(page)).toBe('Other income');
+});
+
+test('keys typed in a select inside the card do nothing', async ({ page }) => {
+  await openCategorise(page);
+  await page.getByRole('button', { name: 'New category…' }).click();
+  const kind = card(page).getByLabel('Kind', { exact: true });
+  await kind.focus();
+  await page.keyboard.press('1');
+  await expect(kind).toBeFocused();
+  expect(await pressTwoOnCard(page)).toBe('Other income');
+});
+
+test('busy guard: a second click while saving is ignored', async ({ page }) => {
+  await openCategorise(page);
+  // Two clicks in one task, so the second always lands while the first save is in flight.
+  await card(page).getByRole('button', { name: '1 Salary' }).evaluate((b) => { b.click(); b.click(); });
+  await expect(cardHeading(page)).toHaveText('ACME LETTINGS');
+  expect((await readStore(page, 'buckets')).filter((b) => b.categoryId).map((b) => b.displayName)).toEqual([SALARY]);
+
+  await skipToCard(page, 'PAYPAL PAYMENT');
+  const item = section(page, 'Repeating amounts').getByRole('listitem').filter({ hasText: '£2.99, 13 times, monthly' });
+  await item.getByRole('button', { name: 'Make this its own bucket' }).click();
+  await card(page).getByLabel('Bucket name').fill('Google One storage');
+  await card(page).getByRole('button', { name: 'Make bucket' }).evaluate((b) => { b.click(); b.click(); });
+  await expect(section(page, 'Flagged')).toBeVisible();
+  expect(await readStore(page, 'rules')).toHaveLength(1);
+  expect((await readStore(page, 'buckets')).filter((b) => b.displayName === 'Google One storage')).toHaveLength(1);
 });
 
 test('category buttons, Skip for now and Stop here', async ({ page }) => {

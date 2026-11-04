@@ -3,7 +3,7 @@
 // amounts, repeating amounts and flagged rows for this bucket.
 
 /** @import {App} from '../main.js' */
-/** @import {Bucket, Category, CategoryKind, BudgetType, Transaction, Changes} from '../types.js' */
+/** @import {Bucket, Category, Transaction, Changes} from '../types.js' */
 /** @import {BucketCount} from '../progress.js' */
 import { h } from '../dom.js';
 import { analysisWindow } from '../coverage.js';
@@ -11,17 +11,20 @@ import { bucketCounts, cardQueue, progress } from '../progress.js';
 import { relatedBuckets, unusualTransactions, repeatingAmounts } from '../insights.js';
 import { createAmountRule, resolveFlag } from '../rules.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
-import { createCategory, orderedCategories, isBudgeted } from '../categories.js';
+import { orderedCategories } from '../categories.js';
 import { setCategoryOverride, dismissUnusual } from '../overrides.js';
 import { combine } from '../changes.js';
 import { formatMoney, divRound } from '../money.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
+import { focusKey, plural, valueOf, field, emptyDraft, categoryForm } from './form.js';
 
-/** @type {Record<CategoryKind, string>} */
-const KIND_LABELS = { spend: 'Spend', income: 'Income', contribution: 'Contribution', transfer: 'Transfer', ignore: 'Ignore' };
-/** @type {Record<BudgetType, string>} */
-const BUDGET_LABELS = { fixed: 'Fixed', variable: 'Variable', annual: 'Annual', oneoff: 'One-off' };
+/**
+ * Apply the Changes that `build` returns (built when the save starts), one save at a time. `after`
+ * runs only once the save is accepted, so form input survives a failed or skipped save.
+ * @typedef {(build: () => Changes, after?: () => void) => void} Save
+ */
+
 const PERIOD_ADVERB = { week: 'weekly', month: 'monthly', year: 'yearly' };
 
 /**
@@ -32,8 +35,7 @@ const ui = {
   /** @type {string|null} */
   bucketId: null,
   newOpen: false,
-  /** @type {{name: string, kind: CategoryKind, budgetType: BudgetType}} */
-  draft: { name: '', kind: 'spend', budgetType: 'variable' },
+  draft: emptyDraft(),
   newError: '',
   /** @type {string|null} transaction id */
   moveId: null,
@@ -50,27 +52,10 @@ const ui = {
 /** @param {string} bucketId */
 function resetUi(bucketId) {
   Object.assign(ui, {
-    bucketId, newOpen: false, draft: { name: '', kind: 'spend', budgetType: 'variable' }, newError: '',
+    bucketId, newOpen: false, draft: emptyDraft(), newError: '',
     moveId: null, moveTarget: '', moveError: '', repeatAmount: null, repeatName: '', repeatCount: '1', repeatError: null,
   });
 }
-
-/** @param {string} key */
-function focusKey(key) {
-  const el = [...document.querySelectorAll('[data-focus-key]')]
-    .find((e) => e instanceof HTMLElement && e.dataset.focusKey === key);
-  if (el instanceof HTMLElement) el.focus();
-}
-
-/**
- * @param {number} n
- * @param {string} one
- * @param {string} many
- */
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-
-/** @param {Event} e */
-const valueOf = (e) => /** @type {HTMLInputElement|HTMLSelectElement} */ (e.target).value;
 
 /**
  * The one currency of some transactions, or null when there are none or several.
@@ -87,26 +72,6 @@ function soleCurrency(txns) {
  * @returns {string}
  */
 const absMoney = (t) => formatMoney(Math.abs(t.amountMinor), t.currency);
-
-let seq = 0;
-
-/**
- * A control with its label above it, linked by id. An error is linked with aria-describedby.
- * @param {string} label
- * @param {HTMLElement} control
- * @param {string} [error]
- * @returns {HTMLElement}
- */
-function field(label, control, error) {
-  const id = `card-f${++seq}`;
-  control.id = id;
-  const errorEl = error ? h('p', { class: 'error', id: `${id}-error` }, error) : null;
-  if (errorEl) {
-    control.setAttribute('aria-describedby', errorEl.id);
-    control.setAttribute('aria-invalid', 'true');
-  }
-  return h('div', { class: 'field' }, h('label', { for: id }, label), control, errorEl);
-}
 
 /**
  * @param {HTMLElement} root
@@ -189,8 +154,14 @@ function card(app, bucket, counts) {
   const cats = orderedCategories(state);
   const all = state.transactions.filter((t) => t.bucketId === bucket.id);
 
-  /** @param {() => Changes} build */
-  const save = (build) => whileSaving(el, () => app.store.apply(build()), el);
+  /** @type {Save} */
+  const save = (build, after) => whileSaving(el, async () => {
+    await app.store.apply(build());
+    if (after) {
+      after();
+      app.rerender();
+    }
+  }, el);
   /** @param {string} categoryId */
   const assign = (categoryId) => save(() => setBucketCategory(app.store.state, bucket.id, categoryId));
 
@@ -218,7 +189,7 @@ function card(app, bucket, counts) {
     ui.newOpen ? newCategoryForm(app, bucket, el) : null,
     related(app, bucket, counts, save),
     unusual(app, all, cats, save),
-    repeating(app, bucket, all, el),
+    repeating(app, bucket, all, save),
     flagged(app, all, save),
     h('div', { class: 'actions' },
       h('button', {
@@ -299,55 +270,24 @@ function categoryGroup(app, cats, assign) {
  * @returns {HTMLElement}
  */
 function newCategoryForm(app, bucket, el) {
-  const d = ui.draft;
-  const budgetField = field('Budget type', h('select', {
-    'data-focus-key': 'card-new-budget',
-    onChange: (/** @type {Event} */ e) => { d.budgetType = /** @type {BudgetType} */ (valueOf(e)); },
-  }, ...Object.entries(BUDGET_LABELS).map(([v, t]) => h('option', { value: v, selected: v === d.budgetType }, t))));
-  budgetField.hidden = !isBudgeted(d.kind);
   const cancel = () => {
     ui.newOpen = false;
     ui.newError = '';
     app.rerender();
     focusKey('card-new');
   };
-
-  return h('form', {
-    class: 'card-form', novalidate: true, 'aria-label': 'New category',
-    onSubmit: (/** @type {Event} */ e) => {
-      e.preventDefault();
-      whileSaving(el, async () => {
-        const state = app.store.state;
-        const result = createCategory(state, {
-          name: d.name, kind: d.kind, ...(isBudgeted(d.kind) ? { budgetType: d.budgetType } : {}),
-        });
-        if ('error' in result) {
-          ui.newError = result.error;
-          app.rerender();
-          focusKey('card-new-name');
-          return;
-        }
-        const created = /** @type {Category} */ (result.put?.categories?.[0]);
-        resetUi(bucket.id);
-        await app.store.apply(combine(result, setBucketCategory(state, bucket.id, created.id)));
-      }, el);
+  return categoryForm(app, {
+    draft: ui.draft, error: ui.newError, keyPrefix: 'card-new', submitLabel: 'Add and use',
+    formProps: { class: 'card-form', 'aria-label': 'New category' },
+    buttons: [h('button', { type: 'button', class: 'secondary', onClick: cancel }, 'Cancel')],
+    scope: el, focusTo: el,
+    setError: (message) => { ui.newError = message; },
+    save: async (changes, category) => {
+      await app.store.apply(combine(changes, setBucketCategory(app.store.state, bucket.id, category.id)));
+      Object.assign(ui, { newOpen: false, draft: emptyDraft(), newError: '' });
+      app.rerender();
     },
-  },
-  field('Name', h('input', {
-    type: 'text', value: d.name, autocomplete: 'off', 'data-focus-key': 'card-new-name',
-    onInput: (/** @type {Event} */ e) => { d.name = valueOf(e); },
-  }), ui.newError),
-  field('Kind', h('select', {
-    'data-focus-key': 'card-new-kind',
-    onChange: (/** @type {Event} */ e) => {
-      d.kind = /** @type {CategoryKind} */ (valueOf(e));
-      budgetField.hidden = !isBudgeted(d.kind);
-    },
-  }, ...Object.entries(KIND_LABELS).map(([v, t]) => h('option', { value: v, selected: v === d.kind }, t)))),
-  budgetField,
-  h('div', { class: 'actions' },
-    h('button', { type: 'submit', 'data-saves': true, 'data-focus-key': 'card-new-add' }, 'Add and use'),
-    h('button', { type: 'button', class: 'secondary', onClick: cancel }, 'Cancel')));
+  });
 }
 
 /**
@@ -369,7 +309,7 @@ function part(id, title, items) {
  * @param {App} app
  * @param {Bucket} bucket
  * @param {Map<string, BucketCount>} counts
- * @param {(build: () => Changes) => void} save
+ * @param {Save} save
  * @returns {HTMLElement|null}
  */
 function related(app, bucket, counts, save) {
@@ -402,7 +342,7 @@ function related(app, bucket, counts, save) {
  * @param {App} app
  * @param {Transaction[]} all the whole bucket
  * @param {Category[]} cats
- * @param {(build: () => Changes) => void} save
+ * @param {Save} save
  * @returns {HTMLElement|null}
  */
 function unusual(app, all, cats, save) {
@@ -435,7 +375,7 @@ function unusual(app, all, cats, save) {
  * @param {App} app
  * @param {Transaction} t
  * @param {Category[]} cats
- * @param {(build: () => Changes) => void} save
+ * @param {Save} save
  * @returns {HTMLElement}
  */
 function moveForm(app, t, cats, save) {
@@ -450,8 +390,8 @@ function moveForm(app, t, cats, save) {
         return;
       }
       const target = ui.moveTarget;
-      Object.assign(ui, { moveId: null, moveTarget: '', moveError: '' });
-      save(() => setCategoryOverride(app.store.state, t.fingerprint, target));
+      save(() => setCategoryOverride(app.store.state, t.fingerprint, target),
+        () => Object.assign(ui, { moveId: null, moveTarget: '', moveError: '' }));
     },
   },
   field('Move to', h('select', {
@@ -459,7 +399,7 @@ function moveForm(app, t, cats, save) {
     onChange: (/** @type {Event} */ e) => { ui.moveTarget = valueOf(e); },
   },
   h('option', { value: '', selected: ui.moveTarget === '' }, 'Choose a category'),
-  ...cats.map((c) => h('option', { value: c.id, selected: c.id === ui.moveTarget }, c.name))), ui.moveError),
+  ...cats.map((c) => h('option', { value: c.id, selected: c.id === ui.moveTarget }, c.name))), { error: ui.moveError }),
   h('div', { class: 'row-actions' },
     h('button', { type: 'submit', 'data-saves': true }, 'Move'),
     h('button', {
@@ -477,10 +417,10 @@ function moveForm(app, t, cats, save) {
  * @param {App} app
  * @param {Bucket} bucket
  * @param {Transaction[]} all the whole bucket
- * @param {HTMLElement} el the card
+ * @param {Save} save
  * @returns {HTMLElement|null}
  */
-function repeating(app, bucket, all, el) {
+function repeating(app, bucket, all, save) {
   const list = repeatingAmounts(all, app.tuning);
   return part('card-repeating', 'Repeating amounts', list.map((r) => {
     const id = `repeating-${bucket.id}-${r.amountMinor}`;
@@ -497,7 +437,7 @@ function repeating(app, bucket, all, el) {
           if (opening) focusKey('repeat-name');
         },
       }, 'Make this its own bucket')));
-    if (ui.repeatAmount === r.amountMinor) item.append(repeatForm(app, bucket, r, el));
+    if (ui.repeatAmount === r.amountMinor) item.append(repeatForm(app, bucket, r, save));
     return item;
   }));
 }
@@ -507,10 +447,10 @@ function repeating(app, bucket, all, el) {
  * @param {App} app
  * @param {Bucket} bucket
  * @param {{amountMinor:number, period:'week'|'month'|'year'}} r
- * @param {HTMLElement} el the card
+ * @param {Save} save
  * @returns {HTMLElement}
  */
-function repeatForm(app, bucket, r, el) {
+function repeatForm(app, bucket, r, save) {
   /**
    * @param {'name'|'count'} which
    * @param {string} message
@@ -530,20 +470,19 @@ function repeatForm(app, bucket, r, el) {
       const text = ui.repeatCount.trim();
       const count = /^\d+$/.test(text) ? Number(text) : 0;
       if (!(count >= 1 && Number.isSafeInteger(count))) return fail('count', 'Enter a whole number, 1 or more.');
-      Object.assign(ui, { repeatAmount: null, repeatName: '', repeatCount: '1', repeatError: null });
-      whileSaving(el, () => app.store.apply(createAmountRule(app.store.state, {
+      save(() => createAmountRule(app.store.state, {
         sourceBucketId: bucket.id, amountMinor: r.amountMinor, expected: { count, period: r.period }, displayName,
-      })), el);
+      }), () => Object.assign(ui, { repeatAmount: null, repeatName: '', repeatCount: '1', repeatError: null }));
     },
   },
   field('Bucket name', h('input', {
     type: 'text', value: ui.repeatName, autocomplete: 'off', 'data-focus-key': 'repeat-name',
     onInput: (/** @type {Event} */ e) => { ui.repeatName = valueOf(e); },
-  }), errorFor('name')),
+  }), { error: errorFor('name') }),
   field(`Times per ${r.period}`, h('input', {
     type: 'text', class: 'short', inputmode: 'numeric', value: ui.repeatCount, autocomplete: 'off', 'data-focus-key': 'repeat-count',
     onInput: (/** @type {Event} */ e) => { ui.repeatCount = valueOf(e); },
-  }), errorFor('count')),
+  }), { error: errorFor('count') }),
   h('div', { class: 'row-actions' },
     h('button', { type: 'submit', 'data-saves': true }, 'Make bucket'),
     h('button', {
@@ -560,7 +499,7 @@ function repeatForm(app, bucket, r, el) {
  * Rows an amount rule flagged as extra, each with It belongs there and Keep it here.
  * @param {App} app
  * @param {Transaction[]} all the whole bucket
- * @param {(build: () => Changes) => void} save
+ * @param {Save} save
  * @returns {HTMLElement|null}
  */
 function flagged(app, all, save) {

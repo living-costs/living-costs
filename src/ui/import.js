@@ -6,6 +6,7 @@
 /** @import {Account, Mapping} from '../types.js' */
 /** @import {PreparedFile, MappedFile, PlannedFile, ImportPlan} from '../import.js' */
 import { h } from '../dom.js';
+import { focusKey, field, plural } from './form.js';
 /** @import {Child} from '../dom.js' */
 import { prepareFiles, suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
 import { applyMapping, mappingProblems } from '../mapping.js';
@@ -97,13 +98,6 @@ function messages() {
   return h('div', { class: 'banner', role: 'status' }, ...flow.messages.map((m) => h('p', null, m)));
 }
 
-/** @param {string} key */
-function focusKey(key) {
-  const el = [...document.querySelectorAll('[data-focus-key]')]
-    .find((e) => e instanceof HTMLElement && e.dataset.focusKey === key);
-  if (el instanceof HTMLElement) el.focus();
-}
-
 /**
  * Move to a step, redraw and put focus on its heading (or on `focus`).
  * @param {App} app
@@ -148,27 +142,6 @@ function localDate(iso) {
 /** @param {unknown} err */
 const detail = (err) => (err instanceof Error ? err.message : String(err));
 
-let seq = 0;
-
-/**
- * A control with its label above it, linked by id (not by nesting, so a select's options stay out
- * of its name). An optional hint and error are linked with aria-describedby.
- * @param {string} label
- * @param {HTMLElement} control
- * @param {{hint?: string, error?: string}} [extra]
- * @returns {HTMLElement}
- */
-function field(label, control, { hint, error } = {}) {
-  const id = `f${++seq}`;
-  control.id = id;
-  const hintEl = hint ? h('p', { class: 'muted hint', id: `${id}-hint` }, hint) : null;
-  const errorEl = error ? h('p', { class: 'error', id: `${id}-error` }, error) : null;
-  const described = [errorEl?.id, hintEl?.id].filter(Boolean).join(' ');
-  if (described) control.setAttribute('aria-describedby', described);
-  if (error) control.setAttribute('aria-invalid', 'true');
-  return h('div', { class: 'field' }, h('label', { for: id }, label), control, hintEl, errorEl);
-}
-
 /** @param {string} text */
 const raw = (text) => h('span', { class: 'raw' }, text === '' ? '(no description)' : text);
 
@@ -180,13 +153,6 @@ function validCurrency(code) {
   if (!/^[A-Z]{3}$/.test(code)) return false;
   try { currencyExponent(code); return true; } catch { return false; }
 }
-
-/**
- * @param {number} n
- * @param {string} one
- * @param {string} many
- */
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 // --- 1. Pick files -----------------------------------------------------------------------------
 

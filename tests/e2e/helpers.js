@@ -36,6 +36,18 @@ export async function trackCspViolations(page) {
   });
 }
 
+/** Read every row of one IndexedDB store. */
+export const readStore = (page, name) => page.evaluate((storeName) => new Promise((resolve, reject) => {
+  const req = indexedDB.open('budgie');
+  req.onerror = () => reject(req.error);
+  req.onsuccess = () => {
+    const db = req.result;
+    const all = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+    all.onsuccess = () => { db.close(); resolve(all.result); };
+    all.onerror = () => reject(all.error);
+  };
+}), name);
+
 // --- Import flow -----------------------------------------------------------------------------
 // These drive the Accounts screen's import flow using its pinned labels. Fixture names are
 // relative to tests/fixtures/; absolute paths (for temp files) are used as given.

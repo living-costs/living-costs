@@ -6,21 +6,18 @@
 import { h } from '../dom.js';
 import { whileSaving } from './saving.js';
 import {
-  isBudgeted, createCategory, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
+  KIND_LABELS, BUDGET_LABELS, focusKey, plural, valueOf, field, options, emptyDraft, categoryForm,
+} from './form.js';
+import {
+  isBudgeted, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
 } from '../categories.js';
-
-/** @type {Record<CategoryKind, string>} */
-const KIND_LABELS = { spend: 'Spend', income: 'Income', contribution: 'Contribution', transfer: 'Transfer', ignore: 'Ignore' };
-/** @type {Record<BudgetType, string>} */
-const BUDGET_LABELS = { fixed: 'Fixed', variable: 'Variable', annual: 'Annual', oneoff: 'One-off' };
 
 /**
  * Screen state that is not saved: the new-category draft, the row being renamed or deleted,
  * and any error to show. It survives redraws caused by store changes.
  */
 const ui = {
-  /** @type {{name: string, kind: CategoryKind, budgetType: BudgetType}} */
-  draft: { name: '', kind: 'spend', budgetType: 'variable' },
+  draft: emptyDraft(),
   createError: '',
   /** @type {string|null} */
   renameId: null,
@@ -32,51 +29,6 @@ const ui = {
   deleteError: '',
   rowError: '',
 };
-
-/** @param {string} key */
-function focusKey(key) {
-  const el = [...document.querySelectorAll('[data-focus-key]')]
-    .find((e) => e instanceof HTMLElement && e.dataset.focusKey === key);
-  if (el instanceof HTMLElement) el.focus();
-}
-
-let seq = 0;
-
-/**
- * A control with its label above it, linked by id. An error is linked with aria-describedby.
- * @param {string} label
- * @param {HTMLElement} control
- * @param {string} [error]
- * @returns {HTMLElement}
- */
-function field(label, control, error) {
-  const id = `cat-f${++seq}`;
-  control.id = id;
-  const errorEl = error ? h('p', { class: 'error', id: `${id}-error` }, error) : null;
-  if (errorEl) {
-    control.setAttribute('aria-describedby', errorEl.id);
-    control.setAttribute('aria-invalid', 'true');
-  }
-  return h('div', { class: 'field' }, h('label', { for: id }, label), control, errorEl);
-}
-
-/**
- * @param {Record<string, string>} labels
- * @param {string|undefined} current
- * @returns {HTMLElement[]}
- */
-const options = (labels, current) => Object.entries(labels)
-  .map(([value, text]) => h('option', { value, selected: value === current }, text));
-
-/** @param {Event} e */
-const valueOf = (e) => /** @type {HTMLInputElement|HTMLSelectElement} */ (e.target).value;
-
-/**
- * @param {number} n
- * @param {string} one
- * @param {string} many
- */
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Save valid changes, or show the error above the table.
@@ -197,9 +149,13 @@ function renameForm(app, c) {
         focusKey(`rename-input-${c.id}`);
         return;
       }
-      ui.renameId = null;
-      ui.rowError = '';
-      app.store.apply(result).then(() => focusKey(`rename-${c.id}`));
+      // Close the form only once the save is accepted, so a failed save keeps the typed name.
+      app.store.apply(result).then(() => {
+        ui.renameId = null;
+        ui.rowError = '';
+        app.rerender();
+        focusKey(`rename-${c.id}`);
+      });
     },
   },
   h('input', {
@@ -239,9 +195,10 @@ function deletePanel(app, c, list) {
       focusKey('delete-target');
       return;
     }
+    await app.store.apply(result);
     ui.deleteId = null;
     ui.rowError = '';
-    await app.store.apply(result);
+    app.rerender();
   });
 
   const panel = h('section', { class: 'card', 'aria-labelledby': 'delete-heading' },
@@ -266,7 +223,7 @@ function deletePanel(app, c, list) {
   ...list.filter((o) => o.id !== c.id).map((o) => h('option', { value: o.id, selected: o.id === ui.deleteTarget }, o.name)));
   panel.append(
     h('p', null, `${c.name} is used by ${parts.join(' and ')}.`),
-    field('Move its items to', target, ui.deleteError),
+    field('Move its items to', target, { error: ui.deleteError }),
     h('div', { class: 'actions' },
       h('button', {
         type: 'button', 'data-focus-key': 'delete-confirm', 'data-saves': true, onClick: () => remove(ui.deleteTarget || undefined),
@@ -280,51 +237,18 @@ function deletePanel(app, c, list) {
  * @returns {HTMLElement}
  */
 function newForm(app) {
-  const d = ui.draft;
-  const budgetField = field('Budget type', h('select', {
-    'data-focus-key': 'new-budget',
-    onChange: (/** @type {Event} */ e) => { d.budgetType = /** @type {BudgetType} */ (valueOf(e)); },
-  }, ...options(BUDGET_LABELS, d.budgetType)));
-  budgetField.hidden = !isBudgeted(d.kind);
-
-  const nameInput = h('input', {
-    type: 'text', value: d.name, autocomplete: 'off', 'data-focus-key': 'new-name',
-    onInput: (/** @type {Event} */ e) => { d.name = valueOf(e); },
+  const form = categoryForm(app, {
+    draft: ui.draft, error: ui.createError, keyPrefix: 'new', submitLabel: 'Add category',
+    setError: (message) => { ui.createError = message; },
+    // Focus stays on Name (the default), ready for the next one.
+    save: async (changes) => {
+      await app.store.apply(changes);
+      ui.draft.name = '';
+      ui.createError = '';
+      app.rerender();
+    },
   });
-  // After Add category, focus goes to the name, ready for the next one.
-  const form = h('form', {
-    novalidate: true,
-    onSubmit: (/** @type {Event} */ e) => {
-      e.preventDefault();
-      whileSaving(form, async () => {
-        const result = createCategory(app.store.state, {
-          name: d.name, kind: d.kind, ...(isBudgeted(d.kind) ? { budgetType: d.budgetType } : {}),
-        });
-        if ('error' in result) {
-          ui.createError = result.error;
-          app.rerender();
-          focusKey('new-name');
-          return;
-        }
-        d.name = '';
-        ui.createError = '';
-        await app.store.apply(result);
-      }, nameInput);
-    },
-  },
-  field('Name', nameInput, ui.createError),
-  field('Kind', h('select', {
-    'data-focus-key': 'new-kind',
-    onChange: (/** @type {Event} */ e) => {
-      d.kind = /** @type {CategoryKind} */ (valueOf(e));
-      budgetField.hidden = !isBudgeted(d.kind);
-    },
-  }, ...options(KIND_LABELS, d.kind))),
-  budgetField,
-  h('div', { class: 'actions' }, h('button', { type: 'submit', 'data-focus-key': 'new-add', 'data-saves': true }, 'Add category')));
-
   return h('section', { 'aria-labelledby': 'new-category-heading' },
     h('h3', { id: 'new-category-heading' }, 'New category'),
     form);
 }
-

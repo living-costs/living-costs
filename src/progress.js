@@ -1,5 +1,9 @@
 // Categorising progress and the categorise card's queue. Both use the counted transactions:
 // those in months their account fully covers in the analysis window (decision D1).
+//
+// Currency caveat: the absolute totals here add minor units across currencies. They are used
+// only to order buckets and, by the UI, as money when every counted transaction shares one
+// currency (see soleCurrency in ui/categorise.js). Never show them as money otherwise.
 
 /** @import {State, Transaction, Bucket} from './types.js' */
 /** @import {ResolveContext} from './resolve.js' */
@@ -32,7 +36,8 @@ const countedSpending = (state, tuning, ctx) => countedTransactions(state, tunin
 
 /**
  * Per bucket: the counted transactions (not confirmed transfers) and their absolute total.
- * Buckets with nothing counted are absent.
+ * Buckets with nothing counted are absent. `absTotal` sums across currencies (see the caveat at
+ * the top): it is for ordering, and for display only when the bucket has a single currency.
  * @param {State} state
  * @param {ProgressTuning} tuning
  * @returns {Map<string, BucketCount>}
@@ -53,6 +58,8 @@ export function bucketCounts(state, tuning) {
 /**
  * Value categorised so far, by absolute amount, and how many buckets are still waiting.
  * A part with a category of any kind (including transfer and ignore) counts as categorised.
+ * Both totals sum across currencies (see the caveat at the top), so they are shown as money only
+ * when the counted transactions share one currency.
  * @param {State} state
  * @param {ProgressTuning} tuning
  * @returns {{categorisedAbs:number, totalAbs:number, bucketsLeft:number}}
@@ -74,7 +81,8 @@ export function progress(state, tuning) {
 /**
  * Buckets for the card, largest absolute counted total first: uncategorised buckets with
  * something counted, plus any bucket with a flagged row waiting for a decision. Skipped
- * buckets are left out. Equal totals fall back to name order.
+ * buckets are left out. Equal totals fall back to name order. The ordering totals sum across
+ * currencies (see the caveat at the top).
  * @param {State} state
  * @param {ProgressTuning} tuning
  * @param {Set<string>} skipped bucket ids
