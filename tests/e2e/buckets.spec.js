@@ -57,6 +57,9 @@ test.afterEach(async ({ page }) => {
 });
 
 test('filter and search', async ({ page }) => {
+  // The window the totals cover, and that a drill-in shows everything.
+  await expect(page.locator('#buckets-window')).toHaveText(
+    /^Totals and counts cover [A-Z][a-z]{2} \d{4}( to [A-Z][a-z]{2} \d{4})?\. Opening a bucket shows all its transactions\.$/);
   const buckets = await readStore(page, 'buckets');
   // One header row plus one row per bucket.
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(buckets.length + 1);
@@ -210,4 +213,55 @@ test('drill in', async ({ page }) => {
   await page.getByRole('button', { name: 'Back to buckets' }).click();
   await expect(search(page)).toBeVisible();
   await expect(nameButton(page, 'AMAZON.CO.UK')).toBeFocused();
+});
+
+test('the Buckets nav button returns to the list', async ({ page }) => {
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  const drilled = page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 });
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await expect(drilled).toBeVisible();
+  await nav.getByRole('button', { name: 'Buckets' }).click();
+  await expect(drilled).toHaveCount(0);
+  await expect(search(page)).toBeVisible();
+
+  // Leaving the screen and coming back also lands on the list.
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await expect(drilled).toBeVisible();
+  await nav.getByRole('button', { name: 'Accounts' }).click();
+  await openBuckets(page);
+  await expect(drilled).toHaveCount(0);
+  await expect(search(page)).toBeVisible();
+});
+
+test('a bucket with several currencies is never added across them', async ({ page }) => {
+  // Make one FARM SHOP row euros, so the bucket spans two currencies.
+  const farm = (await readStore(page, 'buckets')).find((b) => b.displayName === 'FARM SHOP');
+  const txn = (await readStore(page, 'transactions')).find((t) => t.bucketId === farm.id);
+  await page.evaluate((t) => new Promise((resolve, reject) => {
+    const req = indexedDB.open('budgie');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction('transactions', 'readwrite');
+      tx.objectStore('transactions').put({ ...t, currency: 'EUR' });
+      tx.oncomplete = () => { db.close(); resolve(undefined); };
+      tx.onerror = () => reject(tx.error);
+    };
+  }), txn);
+  await page.reload();
+  await openBuckets(page);
+
+  await expect(total(page, 'FARM SHOP')).toHaveText('Several currencies');
+  // After every single-currency bucket, in either direction.
+  const names = page.getByRole('table').getByRole('rowheader');
+  await expect(names.last()).toHaveText('FARM SHOP');
+  await page.getByRole('columnheader', { name: 'Total' }).getByRole('button').click();
+  await expect(page.getByRole('columnheader', { name: 'Total' })).toHaveAttribute('aria-sort', 'ascending');
+  await expect(names.last()).toHaveText('FARM SHOP');
+
+  // Not the default name to keep, although its rows add up to more.
+  await page.getByLabel('Select FARM SHOP').check();
+  await page.getByLabel('Select MARKET STALL').check();
+  await page.getByRole('button', { name: 'Merge selected…' }).click();
+  await expect(mergeDialog(page).getByRole('radio', { name: 'MARKET STALL' })).toBeChecked();
 });

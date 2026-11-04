@@ -32,6 +32,17 @@ export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 /** @param {Event} e */
 export const valueOf = (e) => /** @type {HTMLInputElement|HTMLSelectElement} */ (e.target).value;
 
+/**
+ * Show a dialog as modal once it is in the document: now if it is, otherwise after the caller
+ * has finished appending (a screen is built detached, then attached). Does nothing if it is
+ * already modal or never gets attached.
+ * @param {HTMLElement} dialog
+ */
+export function showModalWhenConnected(dialog) {
+  const show = () => { if (dialog.isConnected && !dialog.matches(':modal')) /** @type {HTMLDialogElement} */ (dialog).showModal(); };
+  if (dialog.isConnected) show(); else queueMicrotask(show);
+}
+
 let seq = 0;
 
 /**

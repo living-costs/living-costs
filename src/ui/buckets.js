@@ -4,7 +4,9 @@
 //
 // Totals cover every counted transaction, transfers included, since this is the raw list. A
 // bucket whose counted rows use more than one currency shows "Several currencies" instead of a
-// total, and sorts by its summed minor units.
+// total. It is never added across currencies, even to sort: by Total it comes after every
+// single-currency bucket, by name, and it is never the default name to keep when merging
+// alongside a single-currency bucket.
 
 /** @import {App} from '../main.js' */
 /** @import {Bucket, Category, Transaction} from '../types.js' */
@@ -13,18 +15,21 @@ import { countedTransactions } from '../progress.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
 import { orderedCategories } from '../categories.js';
 import { formatMoney } from '../money.js';
+import { analysisWindow } from '../coverage.js';
+import { formatMonth } from '../dates.js';
 import { whileSaving } from './saving.js';
-import { field, focusKey, plural, valueOf } from './form.js';
+import { field, focusKey, plural, valueOf, showModalWhenConnected } from './form.js';
 import { renderTransactionList } from './transactions.js';
 
 /** @typedef {'total'|'name'|'count'} SortKey */
 /** @typedef {'ascending'|'descending'} SortDir */
 /** @typedef {{survivorId: string, categoryId: string}} MergeDraft */
 /**
- * One row: the bucket, its signed minor sum over the counted transactions, how many there are,
- * and the one currency they use (null when there are none or several).
- * `zero` is the total shown when nothing is counted.
- * @typedef {{bucket: Bucket, sum: number, count: number, currency: string|null, currencies: number, zero: string}} Row
+ * One row: the bucket, how many counted transactions it has, and the one currency they use
+ * (null when there are none or several). `sum` is their signed minor sum, and is 0 when they
+ * span several currencies (`mixed`), since those are never added together. `zero` is the
+ * total shown when nothing is counted.
+ * @typedef {{bucket: Bucket, sum: number, count: number, currency: string|null, mixed: boolean, zero: string}} Row
  */
 
 /** The direction a column sorts in when first chosen: names A to Z, numbers largest first. */
@@ -34,7 +39,8 @@ const FIRST_DIR = { total: 'descending', name: 'ascending', count: 'descending' 
 const SORT_LABELS = { name: 'Name', total: 'Total', count: 'Transactions' };
 
 /**
- * Screen state that is not saved. It survives redraws and leaving the screen.
+ * Screen state that is not saved. It survives redraws and leaving the screen, except the open
+ * bucket, which reset() clears.
  */
 const ui = {
   query: '',
@@ -50,6 +56,14 @@ const ui = {
   /** @type {string|null} the bucket opened for drill-in */
   drillId: null,
 };
+
+/**
+ * Entering the screen from the nav shows the list, not a bucket opened earlier. Redraws after a
+ * store change do not call this, so they stay in the bucket.
+ */
+export function reset() {
+  ui.drillId = null;
+}
 
 /** @param {string} id */
 const nameKey = (id) => `bucket-name-${id}`;
@@ -83,6 +97,13 @@ export function render(root, app) {
 
   const rows = bucketRows(app);
   const cats = orderedCategories(state);
+  const { months } = analysisWindow(state, app.tuning);
+  if (months.length > 0) {
+    const first = formatMonth(months[0]);
+    const last = formatMonth(months[months.length - 1]);
+    root.append(h('p', { id: 'buckets-window', class: 'muted' },
+      `Totals and counts cover ${first === last ? first : `${first} to ${last}`}. Opening a bucket shows all its transactions.`));
+  }
   const results = h('div');
   const update = () => drawList(app, results, rows, cats);
   root.append(
@@ -127,12 +148,13 @@ function bucketRows(app) {
     const txns = byBucket.get(bucket.id) ?? [];
     const currencies = new Set(txns.map((t) => t.currency));
     const all = own.get(bucket.id);
+    const mixed = currencies.size > 1;
     return {
       bucket,
-      sum: txns.reduce((s, t) => s + t.amountMinor, 0),
+      sum: mixed ? 0 : txns.reduce((s, t) => s + t.amountMinor, 0),
       count: txns.length,
       currency: currencies.size === 1 ? [...currencies][0] : null,
-      currencies: currencies.size,
+      mixed,
       zero: all?.size === 1 ? formatMoney(0, [...all][0]) : '0',
     };
   });
@@ -146,7 +168,7 @@ function bucketRows(app) {
  */
 function totalText(r) {
   if (r.currency) return formatMoney(r.sum, r.currency);
-  return r.currencies > 1 ? 'Several currencies' : r.zero;
+  return r.mixed ? 'Several currencies' : r.zero;
 }
 
 /**
@@ -158,6 +180,7 @@ const isCategorised = (app, b) => b.categoryId !== undefined && app.store.state.
 
 /**
  * The rows that match the search and filter, in the chosen order. Ties fall back to name, then id.
+ * By Total, buckets with several currencies come last in either direction, by name.
  * @param {App} app
  * @param {Row[]} rows
  * @returns {Row[]}
@@ -175,9 +198,13 @@ function shownRows(app, rows) {
     count: (a, b) => a.count - b.count,
   };
   const sign = ui.sortDir === 'ascending' ? 1 : -1;
+  /** @type {(a: Row, b: Row) => number} */
+  const order = (a, b) => (ui.sortKey === 'total' && (a.mixed || b.mixed)
+    ? Number(a.mixed) - Number(b.mixed)
+    : sign * compare[ui.sortKey](a, b));
   return rows
     .filter((r) => matches(r.bucket) && !(ui.onlyUncategorised && isCategorised(app, r.bucket)))
-    .sort((a, b) => sign * compare[ui.sortKey](a, b) || byName(a, b));
+    .sort((a, b) => order(a, b) || byName(a, b));
 }
 
 /**
@@ -286,12 +313,16 @@ function bucketRow(app, r, cats, shown, i) {
 /**
  * Show the merge dialog with its defaults: the name of the selected bucket with the largest
  * absolute total, and that bucket's category, else the first selected one that has one.
+ * Buckets with several currencies have no total, so one is the default only when every selected
+ * bucket has several (then the first).
  * @param {App} app
  */
 function startMerge(app) {
   const rows = bucketRows(app).filter((r) => ui.selected.has(r.bucket.id));
   if (rows.length < 2) return;
-  const largest = rows.reduce((best, r) => (Math.abs(r.sum) > Math.abs(best.sum) ? r : best));
+  const single = rows.filter((r) => !r.mixed);
+  const largest = single.length === 0 ? rows[0]
+    : single.reduce((best, r) => (Math.abs(r.sum) > Math.abs(best.sum) ? r : best));
   const withCategory = [largest, ...rows].find((r) => isCategorised(app, r.bucket));
   ui.merge = { survivorId: largest.bucket.id, categoryId: withCategory?.bucket.categoryId ?? '' };
   app.rerender();
@@ -309,8 +340,7 @@ function startMerge(app) {
 function appendMergeDialog(root, app, d, rows, cats) {
   const dialog = mergeDialog(app, d, rows.filter((r) => ui.selected.has(r.bucket.id)), cats);
   root.append(dialog);
-  const show = () => { if (dialog.isConnected && !dialog.matches(':modal')) /** @type {HTMLDialogElement} */ (dialog).showModal(); };
-  if (dialog.isConnected) show(); else queueMicrotask(show);
+  showModalWhenConnected(dialog);
 }
 
 /**

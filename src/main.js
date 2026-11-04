@@ -44,6 +44,15 @@ const SCREENS = {
   backup: placeholder(label('backup')),
 };
 
+/**
+ * Called when a screen is entered from the nav (or navigate), not on a redraw after a store
+ * change, so a screen can drop view state that should not outlive leaving it.
+ * @type {Partial<Record<ScreenName, () => void>>}
+ */
+const RESETS = {
+  buckets: buckets.reset,
+};
+
 const screenEl = /** @type {HTMLElement} */ (document.getElementById('screen'));
 const navEl = /** @type {HTMLElement} */ (document.querySelector('header nav'));
 const noticesEl = /** @type {HTMLElement} */ (document.getElementById('notices'));
@@ -118,6 +127,7 @@ function createApp(store) {
       screen: store.state.transactions.length === 0 || !store.state.settings.helpDismissed ? 'help' : 'typical',
     },
     navigate(name) {
+      RESETS[name]?.();
       app.session.screen = name;
       drawScreen(app);
       focusHeading();

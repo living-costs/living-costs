@@ -13,7 +13,7 @@ import { setCategoryOverride, setSplit, resetOverride } from '../overrides.js';
 import { parseAmount, formatMoney, currencyExponent, decimalString, withoutCurrencySymbol } from '../money.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
-import { focusKey, valueOf, field } from './form.js';
+import { focusKey, valueOf, field, showModalWhenConnected } from './form.js';
 
 // Option values that are not category ids (those are UUIDs).
 const BUCKET = '@bucket';
@@ -164,8 +164,7 @@ export function appendSplitDialog(root, app, prefix) {
   }
   const dialog = splitDialog(app, t, d);
   root.append(dialog);
-  const show = () => { if (dialog.isConnected && !dialog.matches(':modal')) /** @type {HTMLDialogElement} */ (dialog).showModal(); };
-  if (dialog.isConnected) show(); else queueMicrotask(show);
+  showModalWhenConnected(dialog);
 }
 
 /**
