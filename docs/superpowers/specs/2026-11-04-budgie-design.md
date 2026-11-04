@@ -118,8 +118,8 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
     - **separate debit and credit columns**
 
   A preview of the first rows, as Budgie will read them, updates live.
-- **Covered period (Claude's call):** every import asks "This file covers from … to …", prefilled from the first and last row dates, and the user can edit it. This is stored on the batch. Savings accounts have few transactions, so first-to-last row dates understate what a file really covers. Without this, real coverage would look patchy and the typical-month window would shrink.
-- **Parser:** must handle a BOM, quoted and unquoted fields, commas and quotes inside quotes, and CRLF or LF line endings. Amounts can look like `46`, `1.2`, `.51`, `+12.58` or `-1234.56`, and a literal `null` or empty value in an optional column counts as missing. Rows can appear out of date order, and the description can be empty. All three known formats use `DD/MM/YYYY` dates and plain amounts, with no thousands separators, currency symbols or parentheses. An amount with any of those is a parse error, not a guess. Rows that fail to parse are listed with their row number, and the import can't continue until the user cancels or skips them.
+- **Covered period (Claude's call):** every import asks "This file covers from … to …", prefilled from the first and last row dates, and the user can edit it. If every row falls in one calendar month, a one-click "Whole month (*Mon YYYY*)" choice is offered, because some banks export by month and the last transaction is rarely on the last day. This is stored on the batch. Savings accounts have few transactions, so first-to-last row dates understate what a file really covers. Without this, real coverage would look patchy and the typical-month window would shrink.
+- **Parser:** must handle a BOM, quoted and unquoted fields, commas and quotes inside quotes, and CRLF or LF line endings. Amounts can look like `46`, `1.2`, `.51`, `+12.58` or `-1234.56`, and a literal `null` or empty value in an optional column counts as missing. Rows can appear out of date order, and the description can be empty. All four known formats use `DD/MM/YYYY` dates and plain amounts, with no thousands separators, currency symbols or parentheses. An amount with any of those is a parse error, not a guess. Rows that fail to parse are listed with their row number, and the import can't continue until the user cancels or skips them.
 - **Card files** with transaction and cleared dates use the **transaction date**, so card spending counts at purchase.
 - **Accidental re-import** is caught in two layers:
   1. **The same file:** Budgie computes the SHA-256 of the file's bytes with `crypto.subtle` and checks it against every batch in every account, before parsing. A match is blocked with "This file was already imported on *date* into *account*". Nothing is changed. Undoing that batch removes its hash, so the file can be imported again deliberately.
@@ -178,10 +178,10 @@ export default {
 Normaliser v1 works in this order. Prefer too many buckets over wrong merges.
 
 1. Upper-case the text and collapse whitespace.
-2. Strip processor prefixes, keeping the merchant. The list lives in one module so it's easy to extend: `PAYPAL *`, `SQ *`, `SP `, `MOLLIE *`, `ZETTLE_*`, `SUMUP *`.
+2. Strip processor and bank prefixes, keeping the merchant. The list lives in one module so it's easy to extend: `PAYPAL *`, `SQ *`, `SP `, `MOLLIE *`, `ZETTLE_*`, `SUMUP *`, and the bank-added `CARD PURCHASE `.
 3. Strip a trailing `*` reference token, for example `AMAZON.CO.UK*AB12CD34E` → `AMAZON.CO.UK` and `PAYPAL *SPOTIFY*X9Q2W7` → `SPOTIFY`.
-4. Remove date tokens such as `05MAR26`, `01/10/2026` and `01OCT`, digit runs of 4 or more (store numbers, account numbers, references), sort-code patterns, and card fragments.
-5. Trim trailing `...` and stray punctuation. Leave truncated words as they are.
+4. Remove date tokens such as `05MAR26`, `01/10/2026` and `01OCT`, sort-code patterns, and card fragments. Then split on whitespace and hyphens and drop every piece containing a run of 4 or more digits. This removes store numbers, account numbers, and references like `CB1234567890` or `REF-202601-99887766` whole, rather than leaving fragments such as `CB`. Pieces with fewer digits, like `3WGC` or `INV83`, stay.
+5. Trim trailing `...` and stray punctuation, including lone `&` and `-`. Leave truncated words as they are.
 6. If nothing is left, use the type column, for example `SO (NO DESCRIPTION)` (Claude's call).
 
 The result is the bucket key. The normaliser is versioned, and buckets keep up to five raw example texts so rules can be migrated.
@@ -328,7 +328,7 @@ A month is complete when every non-placeholder account that has coverage both be
 
 Category totals are net of refunds. Each type is worked out as follows (Claude's call on the details):
 
-- **Fixed:** the sum over the category's buckets of each bucket's most recent monthly amount. Only buckets with a transaction in the last `fixedActiveMonths` complete months count, and older ones are treated as ended. Transactions moved into a fixed category by override are grouped by bucket in the same way.
+- **Fixed:** the sum over the category's buckets of each bucket's monthly equivalent: its most recent charge × its charges per year ÷ 12. Charges per year come from the bucket's history in the window. A weekly £90 standing order counts as £390 a month, not as £360 or £450, depending on whether the last month had four or five Mondays. Only buckets with a transaction in the last `fixedActiveMonths` complete months count, and older ones are treated as ended. Transactions moved into a fixed category by override are grouped by bucket in the same way.
 - **Variable:** the median of the category's monthly totals across the window. The typical range is the `variableRange` percentiles, which start as the lower and upper quartiles.
 - **Annual:** the window total ÷ the number of months in the window. Per year is the window total, scaled to 12 months.
 - **One-off:** excluded from the table and listed below it.
@@ -381,14 +381,20 @@ Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gi
   - `*.csv` everywhere except `tests/fixtures/*.csv`
   - backup files, `budgie-backup*.json`
 
-  This covers the three real export naming styles: account-number-and-date names, card-digits-and-date names, and a generic `Statements.csv`.
-- **Committed fixtures are synthesized from scratch** in `tests/fixtures/`. All use `DD/MM/YYYY` dates. Together they reproduce every quirk of the three real formats:
+  This covers the four real export naming styles: account-number-and-date names, card-digits-and-date names, a generic `Statements.csv`, and `Transactions_Export_<Mon>_<YYYY>_<digits>.csv`.
+- **Committed fixtures are synthesized from scratch** in `tests/fixtures/`. All use `DD/MM/YYYY` dates. Together they reproduce every quirk of the four real formats:
   - **Bank current account:** headers `Transaction Date,Transaction Type,Sort Code,Account Number,Transaction Description,Debit Amount,Credit Amount,Balance`. Separate debit and credit columns, the sort code with a leading `'`, decimals like `.51`, and blank types and descriptions.
   - **Bank savings account:** headers `Transaction Date,Transaction Type,Transaction Description,Amount,Balance`. A signed amount with explicit `+`, a literal `null` type, and descriptions that include a date token and an account number.
   - **Credit card:** a UTF-8 BOM, every field quoted, and headers `"Transaction Date","Transaction Cleared Date","Transaction Type","Transaction Description","Transaction Amount"`. Purchases are positive and payments and refunds negative, amounts look like `46` and `1.2`, rows are ordered by cleared date, and some types are `Not Available`.
-  - **Descriptions:** processor prefixes, `*REF` suffixes, store numbers, truncated text ending in `...`, and HTML in a description.
-  - **Transactions:** a refund, identical same-day purchases, masked `PAYPAL PAYMENT` subscriptions, and an extra masked payment in one month to trigger the amount-rule flag.
-  - **Across files:** a savings-to-current transfer pair a day apart, a card payment matching a bank repayment a day apart, repayments to an untracked card, an overlapping re-export of one month, and an unusually large purchase in a grocery bucket.
+  - **Second bank's current account (exported by month):** headers `Date,Details,Transaction Type,In,Out,Balance`. No BOM, unquoted, LF line endings, and amounts always to 2 decimal places. Credit (`In`) comes before debit (`Out`), the reverse of the first bank. There's no account-identifier column, and types are long phrases such as `Card Transaction`, `Standing Order` and `BACS Payment Received`.
+  - **Descriptions:**
+    - processor prefixes, the bank-added `Card Purchase ` prefix, `*REF` suffixes, and store numbers
+    - space-separated references like `GAMESHOP CB1234567890` that differ on every row
+    - long hyphenated benefit-style references with `&--&` and digits that change each month
+    - personal payee names on standing orders
+    - truncated text ending in `...`, and HTML in a description
+  - **Transactions:** a refund, identical same-day purchases, masked `PAYPAL PAYMENT` subscriptions, an extra masked payment in one month to trigger the amount-rule flag, and a **weekly** standing order (to test the fixed monthly equivalent).
+  - **Across files:** a same-day transfer pair between the two banks' current accounts, a savings-to-current transfer pair a day apart, a card payment matching a bank repayment a day apart, repayments to an untracked card, an overlapping re-export of one month, and an unusually large purchase in a grocery bucket.
 - **Reconciliation:** the expected totals per category and per month are written down alongside the fixtures, so the reconciliation tests have a known answer.
 - **Unit tests** (`node:test`) cover:
   - the parser and amount parsing
