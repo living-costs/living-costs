@@ -104,3 +104,8 @@ th, td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.5rem; text-a
 .raw { white-space: pre-wrap; overflow-wrap: anywhere; }
 .scroll { overflow-x: auto; max-width: 100%; }
 .scroll th, .scroll td { white-space: nowrap; overflow-wrap: normal; }
+
+/* Categories */
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.inline-form .name-input { width: 14rem; }
+.inline-form .error { white-space: normal; }

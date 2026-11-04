@@ -1,7 +1,6 @@
 // App entry: open the store, seed defaults on first run, build the nav and route.
 
 /** @import {Store} from './store.js' */
-/** @import {Changes} from './types.js' */
 import { openStore } from './store.js';
 import { h, clear } from './dom.js';
 import tuning from './tuning.js';
@@ -9,6 +8,8 @@ import defaults from './default-categories.js';
 import { SCREEN_LIST, renderNav, markCurrent } from './ui/nav.js';
 import * as help from './ui/help.js';
 import * as accounts from './ui/accounts.js';
+import * as categories from './ui/categories.js';
+import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
 /** @typedef {{store: Store, tuning: typeof tuning, defaults: typeof defaults,
@@ -35,7 +36,7 @@ const SCREENS = {
   transactions: placeholder(label('transactions')),
   transfers: placeholder(label('transfers')),
   accounts: accounts.render,
-  categories: placeholder(label('categories')),
+  categories: categories.render,
   backup: placeholder(label('backup')),
 };
 
@@ -58,25 +59,40 @@ function showError(err) {
 
 /**
  * First run (no categories and nothing offered yet): add every default category.
- * Task 17 replaces this with `seedDefaults`.
  * @param {Store} store
  * @returns {Promise<void>}
  */
 async function seed(store) {
-  const { state } = store;
-  if (state.categories.length > 0 || state.settings.offeredDefaultIds.length > 0) return;
-  /** @type {Changes} */
-  const changes = {
-    put: {
-      categories: defaults.map((d, i) => ({
-        id: crypto.randomUUID(), name: d.name, kind: d.kind,
-        ...(d.budgetType ? { budgetType: d.budgetType } : {}),
-        defaultId: d.id, position: i,
-      })),
-      settings: [{ ...state.settings, offeredDefaultIds: defaults.map((d) => d.id) }],
-    },
-  };
-  await store.apply(changes);
+  const changes = seedDefaults(defaults, store.state);
+  if (changes.put) await store.apply(changes);
+}
+
+/** Pending default ids the notice currently shows, so it is only rebuilt when they change. */
+let noticeShows = '';
+
+/**
+ * Show "New suggested categories" in #notices while any default has not been offered yet,
+ * and remove it once there are none. Other notices are left alone.
+ * @param {App} app
+ */
+function showDefaultsNotice(app) {
+  const pending = pendingDefaults(app.defaults, app.store.state.settings);
+  const ids = pending.map((d) => d.id);
+  if (ids.join('\n') === noticeShows) return;
+  noticeShows = ids.join('\n');
+  noticesEl.querySelector('#defaults-notice')?.remove();
+  if (ids.length === 0) return;
+  noticesEl.append(h('div', { class: 'banner', id: 'defaults-notice' },
+    h('p', { id: 'defaults-notice-text' }, `New suggested categories: ${pending.map((d) => d.name).join(', ')}`),
+    h('div', { class: 'actions' },
+      h('button', {
+        type: 'button', 'aria-describedby': 'defaults-notice-text',
+        onClick: () => app.store.apply(acceptDefaults(app.store.state, ids, app.defaults)),
+      }, 'Add'),
+      h('button', {
+        type: 'button', class: 'secondary', 'aria-describedby': 'defaults-notice-text',
+        onClick: () => app.store.apply(dismissDefaults(app.store.state, ids)),
+      }, 'Dismiss'))));
 }
 
 /** Focus the current screen's h2. */
@@ -131,7 +147,12 @@ async function start() {
   const app = createApp(store);
   renderNav(navEl, app);
   drawScreen(app);
-  store.subscribe(() => app.rerender());
+  showDefaultsNotice(app);
+  // The notice first, so a removed notice button no longer holds focus when the screen redraws.
+  store.subscribe(() => {
+    showDefaultsNotice(app);
+    app.rerender();
+  });
 }
 
 window.addEventListener('unhandledrejection', (event) => showError(event.reason));
