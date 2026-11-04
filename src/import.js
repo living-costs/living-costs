@@ -10,6 +10,7 @@ import { headerSignature, mappingProblems, applyMapping } from './mapping.js';
 import { withFingerprints } from './fingerprint.js';
 import { sha256Hex } from './hash.js';
 import { classifyIncoming } from './dedupe.js';
+import { cmp } from './order.js';
 import { assignBuckets } from './buckets.js';
 import { combine } from './changes.js';
 import { coverageIntervals } from './coverage.js';
@@ -146,7 +147,7 @@ export function planImport(state, account, files, tuning) {
     .map(({ fingerprint, date, amountMinor, rawText }) => ({ fingerprint, date, amountMinor, rawText }));
   /** @type {Batch[]} */
   const periods = state.batches.filter((b) => b.accountId === account.id);
-  const ordered = [...files].sort((a, b) => (a.coversFrom < b.coversFrom ? -1 : a.coversFrom > b.coversFrom ? 1 : 0));
+  const ordered = [...files].sort((a, b) => cmp(a.coversFrom, b.coversFrom));
 
   /** @type {PlanFile[]} */
   const out = [];
@@ -256,6 +257,6 @@ export function undoBatches(state, batchIds) {
  */
 function stableJson(value) {
   return JSON.stringify(value, (_k, v) => (v && typeof v === 'object' && !Array.isArray(v)
-    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => cmp(a, b)))
     : v));
 }

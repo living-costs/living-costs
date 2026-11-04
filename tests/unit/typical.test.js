@@ -294,3 +294,14 @@ test('fixed: a refund in an active bucket still lowers perMonth', () => {
   }), tuning);
   assert.equal(row(tm, 'broadband').perMonth, 3500 - 100);
 });
+
+test('rows with equal figures are in name order ignoring case', () => {
+  const s = build({
+    categories: [{ ...cat('z', 'spend', 'annual'), name: 'Zoo' }, { ...cat('a', 'spend', 'annual'), name: 'apples' }],
+    buckets: [bucket('bz', 'z'), bucket('ba', 'a')],
+    transactions: [txn('A', '2026-01-10', -1200, 'bz'), txn('A', '2026-01-10', -1200, 'ba')],
+  });
+  const tm = /** @type {any} */ (typicalMonth(s, tuning));
+  // Code-unit order would put Zoo before apples.
+  assert.deepEqual(tm.spend.map((r) => r.name), ['apples', 'Zoo']);
+});

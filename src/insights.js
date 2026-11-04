@@ -1,22 +1,13 @@
 /** @import {Bucket, Transaction, Override} from './types.js' */
-import { currencyExponent, divRound } from './money.js';
+import { currencyExponent } from './money.js';
+import { median } from './typical.js';
+import { cmp, compareNames } from './order.js';
 import { daysBetween } from './dates.js';
 
 /**
  * @typedef {{relatedMinWordLength:number,relatedStopWords:string[],relatedMaxShown:number,
  *   unusualMultiple:number,unusualMinMajor:number,repeatingMinCount:number}} InsightTuning
  */
-
-/**
- * Median of integers; an even count averages the two middle values with divRound.
- * @param {number[]} values non-empty
- * @returns {number}
- */
-function median(values) {
-  const s = [...values].sort((a, b) => a - b);
-  const mid = s.length >> 1;
-  return s.length % 2 === 1 ? s[mid] : divRound(s[mid - 1] + s[mid], 2);
-}
 
 /**
  * Whole upper-case words from a bucket's name and keys.
@@ -53,7 +44,7 @@ export function relatedBuckets(bucket, buckets, absTotals, tuning) {
     if (shared > 0) scored.push({ other, shared, total: absTotals.get(other.id) ?? 0 });
   }
   scored.sort((a, b) => b.shared - a.shared || b.total - a.total
-    || (a.other.displayName < b.other.displayName ? -1 : a.other.displayName > b.other.displayName ? 1 : 0));
+    || compareNames(a.other.displayName, b.other.displayName) || cmp(a.other.id, b.other.id));
   return scored.slice(0, tuning.relatedMaxShown).map((s) => s.other);
 }
 

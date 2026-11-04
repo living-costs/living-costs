@@ -2,6 +2,7 @@
 // per-account analysis window (decision D1: a transaction counts only in months its account covers fully).
 /** @import {State, Account, Batch} from './types.js' */
 import { addDays, monthOf, monthStart, monthEnd, monthRange } from './dates.js';
+import { cmp } from './order.js';
 
 /** @typedef {{from:string,to:string}} Interval */
 /** @typedef {'covered'|'partial'|'missing'} Status */
@@ -15,7 +16,7 @@ import { addDays, monthOf, monthStart, monthEnd, monthRange } from './dates.js';
  */
 export function coverageIntervals(batches, gapDays) {
   const sorted = batches.map((b) => ({ from: b.coversFrom, to: b.coversTo }))
-    .sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+    .sort((a, b) => cmp(a.from, b.from));
   /** @type {Interval[]} */
   const out = [];
   for (const iv of sorted) {

@@ -12,10 +12,11 @@
 import { h } from '../dom.js';
 import { suggestPairs, decidePair, unpair, markPlaceholder } from '../transfers.js';
 import { combine } from '../changes.js';
-import { formatMoney } from '../money.js';
+import { formatMoney, currenciesOf } from '../money.js';
+import { cmp, compareNames } from '../order.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
-import { field, focusKey, plural, valueOf } from './form.js';
+import { field, focusKey, keyed, plural, valueOf } from './form.js';
 
 /** The Add a card you don't import form. Not saved; it survives redraws until reset(). */
 const form = {
@@ -105,18 +106,9 @@ const headerRow = (/** @type {string} */ last) => h('tr', null,
  */
 const nextFocus = (keys, i, fallback) => keys[i + 1] ?? keys[i - 1] ?? fallback;
 
-/**
- * An element by data-focus-key within `root`.
- * @param {ParentNode} root
- * @param {string} key
- * @returns {HTMLElement|undefined}
- */
-const byKey = (root, key) => /** @type {HTMLElement|undefined} */ ([...root.querySelectorAll('[data-focus-key]')]
-  .find((el) => el instanceof HTMLElement && el.dataset.focusKey === key));
-
 /** By From date, then fingerprint. */
-const suggestionOrder = (/** @type {Suggestion} */ x, /** @type {Suggestion} */ y) => (x.a.date < y.a.date ? -1 : x.a.date > y.a.date ? 1 : 0)
-  || (x.a.fingerprint < y.a.fingerprint ? -1 : x.a.fingerprint > y.a.fingerprint ? 1 : 0);
+const suggestionOrder = (/** @type {Suggestion} */ x, /** @type {Suggestion} */ y) => cmp(x.a.date, y.a.date)
+  || cmp(x.a.fingerprint, y.a.fingerprint);
 
 /**
  * @param {App} app
@@ -142,7 +134,7 @@ function suggestedSection(app) {
    * @param {() => Changes} build
    * @param {string} focus
    */
-  const save = (scope, build, focus) => whileSaving(scope, () => app.store.apply(build()), byKey(section, focus) ?? heading);
+  const save = (scope, build, focus) => whileSaving(scope, () => app.store.apply(build()), keyed(focus) ?? heading);
 
   const all = h('button', {
     type: 'button', 'data-saves': true, 'data-focus-key': 'transfers-confirm-all', 'aria-describedby': 'suggested-count',
@@ -196,7 +188,7 @@ function decidedSection(app, { status, id, title, intro }) {
     const a = byFingerprint.get(pair.fingerprintA);
     const b = byFingerprint.get(pair.fingerprintB);
     return { pair, a, b, date: a?.date ?? b?.date ?? '' };
-  }).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0) || (x.pair.key < y.pair.key ? -1 : x.pair.key > y.pair.key ? 1 : 0));
+  }).sort((x, y) => cmp(x.date, y.date) || cmp(x.pair.key, y.pair.key));
   if (rows.length === 0) {
     section.append(h('p', null, 'None yet.'));
     return section;
@@ -218,21 +210,11 @@ function decidedSection(app, { status, id, title, intro }) {
               type: 'button', class: 'secondary', 'data-saves': true, 'data-focus-key': keys[i],
               'aria-label': `Undo ${pairWords(a, b, accounts)}`,
               onClick: () => whileSaving(row, () => app.store.apply(unpair(pair.key)),
-                byKey(section, nextFocus(keys, i, headingId)) ?? heading),
+                keyed(nextFocus(keys, i, headingId)) ?? heading),
             }, 'Undo')));
           return row;
         })))));
   return section;
-}
-
-/**
- * The currencies of a bucket's transactions.
- * @param {App} app
- * @param {string} bucketId
- * @returns {string[]}
- */
-function bucketCurrencies(app, bucketId) {
-  return [...new Set(app.store.state.transactions.filter((t) => t.bucketId === bucketId).map((t) => t.currency))].sort();
 }
 
 /**
@@ -271,7 +253,7 @@ function addCardForm(app) {
   const state = app.store.state;
   const linked = new Set(state.accounts.flatMap((a) => a.repaymentBucketIds));
   const choices = state.buckets.filter((b) => !linked.has(b.id))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    .sort((a, b) => compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
   if (form.bucketId && !choices.some((b) => b.id === form.bucketId)) form.bucketId = '';
 
   const bucketSelect = h('select', {
@@ -293,7 +275,8 @@ function addCardForm(app) {
         /** @type {{bucket?: string, name?: string}} */
         const errors = {};
         const cardName = form.cardName.trim();
-        const currencies = form.bucketId ? bucketCurrencies(app, form.bucketId) : [];
+        const currencies = form.bucketId
+          ? currenciesOf(app.store.state.transactions.filter((t) => t.bucketId === form.bucketId)) : [];
         if (!form.bucketId) errors.bucket = 'Choose the bucket your repayments to this card are in.';
         else if (currencies.length === 0) errors.bucket = "This bucket has no transactions, so its currency isn't known.";
         else if (currencies.length > 1) errors.bucket = `This bucket has transactions in more than one currency (${currencies.join(', ')}). Choose a bucket in one currency.`;

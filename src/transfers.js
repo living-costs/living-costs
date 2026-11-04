@@ -10,6 +10,7 @@ import { daysBetween } from './dates.js';
 import { createCategory } from './categories.js';
 import { setBucketCategory } from './buckets.js';
 import { combine } from './changes.js';
+import { cmp } from './order.js';
 
 /** @typedef {{a: Transaction, b: Transaction, days: number}} Suggestion */
 
@@ -23,9 +24,6 @@ import { combine } from './changes.js';
 export function pairKey(fpA, fpB) {
   return fpA < fpB ? `${fpA}\n${fpB}` : `${fpB}\n${fpA}`;
 }
-
-/** @param {string} a @param {string} b */
-const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * Likely transfers. A candidate is a debit and a credit of exactly opposite, non-zero amounts in

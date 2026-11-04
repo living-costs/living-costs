@@ -3,7 +3,7 @@
 //
 // Currency caveat: the absolute totals here add minor units across currencies. They are used
 // only to order buckets and, by the UI, as money when every counted transaction shares one
-// currency (see soleCurrency in ui/categorise.js). Never show them as money otherwise.
+// currency (see soleCurrency in money.js). Never show them as money otherwise.
 
 /** @import {State, Transaction, Bucket} from './types.js' */
 /** @import {ResolveContext} from './resolve.js' */
@@ -11,6 +11,7 @@ import { analysisWindow } from './coverage.js';
 import { buildContext, resolve } from './resolve.js';
 import { monthOf } from './dates.js';
 import { divRound } from './money.js';
+import { cmp, compareNames } from './order.js';
 
 /** @typedef {{windowMonths:number, coverageGapDays:number}} ProgressTuning */
 /** @typedef {{absTotal:number, txns:Transaction[]}} BucketCount */
@@ -101,9 +102,7 @@ export function cardQueue(state, tuning, skipped) {
       const categorised = b.categoryId !== undefined && ctx.categories.has(b.categoryId);
       return !categorised && total(b) > 0;
     })
-    .sort((a, b) => total(b) - total(a)
-      || (a.displayName < b.displayName ? -1 : a.displayName > b.displayName ? 1 : 0)
-      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    .sort((a, b) => total(b) - total(a) || compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
 }
 
 /**

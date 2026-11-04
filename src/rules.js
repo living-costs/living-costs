@@ -1,6 +1,7 @@
 /** @import {State, Changes, Rule, Transaction, Bucket, Override} from './types.js' */
 import { normalise, NORMALISER_VERSION } from './normalise.js';
 import { periodKey } from './dates.js';
+import { cmp } from './order.js';
 
 /**
  * Decide whether an amount rule takes a transaction. Increments the count on 'rule'.
@@ -28,7 +29,7 @@ export function routeByRule(rule, txn, counts) {
  */
 export function byDate(rows) {
   return rows.map((r, i) => ({ r, i }))
-    .sort((a, b) => (a.r.date < b.r.date ? -1 : a.r.date > b.r.date ? 1 : a.i - b.i))
+    .sort((a, b) => cmp(a.r.date, b.r.date) || a.i - b.i)
     .map((x) => x.r);
 }
 

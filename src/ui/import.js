@@ -8,6 +8,7 @@
 import { h } from '../dom.js';
 import { focusKey, field, plural } from './form.js';
 import { whileSaving } from './saving.js';
+import { cmp } from '../order.js';
 /** @import {Child} from '../dom.js' */
 import { prepareFiles, suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
 import { applyMapping, mappingProblems } from '../mapping.js';
@@ -446,7 +447,7 @@ function preview(f, file, signature) {
   if (!mapping) return h('p', { class: 'muted' }, 'Choose the date, description and amount columns to see a preview.');
   if (!validCurrency(f.currency)) return h('p', { class: 'muted' }, 'Enter a currency code to see a preview.');
   const { rows, errors } = applyMapping(mapping, file.header, file.rows, f.currency);
-  const shown = [...rows].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).slice(0, 5);
+  const shown = [...rows].sort((a, b) => cmp(a.date, b.date)).slice(0, 5);
   const note = errors.length ? h('p', { class: 'muted' }, `${plural(errors.length, 'row', 'rows')} can't be read with these columns.`) : null;
   if (shown.length === 0) return h('div', null, h('p', { class: 'muted' }, 'No rows can be read with these columns.'), note);
   return h('div', null,
@@ -537,7 +538,7 @@ function toPeriod(app) {
   }
   const dropped = flow.files.filter((f) => f.mapped.length === 0);
   flow.messages = [...flow.messages, ...dropped.map((f) => `"${f.name}" has no rows to import.`)];
-  flow.files = [...kept].sort((a, b) => (a.coversFrom < b.coversFrom ? -1 : a.coversFrom > b.coversFrom ? 1 : 0));
+  flow.files = [...kept].sort((a, b) => cmp(a.coversFrom, b.coversFrom));
   flow.periods = new Map(flow.files.map((f) => [f.hash, { from: formatDate(f.coversFrom), to: formatDate(f.coversTo) }]));
   go(app, 'period');
 }

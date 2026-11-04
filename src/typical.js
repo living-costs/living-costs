@@ -4,7 +4,8 @@
 /** @import {State, Account, Transaction, BudgetType} from './types.js' */
 import { analysisWindow, staleAccounts } from './coverage.js';
 import { buildContext, resolve } from './resolve.js';
-import { divRound } from './money.js';
+import { divRound, currenciesOf } from './money.js';
+import { cmp, compareNames } from './order.js';
 import { monthOf } from './dates.js';
 
 /**
@@ -60,7 +61,7 @@ export function percentile(values, p) {
  * @returns {TypicalMonth|MixedCurrencies}
  */
 export function typicalMonth(state, tuning) {
-  const currencies = [...new Set(state.transactions.map((t) => t.currency))].sort();
+  const currencies = currenciesOf(state.transactions);
   if (currencies.length > 1) return { mixedCurrencies: true, currencies };
   const currency = currencies[0] ?? state.accounts[0]?.currency ?? 'GBP';
 
@@ -158,9 +159,9 @@ export function typicalMonth(state, tuning) {
     tables[category.kind].push(row);
   }
   for (const rows of Object.values(tables)) {
-    rows.sort((a, b) => b.perMonth - a.perMonth || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    rows.sort((a, b) => b.perMonth - a.perMonth || compareNames(a.name, b.name) || cmp(a.categoryId, b.categoryId));
   }
-  oneOffs.sort((a, b) => (a.txn.date < b.txn.date ? -1 : a.txn.date > b.txn.date ? 1 : 0));
+  oneOffs.sort((a, b) => cmp(a.txn.date, b.txn.date));
 
   /** @param {Row[]} rows */
   const sum = (rows) => rows.reduce((acc, r) => acc + r.perMonth, 0);

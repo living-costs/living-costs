@@ -14,7 +14,8 @@ import { mergeBuckets, setBucketCategory } from '../buckets.js';
 import { orderedCategories } from '../categories.js';
 import { setCategoryOverride, dismissUnusual } from '../overrides.js';
 import { combine } from '../changes.js';
-import { formatMoney } from '../money.js';
+import { formatMoney, soleCurrency } from '../money.js';
+import { cmp } from '../order.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
 import { focusKey, plural, valueOf, field, emptyDraft, categoryForm } from './form.js';
@@ -55,16 +56,6 @@ function resetUi(bucketId) {
     bucketId, newOpen: false, draft: emptyDraft(), newError: '',
     moveId: null, moveTarget: '', moveError: '', repeatAmount: null, repeatName: '', repeatCount: '1', repeatError: null,
   });
-}
-
-/**
- * The one currency of some transactions, or null when there are none or several.
- * @param {Transaction[]} txns
- * @returns {string|null}
- */
-function soleCurrency(txns) {
-  const set = new Set(txns.map((t) => t.currency));
-  return set.size === 1 ? [...set][0] : null;
 }
 
 /**
@@ -228,7 +219,7 @@ function summaryText(app, count) {
  * @returns {HTMLElement}
  */
 function examples(all) {
-  const newest = [...all].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const newest = [...all].sort((a, b) => cmp(b.date, a.date));
   const seen = new Set();
   const distinct = newest.filter((t) => !seen.has(t.rawText) && seen.add(t.rawText));
   const picked = [...distinct, ...newest.filter((t) => !distinct.includes(t))].slice(0, 3);
@@ -508,7 +499,7 @@ function repeatForm(app, bucket, r, save) {
 function flagged(app, all, save) {
   const state = app.store.state;
   const list = all.filter((t) => t.flaggedRuleId)
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    .sort((a, b) => cmp(a.date, b.date));
   return part('card-flagged', 'Flagged', list.map((t) => {
     const id = `flagged-${t.id}`;
     const rule = state.rules.find((r) => r.id === t.flaggedRuleId);

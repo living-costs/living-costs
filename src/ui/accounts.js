@@ -10,6 +10,7 @@ import { accountsByMonth } from '../coverage.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { renderImport, importActive } from './import.js';
 import { whileSaving, isSaving } from './saving.js';
+import { cmp } from '../order.js';
 import { plural } from './form.js';
 
 const KIND_LABELS = { bank: 'Bank', card: 'Card', placeholder: 'Card (not imported)' };
@@ -60,7 +61,7 @@ function accountList(app) {
   }
   for (const account of accounts) {
     const own = batches.filter((b) => b.accountId === account.id)
-      .sort((a, b) => (a.coversFrom < b.coversFrom ? -1 : a.coversFrom > b.coversFrom ? 1 : 0));
+      .sort((a, b) => cmp(a.coversFrom, b.coversFrom));
     section.append(accountCard(app, account, own));
   }
   return section;

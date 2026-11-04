@@ -90,3 +90,22 @@ export function divRound(n, d) {
   if (2 * (an - q * ad) >= ad) q += 1;
   return (n < 0) !== (d < 0) && q !== 0 ? -q : q;
 }
+
+/**
+ * The distinct currencies of some transactions (or anything with a currency), sorted.
+ * @param {{currency: string}[]} items
+ * @returns {string[]}
+ */
+export function currenciesOf(items) {
+  return [...new Set(items.map((x) => x.currency))].sort();
+}
+
+/**
+ * The one currency of some transactions, or null when there are none or several.
+ * @param {{currency: string}[]} items
+ * @returns {string|null}
+ */
+export function soleCurrency(items) {
+  const list = currenciesOf(items);
+  return list.length === 1 ? list[0] : null;
+}

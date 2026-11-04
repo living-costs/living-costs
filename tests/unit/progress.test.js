@@ -133,3 +133,13 @@ test('monthlyFigure divides each account by its own month count (D1) and sums', 
     { perMonth: 1000, months: null });
   assert.deepEqual(monthlyFigure({ absTotal: 500, txns: [t('a3', -500)] }, accountMonths), { perMonth: 0, months: 0 });
 });
+
+test('equal totals fall back to name order ignoring case, as the Buckets screen orders names', () => {
+  const s = build();
+  s.buckets.push(bucket('lower'), bucket('upper'));
+  s.buckets.find((b) => b.id === 'lower').displayName = 'apple stall';
+  s.buckets.find((b) => b.id === 'upper').displayName = 'BAKERY';
+  s.transactions.push(txn('lower', -700, '2026-10-02'), txn('upper', -700, '2026-10-03'));
+  // Code-unit order would put BAKERY before apple stall.
+  assert.deepEqual(ids(cardQueue(s, tuning, new Set())).slice(-2), ['lower', 'upper']);
+});

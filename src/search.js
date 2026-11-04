@@ -1,6 +1,7 @@
 /** @import {Transaction} from './types.js' */
 import { parseDate, daysBetween } from './dates.js';
 import { parseMoneyQuery, currencyExponent } from './money.js';
+import { cmp } from './order.js';
 
 /**
  * Smallest day distance from a row to the query date, or null if the query is not a date.
@@ -51,7 +52,7 @@ export function searchTransactions(txns, query, filters, opts) {
     (!filters.from || t.date >= filters.from) &&
     (!filters.to || t.date <= filters.to));
   /** @param {Transaction} a @param {Transaction} b */
-  const newest = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+  const newest = (a, b) => cmp(b.date, a.date);
   const q = query.trim();
   if (q === '') return rows.slice().sort(newest);
 

@@ -9,6 +9,7 @@ import { buildContext } from '../resolve.js';
 import { searchTransactions } from '../search.js';
 import { orderedCategories } from '../categories.js';
 import { formatMoney } from '../money.js';
+import { cmp, compareNames } from '../order.js';
 import { formatDate } from '../dates.js';
 import { field, valueOf } from './form.js';
 import { countsAsCell, appendSplitDialog } from './counts-as.js';
@@ -64,7 +65,7 @@ export function renderTransactionList(root, app, filters) {
    */
   const set = (key) => (e) => { v[key] = valueOf(e); update(); };
 
-  const buckets = [...state.buckets].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const buckets = [...state.buckets].sort((a, b) => compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
   root.append(
     h('div', { role: 'search', class: 'row filters' },
       field('Search transactions', h('input', {

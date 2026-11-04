@@ -131,3 +131,10 @@ test('repeating: median gap in band but under 80% of gaps in band is skipped', (
   const rows = [...ds.map((d) => txn(d, -400)), txn('2026-01-02', -401)];
   assert.deepEqual(repeatingAmounts(rows, tuning), []);
 });
+
+test('related buckets with equal scores are in name order ignoring case', () => {
+  const me = bucket('m', 'FARM SHOP');
+  const upper = bucket('u', 'FARM ZONE');
+  const lower = bucket('l', 'farm apples');
+  assert.deepEqual(relatedBuckets(me, [me, upper, lower], new Map(), tuning).map((x) => x.id), ['l', 'u']);
+});

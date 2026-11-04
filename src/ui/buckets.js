@@ -14,7 +14,8 @@ import { h } from '../dom.js';
 import { countedTransactions } from '../progress.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
 import { orderedCategories } from '../categories.js';
-import { formatMoney } from '../money.js';
+import { formatMoney, currenciesOf, soleCurrency } from '../money.js';
+import { cmp, compareNames } from '../order.js';
 import { analysisWindow } from '../coverage.js';
 import { formatMonth } from '../dates.js';
 import { whileSaving, queueSave } from './saving.js';
@@ -136,9 +137,13 @@ function bucketRows(app) {
   const state = app.store.state;
   /** @type {Map<string, Transaction[]>} */
   const byBucket = new Map();
-  /** @type {Map<string, Set<string>>} every currency each bucket has, counted or not */
+  /** @type {Map<string, Transaction[]>} every transaction each bucket has, counted or not */
   const own = new Map();
-  for (const t of state.transactions) own.set(t.bucketId, (own.get(t.bucketId) ?? new Set()).add(t.currency));
+  for (const t of state.transactions) {
+    const list = own.get(t.bucketId) ?? [];
+    list.push(t);
+    own.set(t.bucketId, list);
+  }
   for (const t of countedTransactions(state, app.tuning)) {
     const list = byBucket.get(t.bucketId) ?? [];
     list.push(t);
@@ -146,16 +151,15 @@ function bucketRows(app) {
   }
   return state.buckets.map((bucket) => {
     const txns = byBucket.get(bucket.id) ?? [];
-    const currencies = new Set(txns.map((t) => t.currency));
-    const all = own.get(bucket.id);
-    const mixed = currencies.size > 1;
+    const mixed = currenciesOf(txns).length > 1;
+    const ownCurrency = soleCurrency(own.get(bucket.id) ?? []);
     return {
       bucket,
       sum: mixed ? 0 : txns.reduce((s, t) => s + t.amountMinor, 0),
       count: txns.length,
-      currency: currencies.size === 1 ? [...currencies][0] : null,
+      currency: soleCurrency(txns),
       mixed,
-      zero: all?.size === 1 ? formatMoney(0, [...all][0]) : '0',
+      zero: ownCurrency ? formatMoney(0, ownCurrency) : '0',
     };
   });
 }
@@ -189,8 +193,8 @@ function shownRows(app, rows) {
   const q = ui.query.trim().toLowerCase();
   const matches = (/** @type {Bucket} */ b) => q === ''
     || b.displayName.toLowerCase().includes(q) || b.keys.some((k) => k.toLowerCase().includes(q));
-  const byName = (/** @type {Row} */ a, /** @type {Row} */ b) => a.bucket.displayName.localeCompare(b.bucket.displayName)
-    || (a.bucket.id < b.bucket.id ? -1 : a.bucket.id > b.bucket.id ? 1 : 0);
+  const byName = (/** @type {Row} */ a, /** @type {Row} */ b) => compareNames(a.bucket.displayName, b.bucket.displayName)
+    || cmp(a.bucket.id, b.bucket.id);
   /** @type {Record<SortKey, (a: Row, b: Row) => number>} ascending */
   const compare = {
     name: byName,

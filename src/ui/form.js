@@ -13,13 +13,23 @@ export const KIND_LABELS = { spend: 'Spend', income: 'Income', contribution: 'Co
 export const BUDGET_LABELS = { fixed: 'Fixed', variable: 'Variable', annual: 'Annual', oneoff: 'One-off' };
 
 /**
+ * The element within `root` whose data-focus-key is `key`, if there is one.
+ * @param {string} key
+ * @param {ParentNode} [root]
+ * @returns {HTMLElement|undefined}
+ */
+export function keyed(key, root = document) {
+  const el = [...root.querySelectorAll('[data-focus-key]')]
+    .find((e) => e instanceof HTMLElement && e.dataset.focusKey === key);
+  return el instanceof HTMLElement ? el : undefined;
+}
+
+/**
  * Focus the element whose data-focus-key is `key`, if there is one.
  * @param {string} key
  */
 export function focusKey(key) {
-  const el = [...document.querySelectorAll('[data-focus-key]')]
-    .find((e) => e instanceof HTMLElement && e.dataset.focusKey === key);
-  if (el instanceof HTMLElement) el.focus();
+  keyed(key)?.focus();
 }
 
 /**
