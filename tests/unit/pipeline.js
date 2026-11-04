@@ -61,13 +61,18 @@ export function decisionsFor(plan, decide) {
   return new Map(plan.files.flatMap((f) => f.review.map((r) => [r.row.fingerprint, decide(r)])));
 }
 
-/** The whole pipeline for one pick, asserting no refusals along the way. */
-export async function run(state, account, picks, decide = () => 'both') {
+/**
+ * The whole pipeline for one pick, asserting no refusals along the way. `period`, if given, sets
+ * each file's covered period, as the user does on the import screen (it gets the mapped file and
+ * returns `{coversFrom, coversTo}`).
+ */
+export async function run(state, account, picks, decide = () => 'both', period = undefined) {
   const prep = await prepareFiles(state, picks);
   assert.equal(prep.signatureError, undefined);
   const mapped = mapFiles(account, prep.files);
   assert.deepEqual(mapped.refused, []);
-  const plan = planImport(state, account, withSkips(mapped.files), tuning);
-  const changes = commitImport(state, account, plan, decisionsFor(plan, decide), mapped.files, NOW);
-  return { prep, files: mapped.files, plan, changes };
+  const files = period ? mapped.files.map((f) => ({ ...f, ...period(f) })) : mapped.files;
+  const plan = planImport(state, account, withSkips(files), tuning);
+  const changes = commitImport(state, account, plan, decisionsFor(plan, decide), files, NOW);
+  return { prep, files, plan, changes };
 }
