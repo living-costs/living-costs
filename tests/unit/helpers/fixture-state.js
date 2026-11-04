@@ -22,7 +22,7 @@ const PAYPAL = 'PAYPAL PAYMENT';
  * (Nov 2025 to Oct 2026); for each Bank B file it is the "Whole month" choice.
  * @param {{coversFrom:string,coversTo:string,wholeMonth?:string}} f
  */
-function wholeMonths(f) {
+export function wholeMonths(f) {
   if (f.wholeMonth) return { coversFrom: monthStart(f.wholeMonth), coversTo: monthEnd(f.wholeMonth) };
   return { coversFrom: monthStart(monthOf(f.coversFrom)), coversTo: monthEnd(monthOf(f.coversTo)) };
 }

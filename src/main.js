@@ -5,7 +5,7 @@ import { openStore } from './store.js';
 import { h, clear } from './dom.js';
 import tuning from './tuning.js';
 import defaults from './default-categories.js';
-import { SCREEN_LIST, renderNav, markCurrent } from './ui/nav.js';
+import { renderNav, markCurrent } from './ui/nav.js';
 import { whileSaving } from './ui/saving.js';
 import * as help from './ui/help.js';
 import * as accounts from './ui/accounts.js';
@@ -15,6 +15,7 @@ import * as transactions from './ui/transactions.js';
 import * as buckets from './ui/buckets.js';
 import * as transfers from './ui/transfers.js';
 import * as typical from './ui/typical.js';
+import * as backup from './ui/backup.js';
 import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
@@ -22,16 +23,6 @@ import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from '
  *   session: {skipped: Set<string>, screen: ScreenName},
  *   navigate(name: ScreenName): void, rerender(): void}} App */
 /** @typedef {(root: HTMLElement, app: App) => void} Render */
-
-/**
- * Until a screen's own module exists, it shows only its heading.
- * @param {string} label
- * @returns {Render}
- */
-const placeholder = (label) => (root) => { root.append(h('h2', { tabindex: '-1' }, label)); };
-
-/** @param {ScreenName} name */
-const label = (name) => SCREEN_LIST.find((s) => s.name === name)?.label ?? name;
 
 /** @type {Record<ScreenName, Render>} */
 const SCREENS = {
@@ -43,7 +34,7 @@ const SCREENS = {
   transfers: transfers.render,
   accounts: accounts.render,
   categories: categories.render,
-  backup: placeholder(label('backup')),
+  backup: backup.render,
 };
 
 /**
@@ -54,6 +45,7 @@ const SCREENS = {
 const RESETS = {
   buckets: buckets.reset,
   transfers: transfers.reset,
+  backup: backup.reset,
 };
 
 const screenEl = /** @type {HTMLElement} */ (document.getElementById('screen'));
