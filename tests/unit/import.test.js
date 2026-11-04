@@ -155,6 +155,24 @@ test('three Bank B files: date order, three batches, one importId, whole months'
   assert.equal(changes.put.accounts[0].identifier, undefined);
 });
 
+test('two picked files with the same name keep their own hash and period', async () => {
+  const state = emptyState();
+  const [aug, sep] = [buffer(BANK_B[0]), buffer(BANK_B[1])];
+  const { prep, changes } = await run(state, accountB(), [pick('statement.csv', sep), pick('statement.csv', aug)]);
+  const hashOf = (/** @type {string} */ month) => prep.files.find((f) => f.rows[0].cells[0].endsWith(month)).hash;
+  const batches = [...changes.put.batches].sort((a, b) => (a.coversFrom < b.coversFrom ? -1 : 1));
+  assert.deepEqual(batches.map((b) => [b.fileHash, b.coversFrom.slice(0, 7), b.coversTo.slice(0, 7), b.rowCount]), [
+    [hashOf('/08/2026'), '2026-08', '2026-08', expected.rowCounts[BANK_B[0]]],
+    [hashOf('/09/2026'), '2026-09', '2026-09', expected.rowCounts[BANK_B[1]]],
+  ]);
+  applyToState(state, changes);
+  for (const bytes of [aug, sep]) {
+    const again = await prepareFiles(state, [pick('statement.csv', bytes)]);
+    assert.equal(again.blocked.length, 1);
+    assert.deepEqual(again.files, []);
+  }
+});
+
 test('re-export after Bank A: 1 new, already per expected, 1 to review', async () => {
   const state = await importedBankA();
   const account = state.accounts[0];

@@ -26,7 +26,8 @@ import { monthOf } from './dates.js';
 /** @typedef {MappedFile & {skipRowNumbers:Set<number>}} PlannedFile */
 /** @typedef {MappedRow & {fingerprint:string}} PlanRow */
 /** @typedef {{row:PlanRow,candidates:ExistingRow[]}} ReviewRow */
-/** @typedef {{name:string,fresh:PlanRow[],already:PlanRow[],review:ReviewRow[]}} PlanFile */
+/** `hash` pairs the entry with its MappedFile; names can repeat within a pick. */
+/** @typedef {{name:string,hash:string,fresh:PlanRow[],already:PlanRow[],review:ReviewRow[]}} PlanFile */
 /** @typedef {{files:PlanFile[],totals:{new:number,already:number,review:number}}} ImportPlan */
 /** @typedef {{transactionMatchDays:number,coverageGapDays:number}} ImportTuning */
 
@@ -157,7 +158,7 @@ export function planImport(state, account, files, tuning) {
     const { fresh, already, review } = classifyIncoming({
       existing: [...existing], incoming, covered, matchDays: tuning.transactionMatchDays,
     });
-    out.push({ name: f.name, fresh, already, review });
+    out.push({ name: f.name, hash: f.hash, fresh, already, review });
     totals.new += fresh.length;
     totals.already += already.length;
     totals.review += review.length;
@@ -204,8 +205,8 @@ export function commitImport(state, account, plan, decisions, files, now) {
   for (const pf of plan.files) {
     const saved = [...pf.fresh, ...pf.review.filter((r) => decisions.get(r.row.fingerprint) === 'both').map((r) => r.row)];
     if (saved.length === 0) continue;
-    const file = files.find((f) => f.name === pf.name);
-    if (!file) throw new Error(`No file named "${pf.name}" for this plan`);
+    const file = files.find((f) => f.hash === pf.hash);
+    if (!file) throw new Error(`No file matching "${pf.name}" for this plan`);
     const batchId = crypto.randomUUID();
     batches.push({
       id: batchId, importId, accountId: account.id, fileName: file.name, fileHash: file.hash,
