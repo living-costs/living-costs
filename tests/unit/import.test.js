@@ -1,74 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { decodeBytes, parseCsv } from '../../src/csv.js';
-import { headerSignature } from '../../src/mapping.js';
 import { emptyState, applyToState } from '../../src/changes.js';
 import tuning from '../../src/tuning.js';
-import { MAPPINGS } from '../fixtures/mappings.js';
 import {
   prepareFiles, suggestAccounts, mapFiles, planImport, commitImport, undoBatches,
 } from '../../src/import.js';
-
-const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
-const expected = JSON.parse(fs.readFileSync(path.join(DIR, 'expected.json'), 'utf8'));
-const NOW = new Date('2026-11-04T10:00:00.000Z');
-
-const BANK_A = 'bank-a-current.csv';
-const REEXPORT = 'bank-a-current-2026-10-reexport.csv';
-const SAVINGS = 'bank-a-savings.csv';
-const CARD = 'card.csv';
-const BANK_B = ['bank-b-2026-08.csv', 'bank-b-2026-09.csv', 'bank-b-2026-10.csv'];
-
-/** @param {string} name */
-const text = (name) => fs.readFileSync(path.join(DIR, name), 'utf8');
-/** @param {string} name */
-const buffer = (name) => {
-  const b = fs.readFileSync(path.join(DIR, name));
-  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-};
-/** @param {string} s */
-const encode = (s) => new TextEncoder().encode(s).buffer;
-/** @param {string} name @param {ArrayBuffer} [bytes] */
-const pick = (name, bytes = buffer(name)) => ({ name, bytes });
-
-/** @param {keyof typeof MAPPINGS} key @param {string} fileName */
-const mappingFor = (key, fileName) => ({
-  ...MAPPINGS[key], headerSignature: headerSignature(parseCsv(decodeBytes(buffer(fileName))).header),
-});
-const accountA = (extra = {}) => ({
-  id: 'A', name: 'Bank A current', currency: 'GBP', kind: 'bank',
-  mapping: mappingFor('bankA', BANK_A), repaymentBucketIds: [], ...extra,
-});
-const accountS = () => ({
-  id: 'S', name: 'Bank A savings', currency: 'GBP', kind: 'bank',
-  mapping: mappingFor('savings', SAVINGS), repaymentBucketIds: [],
-});
-const accountB = () => ({
-  id: 'B', name: 'Bank B joint', currency: 'GBP', kind: 'bank',
-  mapping: mappingFor('bankB', BANK_B[0]), repaymentBucketIds: [],
-});
-
-/** @param {any[]} files @param {Record<string, Set<number>>} [skips] */
-const withSkips = (files, skips = {}) => files.map((f) => ({ ...f, skipRowNumbers: skips[f.name] ?? new Set() }));
-
-/** Every review row gets `decide(review)`. */
-function decisionsFor(plan, decide) {
-  return new Map(plan.files.flatMap((f) => f.review.map((r) => [r.row.fingerprint, decide(r)])));
-}
-
-/** The whole pipeline for one pick, asserting no refusals along the way. */
-async function run(state, account, picks, decide = () => 'both') {
-  const prep = await prepareFiles(state, picks);
-  assert.equal(prep.signatureError, undefined);
-  const mapped = mapFiles(account, prep.files);
-  assert.deepEqual(mapped.refused, []);
-  const plan = planImport(state, account, withSkips(mapped.files), tuning);
-  const changes = commitImport(state, account, plan, decisionsFor(plan, decide), mapped.files, NOW);
-  return { prep, files: mapped.files, plan, changes };
-}
+import {
+  expected, NOW, BANK_A, REEXPORT, SAVINGS, CARD, BANK_B, text, buffer, encode, pick,
+  accountA, accountS, accountB, withSkips, decisionsFor, run,
+} from './pipeline.js';
 
 async function importedBankA() {
   const state = emptyState();

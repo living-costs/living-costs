@@ -13,6 +13,7 @@ import * as categories from './ui/categories.js';
 import * as categorise from './ui/categorise.js';
 import * as transactions from './ui/transactions.js';
 import * as buckets from './ui/buckets.js';
+import * as transfers from './ui/transfers.js';
 import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
@@ -38,7 +39,7 @@ const SCREENS = {
   categorise: categorise.render,
   buckets: buckets.render,
   transactions: transactions.render,
-  transfers: placeholder(label('transfers')),
+  transfers: transfers.render,
   accounts: accounts.render,
   categories: categories.render,
   backup: placeholder(label('backup')),
@@ -51,6 +52,7 @@ const SCREENS = {
  */
 const RESETS = {
   buckets: buckets.reset,
+  transfers: transfers.reset,
 };
 
 const screenEl = /** @type {HTMLElement} */ (document.getElementById('screen'));

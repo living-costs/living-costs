@@ -174,7 +174,7 @@ export function planImport(state, account, files, tuning) {
  * Saves each file's fresh rows plus review rows decided 'both' as one batch per file (files with
  * nothing to save get none); all batches share one importId. Throws if a review row has no
  * decision. Always puts the account when anything is saved, with `identifier` set from the files
- * if it was unset. With nothing saved, returns `{}`, or just the account if it is new or changed.
+ * if it was unset, and a placeholder account becomes a `card`. With nothing saved, returns `{}`, or just the account if it is new or changed.
  * @param {State} state
  * @param {Account} account
  * @param {ImportPlan} plan
@@ -227,7 +227,9 @@ export function commitImport(state, account, plan, decisions, files, now) {
     const stored = state.accounts.find((a) => a.id === account.id);
     return !stored || stableJson(stored) !== stableJson(next) ? { put: { accounts: [next] } } : {};
   }
-  return combine({ put: { accounts: [next], batches } }, assignBuckets(state, txns));
+  // A card first recorded as one you don't import becomes a normal card once statements land in it.
+  const saved = next.kind === 'placeholder' ? { ...next, kind: /** @type {const} */ ('card') } : next;
+  return combine({ put: { accounts: [saved], batches } }, assignBuckets(state, txns));
 }
 
 /**
