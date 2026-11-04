@@ -7,12 +7,12 @@
 /** @import {Transaction, Category} from '../types.js' */
 /** @import {ResolveContext} from '../resolve.js' */
 import { h } from '../dom.js';
-import { resolve } from '../resolve.js';
+import { resolve, buildContext } from '../resolve.js';
 import { orderedCategories } from '../categories.js';
 import { setCategoryOverride, setSplit, resetOverride } from '../overrides.js';
 import { parseAmount, formatMoney, currencyExponent, decimalString, withoutCurrencySymbol } from '../money.js';
 import { formatDate } from '../dates.js';
-import { whileSaving } from './saving.js';
+import { whileSaving, queueSave } from './saving.js';
 import { focusKey, valueOf, field, showModalWhenConnected } from './form.js';
 
 // Option values that are not category ids (those are UUIDs).
@@ -82,12 +82,12 @@ export function countsAsCell(app, t, ctx, cats, prefix) {
 
   const bucketCategoryId = ctx.buckets.get(t.bucketId)?.categoryId;
   const bucketCategory = bucketCategoryId ? ctx.categories.get(bucketCategoryId) : undefined;
-  const selected = r.source === 'split' ? SPLIT_NOW : r.source === 'override' ? r.parts[0].categoryId : BUCKET;
+  const selected = selectedFor(t, ctx);
   const cell = h('div', { class: 'counts-as' });
   const select = h('select', {
     'aria-label': `Counts as for ${t.rawText} on ${formatDate(t.date)}`,
     'aria-describedby': sourceId, 'data-focus-key': selectKey(prefix, t),
-    onChange: (/** @type {Event} */ e) => choose(app, t, valueOf(e), selected, cell, select, prefix),
+    onChange: (/** @type {Event} */ e) => choose(app, t, valueOf(e), prefix),
   },
   ...cats.map((c) => h('option', { value: c.id, selected: c.id === selected }, c.name)),
   h('option', { value: BUCKET, selected: selected === BUCKET }, `Use bucket's category (${bucketCategory?.name ?? 'none'})`),
@@ -98,24 +98,33 @@ export function countsAsCell(app, t, ctx, cats, prefix) {
 }
 
 /**
- * Act on a choice in the Counts as select. Picking what the row already has does nothing,
- * except Split…, which shows the dialog again with the current parts.
+ * The select value for what a transaction has now.
+ * @param {Transaction} t
+ * @param {ResolveContext} ctx
+ * @returns {string}
+ */
+function selectedFor(t, ctx) {
+  const r = resolve(t, ctx);
+  return r.source === 'split' ? SPLIT_NOW : r.source === 'override' ? r.parts[0].categoryId ?? BUCKET : BUCKET;
+}
+
+/**
+ * Act on a choice in the Counts as select. The save is queued, not dropped, so a second quick
+ * change is saved too; picking what the row has by the time the save runs does nothing. Split…
+ * shows the dialog, with the current parts if it is split.
  * @param {App} app
  * @param {Transaction} t
  * @param {string} value
- * @param {string|null} selected what the row has now
- * @param {HTMLElement} cell
- * @param {HTMLElement} select
  * @param {string} prefix
  */
-function choose(app, t, value, selected, cell, select, prefix) {
+function choose(app, t, value, prefix) {
   if (value === SPLIT) {
     startSplit(app, t, prefix);
     return;
   }
-  if (value === selected) return;
-  whileSaving(cell, async () => {
+  queueSave(async () => {
     const now = app.store.state;
+    if (value === selectedFor(t, buildContext(now))) return;
     try {
       await app.store.apply(value === BUCKET
         ? resetOverride(now, t.fingerprint)
@@ -125,7 +134,7 @@ function choose(app, t, value, selected, cell, select, prefix) {
       app.rerender();
       throw err;
     }
-  }, select);
+  });
 }
 
 /**

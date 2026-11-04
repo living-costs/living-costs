@@ -138,6 +138,21 @@ test('changing a category saves it and keeps focus', async ({ page }) => {
   await expect.poll(async () => 'categoryId' in (await farm())).toBe(false);
 });
 
+test('two quick category changes save the second', async ({ page }) => {
+  // As Chrome's type-ahead can: a second change while the first is still saving.
+  await category(page, 'FARM SHOP').evaluate((el) => {
+    const select = /** @type {HTMLSelectElement} */ (el);
+    for (const label of ['Groceries', 'Eating out']) {
+      select.value = [...select.options].find((o) => o.text === label)?.value ?? '';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  const eating = (await readStore(page, 'categories')).find((c) => c.name === 'Eating out');
+  const farm = () => readStore(page, 'buckets').then((bs) => bs.find((b) => b.displayName === 'FARM SHOP'));
+  await expect.poll(async () => (await farm()).categoryId).toBe(eating.id);
+  await expect(category(page, 'FARM SHOP').locator('option:checked')).toHaveText('Eating out');
+});
+
 test('merge', async ({ page }) => {
   const merge = page.getByRole('button', { name: 'Merge selected…' });
   await expect(merge).toBeDisabled();

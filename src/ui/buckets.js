@@ -17,7 +17,7 @@ import { orderedCategories } from '../categories.js';
 import { formatMoney } from '../money.js';
 import { analysisWindow } from '../coverage.js';
 import { formatMonth } from '../dates.js';
-import { whileSaving } from './saving.js';
+import { whileSaving, queueSave } from './saving.js';
 import { field, focusKey, plural, valueOf, showModalWhenConnected } from './form.js';
 import { renderTransactionList } from './transactions.js';
 
@@ -274,7 +274,8 @@ function bucketRow(app, r, cats, shown, i) {
         const next = shown[i + 1] ?? shown[i - 1];
         if (next) focusKey(categoryKey(next.bucket.id));
       }
-      whileSaving(select, async () => {
+      // Queued, not dropped, so a second quick change is saved too.
+      queueSave(async () => {
         try {
           await app.store.apply(setBucketCategory(app.store.state, b.id, value === '' ? undefined : value));
         } catch (err) {
@@ -282,7 +283,7 @@ function bucketRow(app, r, cats, shown, i) {
           app.rerender();
           throw err;
         }
-      }, select);
+      });
     },
   },
   ...cats.map((c) => h('option', { value: c.id, selected: c.id === current }, c.name)),

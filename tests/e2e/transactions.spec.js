@@ -193,6 +193,30 @@ test('reset', async ({ page }) => {
   expect(await readStore(page, 'overrides')).toEqual([]);
 });
 
+test('two quick Counts as changes save the second, even back to the bucket', async ({ page }) => {
+  await find(page, '24/09');
+  const id = async (name) => (await readStore(page, 'categories')).find((c) => c.name === name).id;
+  const override = async () => (await readStore(page, 'overrides')).map((o) => o.categoryId);
+  /** Two changes in a row, as Chrome's type-ahead can fire them. @param {string[]} labels */
+  const quick = (labels) => page.getByLabel(AMAZON_LABEL).evaluate((el, list) => {
+    const select = /** @type {HTMLSelectElement} */ (el);
+    for (const label of list) {
+      select.value = [...select.options].find((o) => o.text === label)?.value ?? '';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, labels);
+
+  await quick(['Gifts', 'Groceries']);
+  const groceries = await id('Groceries');
+  await expect.poll(override).toEqual([groceries]);
+  await expect(page.getByLabel(AMAZON_LABEL).locator('option:checked')).toHaveText('Groceries');
+
+  // Away and straight back: the second change undoes the first.
+  await quick(['Gifts', "Use bucket's category (none)"]);
+  await expect.poll(override).toEqual([]);
+  await expect(source(page, AMAZON)).toHaveText('uncategorised');
+});
+
 test('override survives undo and re-import', async ({ page }) => {
   await find(page, '24/09');
   await page.getByLabel(AMAZON_LABEL).selectOption({ label: 'Gifts' });
