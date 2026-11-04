@@ -196,7 +196,25 @@ Any list of transactions has a **Counts as** column. It shows the category and w
 
 - **Move to another category:** a category override for that one transaction. For example, an annual insurance payment inside the Tesco bucket can move to Insurance.
 - **Split:** divides one transaction into parts, each with an amount and a category, and the parts must sum to the total. It's meant for Amazon orders and is available on any transaction.
+- **Reset:** the Counts as menu always offers "Use bucket's category (*name*)". This clears a category move or a split.
 - **Precedence:** overrides always beat the bucket's category, even after the bucket is recategorised.
+
+**Finding one transaction (owner's request).** For opaque buckets like Amazon, the expected workflow is categorising by exception:
+
+1. Put the whole bucket in its most common category, for example Household.
+2. Read through the Amazon order history.
+3. For each order that belongs elsewhere, find its charge in Budgie and move or split it.
+
+To make step 3 quick:
+
+- **Search** on the Transactions screen, and inside an opened bucket, matches any of:
+  - description text
+  - an amount, typed as it appears on the order, such as `60.69` or `£60.69`, ignoring sign
+  - a date, such as `24/09` or `24/09/2026`
+- **Filters:** a bucket filter and a date range narrow the list.
+- **Nearby dates:** a typed date matches anything within ±`transactionMatchDays` of it, nearest first. Amazon charges per shipment, often a day or two after the order, so the charge may not match the order date. It may not match the order total either, so searching by date within the bucket is the fallback.
+
+Results show date, raw text, amount and Counts as, so the change can be made right there.
 
 There is no "mark as one-off" action. Something that truly sits outside the typical year, such as a boiler replacement, is moved to a category whose type is One-off.
 
@@ -310,7 +328,20 @@ As in `CLAUDE.md`, with these additions:
 
 There's a simple top navigation (Claude's call):
 
-- **Typical month:** the home screen once data exists.
+- **Help:** the first panel (owner's request). It's a short, plain page covering:
+  - **What Budgie is for:** the typical month.
+  - **What you'll need:** about 12 months of CSV statements from each current, savings and card account, and where to download them.
+  - **Privacy:** everything stays in this browser.
+  - **The steps:**
+    1. Import each account.
+    2. Confirm transfers.
+    3. Categorise the biggest buckets until progress looks good enough.
+    4. Read the typical month.
+    5. Back up.
+    6. Later, import new statements and work through the long tail.
+
+  Help shows on first launch, with a "Got it" button that dismisses it. After that it's always available from the navigation. It shows again automatically whenever there's no data, for example after undoing every import or restoring a backup before re-importing (Claude's call). The dismissed state is stored in Settings and isn't backed up. The text is static and lives in `index.html` or a module, not in data.
+- **Typical month:** the home screen once data exists and Help has been dismissed.
 - **Categorise:** the card.
 - **Buckets:** the all-buckets list.
 - **Transactions:** a searchable list with Counts as.
@@ -319,7 +350,7 @@ There's a simple top navigation (Claude's call):
 - **Categories.**
 - **Backup:** backup and restore.
 
-Before any data exists, the app opens on Import.
+Before any data exists, the app opens on Help, which leads to Import.
 
 Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gitignored, local only).
 
