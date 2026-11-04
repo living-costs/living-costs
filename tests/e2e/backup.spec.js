@@ -7,7 +7,7 @@ import {
 } from './helpers.js';
 
 const CONFIRM = 'Replace all Budgie data in this browser with this backup? Imported statements will need re-importing.';
-const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts and transaction descriptions.";
+const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
 
 /** Init script: no file picker, so saving falls back to a download. */
 const noPicker = () => { delete (/** @type {any} */ (window)).showSaveFilePicker; };

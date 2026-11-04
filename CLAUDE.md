@@ -150,7 +150,7 @@ Exclude incomplete months from calculations.
 - Use plain JSON with a schema version.
 - Save with `showSaveFilePicker()`, falling back to a normal download. Chrome may block a Google Drive folder under `~/Library/CloudStorage`, so test this on macOS.
 - Show the date of the last backup in the UI.
-- Tell users that a backup saved to Google Drive is unencrypted and may include dates, amounts, and transaction descriptions.
+- Tell users that a backup saved to Google Drive is unencrypted and may include dates, amounts, transaction descriptions, and account details.
 
 ## Build order
 

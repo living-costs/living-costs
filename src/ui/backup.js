@@ -8,7 +8,7 @@ import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../
 import { field } from './form.js';
 import { whileSaving } from './saving.js';
 
-const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts and transaction descriptions.";
+const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
 const CONFIRM = 'Replace all Budgie data in this browser with this backup? Imported statements will need re-importing.';
 
 /** @type {{status: string, errors: string[]}} */
