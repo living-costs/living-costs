@@ -1,0 +1,2 @@
+# Keep line endings byte-exact: the CSVs test CRLF and LF handling.
+*.csv -text
