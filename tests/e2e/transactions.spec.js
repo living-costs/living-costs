@@ -199,6 +199,7 @@ test('override survives undo and re-import', async ({ page }) => {
   await expect(source(page, AMAZON)).toHaveText('override');
 
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Accounts' }).click();
+  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Undo card.csv' }).click();
   await expect(page.getByRole('button', { name: 'Undo card.csv' })).toHaveCount(0);
   await openTransactions(page);

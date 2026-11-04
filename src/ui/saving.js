@@ -4,6 +4,9 @@
 
 let busy = false;
 
+/** @returns {boolean} true while a save started by whileSaving is in flight */
+export const isSaving = () => busy;
+
 /**
  * Run `save` unless another save is in flight. Every `button[data-saves]` inside `scope` is
  * disabled until it settles. If focus was on one of those buttons, it moves to `focusTo` first,

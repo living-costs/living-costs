@@ -9,6 +9,8 @@ import { undoBatches } from '../import.js';
 import { accountsByMonth } from '../coverage.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { renderImport, importActive } from './import.js';
+import { whileSaving, isSaving } from './saving.js';
+import { plural } from './form.js';
 
 const KIND_LABELS = { bank: 'Bank', card: 'Card', placeholder: 'Card (not imported)' };
 
@@ -27,11 +29,22 @@ export function render(root, app) {
 }
 
 /**
+ * Ask, then remove these batches and their transactions. Declined, nothing changes. It asks
+ * before the save starts, so a declined Undo leaves focus on its button; while another save is
+ * in flight it does nothing, as whileSaving would.
  * @param {App} app
- * @param {string[]} batchIds
+ * @param {Batch[]} list
+ * @param {HTMLElement} scope its Undo buttons are disabled while the save is in flight
+ * @returns {Promise<void>}
  */
-function undo(app, batchIds) {
-  return app.store.apply(undoBatches(app.store.state, batchIds));
+async function undo(app, list, scope) {
+  if (isSaving()) return;
+  const ids = new Set(list.map((b) => b.id));
+  const n = app.store.state.transactions.filter((t) => ids.has(t.batchId)).length;
+  const files = list.map((b) => b.fileName).join(', ');
+  const again = list.length === 1 ? 'the file' : 'the files';
+  if (!confirm(`Remove the ${plural(n, 'transaction', 'transactions')} from ${files}? You can import ${again} again later.`)) return;
+  await whileSaving(scope, () => app.store.apply(undoBatches(app.store.state, [...ids])));
 }
 
 /**
@@ -77,8 +90,8 @@ function accountCard(app, account, own) {
       h('td', null, `${formatDate(b.coversFrom)} to ${formatDate(b.coversTo)}`),
       h('td', { class: 'num' }, String(b.rowCount)),
       h('td', null, h('button', {
-        type: 'button', class: 'secondary', 'aria-label': `Undo ${b.fileName}`, 'data-focus-key': `undo-${b.id}`,
-        onClick: () => undo(app, [b.id]),
+        type: 'button', class: 'secondary', 'aria-label': `Undo ${b.fileName}`, 'data-focus-key': `undo-${b.id}`, 'data-saves': true,
+        onClick: () => undo(app, [b], card),
       }, 'Undo')))))));
 
   /** @type {Map<string, Batch[]>} */
@@ -90,8 +103,8 @@ function accountCard(app, account, own) {
     card.append(h('div', { class: 'actions' },
       h('p', { id }, `Imported together: ${list.map((b) => b.fileName).join(', ')}.`),
       h('button', {
-        type: 'button', class: 'secondary', 'aria-describedby': id, 'data-focus-key': `undo-import-${list[0].importId}`,
-        onClick: () => undo(app, list.map((b) => b.id)),
+        type: 'button', class: 'secondary', 'aria-describedby': id, 'data-focus-key': `undo-import-${list[0].importId}`, 'data-saves': true,
+        onClick: () => undo(app, list, card),
       }, 'Undo this import')));
   });
   return card;

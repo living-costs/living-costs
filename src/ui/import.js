@@ -7,6 +7,7 @@
 /** @import {PreparedFile, MappedFile, PlannedFile, ImportPlan} from '../import.js' */
 import { h } from '../dom.js';
 import { focusKey, field, plural } from './form.js';
+import { whileSaving } from './saving.js';
 /** @import {Child} from '../dom.js' */
 import { prepareFiles, suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
 import { applyMapping, mappingProblems } from '../mapping.js';
@@ -24,7 +25,7 @@ import { parseDate, formatDate, formatLocalDate, formatMonth, monthStart, monthE
  * @typedef {{step:Step, messages:string[], prepared:PreparedFile[], choice:string, account:Account|null,
  *   form:MappingForm, formErrors:string[], files:MappedFile[], skip:Map<string,Set<number>>,
  *   periods:Map<string,PeriodInput>, planned:PlannedFile[], plan:ImportPlan|null,
- *   decisions:Map<string,'same'|'both'>, plannedAt:number, busy:boolean}} Flow
+ *   decisions:Map<string,'same'|'both'>, plannedAt:number}} Flow
  */
 
 const NEW = 'new';
@@ -42,7 +43,7 @@ function blankForm() {
 function fresh() {
   return {
     step: 'pick', messages: [], prepared: [], choice: '', account: null, form: blankForm(), formErrors: [],
-    files: [], skip: new Map(), periods: new Map(), planned: [], plan: null, decisions: new Map(), plannedAt: -1, busy: false,
+    files: [], skip: new Map(), periods: new Map(), planned: [], plan: null, decisions: new Map(), plannedAt: -1,
   };
 }
 
@@ -671,19 +672,22 @@ function renderSummary(root, app) {
   const account = /** @type {Account} */ (flow.account);
   const kept = [...flow.decisions.values()].filter((d) => d === 'both').length;
   const nothing = plan.totals.new + kept === 0;
+  const heading = stepHeading('Summary');
+  const actions = h('div', { class: 'actions' });
+  put(actions,
+    nothing
+      ? button('Done', () => restart(app), app, { 'data-focus-key': 'import-continue' })
+      : button('Import', () => onImport(app, actions, heading), app, { 'data-focus-key': 'import-continue', 'data-saves': true }),
+    nothing ? null : cancelButton(app));
   put(root,
-    stepHeading('Summary'),
+    heading,
     messages(),
     h('p', null, `Account: ${account.name}`),
     h('ul', null, ...plan.files.map((pf) => h('li', null,
       `${pf.name}: ${counts({ new: pf.fresh.length, already: pf.already.length, review: pf.review.length })}`))),
     h('p', null, h('strong', null, `Total: ${counts(plan.totals)}`)),
     nothing ? h('p', null, 'Nothing new to import.') : null,
-    h('div', { class: 'actions' },
-      nothing
-        ? button('Done', () => restart(app), app, { 'data-focus-key': 'import-continue' })
-        : button('Import', onImport, app, { 'data-focus-key': 'import-continue' }),
-      nothing ? null : cancelButton(app)),
+    actions,
   );
 }
 
@@ -725,32 +729,34 @@ function replan(app) {
   go(app, undecided ? 'review' : 'summary');
 }
 
-/** @param {App} app */
-async function onImport(app) {
-  if (flow.busy) return;
-  if (changeCount !== flow.plannedAt) {
-    replan(app);
-    return;
-  }
-  const state = app.store.state;
-  const account = currentAccount(app);
-  if (!account) {
-    replan(app);
-    return;
-  }
-  flow.busy = true;
-  const firstEver = state.batches.length === 0;
-  let changes;
-  try {
+/**
+ * Commit the plan, one save at a time: Import is disabled while it is in flight, so a double
+ * click imports once.
+ * @param {App} app
+ * @param {HTMLElement} scope the summary's actions
+ * @param {HTMLElement} focusTo
+ * @returns {Promise<void>}
+ */
+function onImport(app, scope, focusTo) {
+  return whileSaving(scope, async () => {
+    if (changeCount !== flow.plannedAt) {
+      replan(app);
+      return;
+    }
+    const state = app.store.state;
+    const account = currentAccount(app);
+    if (!account) {
+      replan(app);
+      return;
+    }
+    const firstEver = state.batches.length === 0;
     // Synchronous from the check above to here, so nothing can change the state in between.
     // The commit's own write bumps changeCount, but the flow restarts straight after it.
-    changes = commitImport(state, account, /** @type {ImportPlan} */ (flow.plan), flow.decisions, flow.planned, new Date());
+    const changes = commitImport(state, account, /** @type {ImportPlan} */ (flow.plan), flow.decisions, flow.planned, new Date());
     await app.store.apply(changes);
-  } finally {
-    flow.busy = false;
-  }
-  const batches = /** @type {{rowCount:number}[]} */ (changes.put?.batches ?? []);
-  if (firstEver && batches.length > 0 && navigator.storage?.persist) navigator.storage.persist().catch(() => {});
-  const rows = batches.reduce((n, b) => n + b.rowCount, 0);
-  restart(app, [`Imported ${plural(rows, 'row', 'rows')} from ${plural(batches.length, 'file', 'files')} into ${account.name}.`]);
+    const batches = /** @type {{rowCount:number}[]} */ (changes.put?.batches ?? []);
+    if (firstEver && batches.length > 0 && navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+    const rows = batches.reduce((n, b) => n + b.rowCount, 0);
+    restart(app, [`Imported ${plural(rows, 'row', 'rows')} from ${plural(batches.length, 'file', 'files')} into ${account.name}.`]);
+  }, focusTo);
 }

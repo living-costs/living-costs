@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 import {
   expectNoAxeViolations, trackCspViolations, importFiles, pickFiles, chooseAccount, fillMapping,
-  confirmPeriods, answerReview, stepHeading, fixturePath,
+  confirmPeriods, answerReview, stepHeading, fixturePath, readStore,
 } from './helpers.js';
 
 const expected = JSON.parse(fs.readFileSync(fixturePath('expected.json'), 'utf8'));
@@ -199,12 +199,33 @@ test('three monthly files in one pick', async ({ page }) => {
   await expect(await monthCell(page, 'Bank B joint', 'Sep 2026')).toHaveText(`✓ ${expected.rowCounts['bank-b-2026-09.csv']}`);
   await expectNoAxeViolations(page);
 
-  // Undo one batch: its month goes missing, and the other two stay.
+  // Undo asks first. Declined, nothing is removed.
+  /** @type {string[]} */
+  const dialogs = [];
+  let accept = false;
+  page.on('dialog', async (dialog) => {
+    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+    await (accept ? dialog.accept() : dialog.dismiss());
+  });
+  const sep = expected.rowCounts['bank-b-2026-09.csv'];
+  await page.getByRole('button', { name: 'Undo bank-b-2026-09.csv' }).click();
+  await expect.poll(() => dialogs.length).toBe(1);
+  expect(dialogs[0]).toBe(`confirm: Remove the ${sep} transactions from bank-b-2026-09.csv? You can import the file again later.`);
+  await expect(batchRow(page, 'bank-b-2026-09.csv')).toHaveCount(1);
+  await expect(await monthCell(page, 'Bank B joint', 'Sep 2026')).toHaveText(`✓ ${sep}`);
+  expect((await readStore(page, 'batches')).length).toBe(3);
+  expect((await readStore(page, 'transactions')).length).toBe(25);
+
+  // Accepted: its month goes missing, and the other two stay.
+  accept = true;
   await page.getByRole('button', { name: 'Undo bank-b-2026-09.csv' }).click();
   await expect(batchRow(page, 'bank-b-2026-09.csv')).toHaveCount(0);
   await expect(await monthCell(page, 'Bank B joint', 'Sep 2026')).toHaveText('Missing');
+  expect((await readStore(page, 'transactions')).length).toBe(25 - sep);
 
   await page.getByRole('button', { name: /^Undo this import/ }).click();
+  await expect.poll(() => dialogs.length).toBe(3);
+  expect(dialogs[2]).toBe(`confirm: Remove the ${25 - sep} transactions from bank-b-2026-08.csv, bank-b-2026-10.csv? You can import the files again later.`);
   for (const f of files) await expect(batchRow(page, f)).toHaveCount(0);
   await expect(page.getByRole('table', { name: 'Accounts by month' })).toHaveCount(0);
   await expectNoAxeViolations(page);
@@ -212,6 +233,23 @@ test('three monthly files in one pick', async ({ page }) => {
   // The hashes went with the batches, so the files can be imported again.
   await importFiles(page, { files, account: { existing: 'Bank B joint' } });
   for (const f of files) await expect(batchRow(page, f)).toHaveCount(1);
+});
+
+test('Import is disabled as soon as it is clicked, so a double click imports once', async ({ page }) => {
+  await pickFiles(page, ['bank-a-current.csv']);
+  await chooseAccount(page, BANK_A);
+  await fillMapping(page, BANK_A.new, 'bankA');
+  await confirmPeriods(page);
+  await expect(stepHeading(page, 'Summary')).toBeVisible();
+  const disabledAfterClick = await page.getByRole('button', { name: 'Import', exact: true }).evaluate((b) => {
+    /** @type {HTMLButtonElement} */ (b).click();
+    const disabled = /** @type {HTMLButtonElement} */ (b).disabled;
+    b.click();
+    return disabled;
+  });
+  expect(disabledAfterClick).toBe(true);
+  await expect(batchRow(page, 'bank-a-current.csv')).toHaveCount(1);
+  expect((await readStore(page, 'batches')).length).toBe(1);
 });
 
 test('refuses mixed formats', async ({ page }) => {
