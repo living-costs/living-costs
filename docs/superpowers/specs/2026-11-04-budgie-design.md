@@ -82,8 +82,9 @@ This replaces the starter model in `CLAUDE.md`. The builder may adjust field nam
 ```
 Account        { id, name, currency, kind: bank | card | placeholder, mappingId?, repaymentBucketIds[] }
 Mapping        { id, headerSignature, dateColumn, dateFormat, descriptionColumn, typeColumn?,
+                 accountIdColumn?,
                  amount: { single: column, signFlipped: bool } | { debit: column, credit: column } }
-Batch          { id, accountId, fileName, fileHash, importedAt, rowCount, coversFrom, coversTo }
+Batch          { id, importId, accountId, fileName, fileHash, importedAt, rowCount, coversFrom, coversTo }
 Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currency,
                  rawText, rawType?, bucketId }
 Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[] }
@@ -101,7 +102,13 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
 
 ## Import
 
-- **Choosing a file:** the user picks a file and **always confirms the account**. Budgie suggests accounts whose saved mapping has the same header signature, which is the header row trimmed and lower-cased, with a BOM ignored. A new header opens the mapping form.
+- **Several files at once (owner's request):** the file picker and drop zone accept several files, as long as they're all for **one account**.
+  - **Separate batches:** each file is still its own batch, with its own hash check, covered period and undo. The batches share an `importId`, so "Undo this import" can remove them all together, which helps if the account was wrong.
+  - **One account per pick:** every file must have the same header signature. If any differs, the whole pick is refused, naming the odd file, and the user re-picks.
+  - **Account check (Claude's call):** two accounts at the same bank share a header row, so the mapping can name an optional account-identifier column, such as Account Number. The value seen in the account's first import is remembered, and any file whose rows show a different value is refused. Formats without such a column rely on the user's account choice.
+  - **Order:** files are processed in date order. Each is checked against what's already imported **and** the files before it in the same pick, so overlapping exports in one pick are handled like any other overlap.
+  - **Confirming:** one table lists every file with its prefilled covered period to confirm or edit. One summary covers the whole pick, per file and in total: "N new, M already imported, K to review". Files that are blocked as already imported are named, and the rest proceed.
+- **Choosing the account:** the user **always confirms the account**. Budgie suggests accounts whose saved mapping has the same header signature, which is the header row trimmed and lower-cased, with a BOM ignored. A new header opens the mapping form.
 - **Mapping form:** the user picks:
   - the date column and date format (default `DD/MM/YYYY`)
   - the description column
@@ -124,7 +131,7 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
 - **Identical rows within one file** are always kept, because they're genuine repeat purchases.
 - **Nothing is ever deleted automatically.**
 - **Wrong account:** if the file's header signature doesn't match the chosen account's saved mapping, Budgie warns before importing.
-- **Undo** removes a batch's transactions. Fingerprint-keyed decisions stay dormant.
+- **Undo** removes a batch's transactions, or every batch from one multi-file import. Fingerprint-keyed decisions stay dormant.
 - **Accounts-by-month table:** accounts as rows and months as columns. Each cell shows covered, partial or missing, with the transaction count. Placeholder accounts show "not itemised". Coverage comes from each batch's declared covered period. A gap of up to `coverageGapDays` between consecutive batches in one account counts as covered, since banks' export boundaries don't always line up.
 
 ## Tuning values
