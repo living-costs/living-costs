@@ -1,0 +1,55 @@
+:root {
+  --text: #1a1a1a;
+  --muted: #3b3b3b;
+  --bg: #f4f4f2;
+  --surface: #ffffff;
+  --border: #595959;
+  --accent: #0b3d91;
+  --accent-contrast: #ffffff;
+  --banner-bg: #fff4d6;
+  --intro-bg: #e8f1fb;
+  --focus: #0b3d91;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+header, #notices, main { padding: 0.5rem 1rem; }
+
+h1 { margin: 0.25rem 0; font-size: 1.5rem; }
+
+nav { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+button, select, input, .target { min-height: 44px; }
+
+button {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.25rem 1rem;
+  font: inherit;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+}
+
+.banner { background: var(--banner-bg); border: 1px solid var(--border); padding: 0.5rem 1rem; }
+.intro { background: var(--intro-bg); border: 1px solid var(--border); padding: 0.5rem 1rem; }
+.muted { color: var(--muted); }
+
+.bar { display: block; height: 1rem; background: var(--accent); }

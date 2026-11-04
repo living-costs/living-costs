@@ -1,2 +1,8 @@
-fixtures/
+/fixtures/
 .superpowers/
+*.csv
+!tests/fixtures/*.csv
+budgie-backup*.json
+node_modules/
+test-results/
+playwright-report/

@@ -1,0 +1,21 @@
+{
+  "name": "budgie",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"tests/unit/**/*.test.js\"",
+    "types": "tsc -p .",
+    "banned": "node tools/check-banned.js",
+    "e2e": "playwright test",
+    "serve": "node tests/server.js",
+    "check": "npm run banned && npm test && npm run types && npm run e2e"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
+    "typescript": "^7.0.2"
+  }
+}
