@@ -1,5 +1,7 @@
+/** @import {Page} from '@playwright/test' */
 import AxeBuilder from '@axe-core/playwright';
 import { expect } from '@playwright/test';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAPPINGS } from '../fixtures/mappings.js';
@@ -161,4 +163,101 @@ export async function skipToCard(page, name) {
     await page.getByRole('button', { name: 'Skip for now' }).click();
   }
   throw new Error(`No card for ${name} after 100 skips`);
+}
+
+// --- Full fixture state ------------------------------------------------------------------------
+
+/** The four imported accounts, named as in tests/unit/pipeline.js. */
+export const FIXTURE_ACCOUNTS = {
+  bankA: { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' },
+  savings: { new: { name: 'Bank A savings', kind: 'bank' }, mapping: 'savings' },
+  card: { new: { name: 'Credit card', kind: 'card' }, mapping: 'card' },
+  bankB: { new: { name: 'Bank B joint', kind: 'bank' }, mapping: 'bankB' },
+};
+
+/** The main screen's heading. */
+const screenH2 = (page) => page.locator('#screen h2');
+
+/** Go to a screen from the nav and wait for its heading. */
+export async function openScreen(page, name) {
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name, exact: true }).click();
+  await expect(screenH2(page)).toHaveText(name);
+}
+
+/**
+ * On the Buckets screen, set one bucket's category and wait until the save has redrawn the list
+ * (the select is replaced), so the next change is not dropped as a second save in flight.
+ */
+export async function setBucketCategory(page, bucketName, categoryName) {
+  const select = () => page.getByRole('combobox', { name: `Category for ${bucketName}`, exact: true });
+  const before = await select().elementHandle();
+  await select().selectOption({ label: categoryName });
+  await page.waitForFunction((el) => !el?.isConnected, before);
+  await expect(select().locator('option:checked')).toHaveText(categoryName);
+}
+
+/** Wait until a store holds `n` rows. */
+const expectStoreCount = (page, name, n) => expect.poll(async () => (await readStore(page, name)).length).toBe(n);
+
+/**
+ * Drive the real UI from a fresh page to the state `fixtureState()` builds in
+ * tests/unit/helpers/fixture-state.js: the six main fixture files imported with whole-month
+ * covered periods, OTHER CARD PLC as a card you don't import, every other bucket categorised as
+ * expected.intendedCategories says, the PAYPAL PAYMENT amounts −2.99 and −9.99 as their own
+ * Subscriptions buckets, every suggested transfer confirmed, and Help dismissed. Ends on the
+ * Typical month screen. Call trackCspViolations first if the test checks for violations.
+ * @param {Page} page
+ */
+export async function setupFixtureApp(page) {
+  const expected = JSON.parse(fs.readFileSync(fixturePath('expected.json'), 'utf8'));
+  const wholeYear = /** @type {[string, string]} */ (['01/11/2025', '31/10/2026']);
+  await page.goto('./');
+  await expect(screenH2(page)).toHaveText('Help');
+
+  await importFiles(page, { files: ['bank-a-current.csv'], account: FIXTURE_ACCOUNTS.bankA, covers: wholeYear });
+  await importFiles(page, { files: ['bank-a-savings.csv'], account: FIXTURE_ACCOUNTS.savings, covers: wholeYear });
+  await importFiles(page, { files: ['card.csv'], account: FIXTURE_ACCOUNTS.card, covers: wholeYear });
+  await importFiles(page, {
+    files: ['bank-b-2026-08.csv', 'bank-b-2026-09.csv', 'bank-b-2026-10.csv'], account: FIXTURE_ACCOUNTS.bankB, covers: 'whole-month',
+  });
+  await expectStoreCount(page, 'batches', 6);
+
+  await openScreen(page, 'Transfers');
+  await page.getByLabel('Repayment bucket', { exact: true }).selectOption({ label: 'OTHER CARD PLC' });
+  await page.getByLabel('Card name', { exact: true }).fill('Other Card');
+  await page.getByRole('button', { name: 'Add card', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Added Other Card.' })).toBeVisible();
+
+  await openScreen(page, 'Buckets');
+  for (const [bucket, category] of Object.entries(expected.intendedCategories)) {
+    if (bucket !== 'OTHER CARD PLC') await setBucketCategory(page, bucket, String(category));
+  }
+
+  await openScreen(page, 'Categorise');
+  await skipToCard(page, 'PAYPAL PAYMENT');
+  const card = page.locator('#card');
+  let rules = 0;
+  for (const [amount, name] of [['£2.99', 'Google One storage'], ['£9.99', 'Streaming']]) {
+    await card.getByRole('region', { name: 'Repeating amounts', exact: true }).getByRole('listitem')
+      .filter({ hasText: `${amount}, ` }).getByRole('button', { name: 'Make this its own bucket' }).click();
+    await expect(card.getByLabel('Times per month')).toHaveValue('1');
+    await card.getByLabel('Bucket name').fill(name);
+    await card.getByRole('button', { name: 'Make bucket' }).click();
+    await expectStoreCount(page, 'rules', ++rules);
+    await expect(cardHeading(page)).toHaveText('PAYPAL PAYMENT');
+  }
+
+  await openScreen(page, 'Buckets');
+  for (const name of ['Google One storage', 'Streaming']) await setBucketCategory(page, name, 'Subscriptions');
+
+  await openScreen(page, 'Transfers');
+  await page.getByRole('button', { name: 'Confirm all' }).click();
+  await expect(page.getByText('No suggestions.')).toBeVisible();
+  await expectStoreCount(page, 'transferPairs', expected.transferPairs);
+
+  await openScreen(page, 'Help');
+  await page.getByRole('button', { name: 'Got it' }).click();
+  await expect(page.getByRole('button', { name: 'Got it' })).toHaveCount(0);
+
+  await openScreen(page, 'Typical month');
 }

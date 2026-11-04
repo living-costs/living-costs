@@ -14,6 +14,7 @@ import * as categorise from './ui/categorise.js';
 import * as transactions from './ui/transactions.js';
 import * as buckets from './ui/buckets.js';
 import * as transfers from './ui/transfers.js';
+import * as typical from './ui/typical.js';
 import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
@@ -35,7 +36,7 @@ const label = (name) => SCREEN_LIST.find((s) => s.name === name)?.label ?? name;
 /** @type {Record<ScreenName, Render>} */
 const SCREENS = {
   help: help.render,
-  typical: placeholder(label('typical')),
+  typical: typical.render,
   categorise: categorise.render,
   buckets: buckets.render,
   transactions: transactions.render,
