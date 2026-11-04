@@ -53,3 +53,15 @@ button {
 .muted { color: var(--muted); }
 
 .bar { display: block; height: 1rem; background: var(--accent); }
+
+nav button[aria-current="page"] {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+h2 { margin: 0.5rem 0; font-size: 1.25rem; }
+h3 { margin: 1rem 0 0.25rem; font-size: 1.1rem; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
