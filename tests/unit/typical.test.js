@@ -189,13 +189,17 @@ test('fixed: a bucket with no charge in the last fixedActiveMonths contributes 0
 test('split parts count in their own categories; fixed parts group by the transaction bucket', () => {
   const tm = typicalMonth(build({
     batches: [batch('A', '2026-04-01', '2026-04-30')],
-    categories: [cat('groc', 'spend', 'variable'), cat('home', 'spend', 'fixed')],
-    buckets: [bucket('amazon')],
+    categories: [cat('groc', 'spend', 'variable'), cat('home', 'spend', 'fixed'), cat('misc', 'spend', 'annual')],
+    buckets: [bucket('amazon', 'misc')],
     transactions: [{ ...txn('A', '2026-04-03', -10000, 'amazon'), fingerprint: 'split1' }],
     overrides: [{ fingerprint: 'split1', splits: [{ amountMinor: -6000, categoryId: 'groc' }, { amountMinor: -4000, categoryId: 'home' }] }],
   }), tuning);
   assert.equal(row(tm, 'groc').perMonth, 6000);
   assert.equal(row(tm, 'home').perMonth, 4000);
+  // Each part takes its own category's budget type, not the bucket's (annual).
+  assert.equal(row(tm, 'groc').budgetType, 'variable');
+  assert.equal(row(tm, 'home').budgetType, 'fixed');
+  assert.equal(row(tm, 'misc'), undefined);
   assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
 });
 

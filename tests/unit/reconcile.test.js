@@ -117,6 +117,53 @@ test('uncategorised spending is A6 extra (299) + A16 (500) + A17 (2500)', () => 
   assert.equal(tm.uncategorised.income, 0);
 });
 
+/** Nearest-rank percentile with a plain sort: rank ceil(p × n / 100). */
+function plainPercentile(values, p) {
+  const v = [...values].sort((a, b) => a - b);
+  return v[Math.max(1, Math.ceil((p * v.length) / 100)) - 1];
+}
+
+/** Money out per account month for a spend category, from expected.json. @param {string} name */
+const outByAccount = (name) => Object.values(expected.monthlyTotalsByAccount[name])
+  .map((months) => Object.values(months).map((v) => -v));
+/** @param {number[][]} series @param {(v:number[]) => number} f */
+const sumOver = (series, f) => series.reduce((s, v) => s + f(v), 0);
+
+test('Household maintenance (annual) is pinned from expected.json', () => {
+  // A: 12 × 5700 = 68400 over 12 months. C: 105841 over 12 months. perYear = 68400 + 105841.
+  const perYear = sumOver(outByAccount('Household maintenance'), (v) => v.reduce((s, x) => s + x, 0) * 12 / v.length);
+  assert.equal(perYear, 174241);
+  const r = rowNamed('Household maintenance');
+  assert.equal(r.perYear, 174241);
+  assert.equal(r.perMonth, 14520); // 174241 / 12 = 14520.08
+});
+
+test('variable rows are pinned from expected.json', () => {
+  // Other income: A median 10291 + S median 123.
+  const otherIncome = Object.values(expected.monthlyTotalsByAccount['Other income'])
+    .reduce((s, months) => s + plainMedian(Object.values(months)), 0);
+  assert.equal(otherIncome, 10414);
+  assert.equal(rowNamed('Other income').perMonth, 10414);
+  // Transport (C): 11 × 4720 and one 2380. Entertainment (A): 11 × 2899 and one 3898.
+  // Eating out (A): 7 × 1400 and 5 × 1750, so the middle two are both 1400.
+  for (const [name, want] of [['Transport', 4720], ['Entertainment', 2899], ['Eating out', 1400]]) {
+    assert.equal(sumOver(outByAccount(name), plainMedian), want, name);
+    assert.equal(rowNamed(name).perMonth, want, name);
+  }
+  // Groceries: A ranks 3 and 9 are 27764 and 35390; B ranks 1 and 3 are 37250 and 54450.
+  const groceries = outByAccount('Groceries');
+  const range = [sumOver(groceries, (v) => plainPercentile(v, 25)), sumOver(groceries, (v) => plainPercentile(v, 75))];
+  assert.deepEqual(range, [65014, 89840]);
+  assert.deepEqual(rowNamed('Groceries').range, [65014, 89840]);
+});
+
+test('totals are pinned', () => {
+  // living = 90000 + 73784 + 15000 + 14750 + 14520 + 13300 + 8997 + 4720 + 4000 + 2899 + 1400
+  // income = 250000 + 10414; share = living − 55000; leftOver = income − share
+  assert.equal(90000 + 73784 + 15000 + 14750 + 14520 + 13300 + 8997 + 4720 + 4000 + 2899 + 1400, 243370);
+  assert.deepEqual(tm.totals, { income: 260414, living: 243370, contributions: 55000, share: 188370, leftOver: 72044 });
+});
+
 test('totals add up from the rows', () => {
   const sum = (rows) => rows.reduce((s, r) => s + r.perMonth, 0);
   assert.equal(tm.totals.living, sum(tm.spend));

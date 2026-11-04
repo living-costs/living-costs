@@ -48,6 +48,7 @@ export function percentile(values, p) {
   const v = [...values].sort((a, b) => a - b);
   const n = v.length;
   if (n === 0) return 0;
+  // variableRange percentiles must be integers: x % 100 is exact only for integers.
   const x = p * n;
   const rank = (x - (x % 100)) / 100 + (x % 100 > 0 ? 1 : 0);
   return v[Math.min(n, Math.max(1, rank)) - 1];
