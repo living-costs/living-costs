@@ -10,6 +10,7 @@ import { emptyState } from './changes.js';
 import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
+import { localDay } from './dates.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -42,16 +43,6 @@ export function buildBackup(state, now) {
     transferPairs: [...state.transferPairs.values()],
     offeredDefaultIds: state.settings.offeredDefaultIds,
   };
-}
-
-/**
- * The local calendar date of `date`, as YYYY-MM-DD.
- * @param {Date} date
- * @returns {string}
- */
-export function localDay(date) {
-  const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
-  return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /**
@@ -263,14 +254,15 @@ function readBucket(o, label, p) {
   const categoryId = get(o, 'categoryId');
   const exampleRawTexts = get(o, 'exampleRawTexts');
   c.need(isId(id), 'ID');
-  c.need(isTextList(keys), 'list of keys');
+  // Keys come from the normaliser, which never returns an empty string.
+  c.need(isIdList(keys), 'list of keys');
   c.need(isText(displayName), 'name');
   if (has(o, 'categoryId')) c.need(isId(categoryId), 'category');
   c.need(isTextList(exampleRawTexts), 'list of examples');
   /** @type {Bucket} */
   const bucket = {
     id: isId(id) ? id : '',
-    keys: isTextList(keys) ? [...keys] : [],
+    keys: isIdList(keys) ? [...keys] : [],
     displayName: isText(displayName) ? displayName : '',
     exampleRawTexts: isTextList(exampleRawTexts) ? [...exampleRawTexts] : [],
   };

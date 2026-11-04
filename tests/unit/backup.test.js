@@ -7,8 +7,9 @@ import { pairKey, decidePair } from '../../src/transfers.js';
 import { typicalMonth } from '../../src/typical.js';
 import tuning from '../../src/tuning.js';
 import {
-  SCHEMA_VERSION, buildBackup, validateBackup, restoreChanges, backupFileName, localDay,
+  SCHEMA_VERSION, buildBackup, validateBackup, restoreChanges, backupFileName,
 } from '../../src/backup.js';
+import { localDay } from '../../src/dates.js';
 import { fixtureState, wholeMonths } from './helpers/fixture-state.js';
 import { NOW, BANK_A, SAVINGS, CARD, BANK_B, pick, run } from './pipeline.js';
 
@@ -131,7 +132,6 @@ test('round trip: every field of every backed-up type is copied', () => {
 
 test('restore then re-import: splits, overrides, flags and confirmed pairs resolve exactly as before', async () => {
   const before = await fixtureState();
-  const byFp = (/** @type {string} */ fp) => /** @type {any} */ (before.transactions.find((t) => t.fingerprint === fp));
   const ctx0 = buildContext(before);
   const free = before.transactions.filter((t) => resolve(t, ctx0).source === 'bucket' && t.amountMinor < -1000);
   const [splitTxn, movedTxn, dismissedTxn, rejA] = free;
@@ -179,7 +179,6 @@ test('restore then re-import: splits, overrides, flags and confirmed pairs resol
   }
   // Every transaction, not just the ones above, counts as it did before.
   assert.deepEqual(now, was);
-  assert.equal(byFp(dismissedTxn.fingerprint).fingerprint, dismissedTxn.fingerprint);
   assert.equal(after.overrides.get(dismissedTxn.fingerprint)?.unusualDismissed, true);
   // Flagged rows and rule buckets come back the same, so the typical month does too.
   const flags = (/** @type {any} */ st) => st.transactions.filter((t) => t.flaggedRuleId).map((t) => `${t.fingerprint}>${t.flaggedRuleId}`).sort();
@@ -323,6 +322,12 @@ test('duplicate IDs, keys and fingerprints are refused', () => {
     'Transfer pair 3 is the same pair as transfer pair 1.',
     'The list of offered default categories repeats an entry.',
   ]);
+});
+
+test('an empty bucket key is refused, since the normaliser never makes one', () => {
+  const b = base();
+  b.buckets[0].keys.push('');
+  assert.deepEqual(errorsOf(b), ['Bucket 1 has a missing or invalid list of keys.']);
 });
 
 test('a bucket key in two buckets is refused', () => {

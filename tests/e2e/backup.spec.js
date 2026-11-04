@@ -70,6 +70,7 @@ test('download fallback', async ({ page }, testInfo) => {
 
   await expect(page.getByText(`Last backup: ${shown}`, { exact: true })).toBeVisible();
   await expect(page.getByText('Not backed up yet.')).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveText('Backup saved.');
   const [settings] = await readStore(page, 'settings');
   expect(settings.lastBackupAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
@@ -103,6 +104,7 @@ test('picker path', async ({ page }) => {
     return { saved: x.__saved, closed: x.__closed, options: x.__pickerOptions };
   });
   expect(w.closed).toBe(true);
+  await expect(page.getByRole('status')).toHaveText('Backup saved.');
   expect(JSON.parse(w.saved).schemaVersion).toBe(1);
   expect(w.options.suggestedName).toBe(`budgie-backup-${iso}.json`);
   expect(w.options.types).toEqual([{ description: 'Budgie backup', accept: { 'application/json': ['.json'] } }]);
@@ -135,6 +137,7 @@ test('picker cancelled does nothing; picker failure falls back to a download', a
   const [download] = await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
   expect(download.suggestedFilename()).toMatch(/^budgie-backup-\d{4}-\d{2}-\d{2}\.json$/);
   await expect(page.getByText(/^Last backup: \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Backup saved to your Downloads folder instead.');
 });
 
 test('restore replaces', async ({ browser, baseURL }, testInfo) => {

@@ -11,7 +11,7 @@ import { focusKey, field, plural } from './form.js';
 import { prepareFiles, suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
 import { applyMapping, mappingProblems } from '../mapping.js';
 import { formatMoney, currencyExponent } from '../money.js';
-import { parseDate, formatDate, formatMonth, monthStart, monthEnd } from '../dates.js';
+import { parseDate, formatDate, formatLocalDate, formatMonth, monthStart, monthEnd } from '../dates.js';
 
 /** @typedef {'pick'|'account'|'mismatch'|'mapping'|'problems'|'period'|'review'|'summary'} Step */
 /** @typedef {'dateColumn'|'descriptionColumn'|'typeColumn'|'accountIdColumn'|'amountColumn'|'debitColumn'|'creditColumn'} ColumnKey */
@@ -132,13 +132,6 @@ const button = (label, onClick, app, props = {}) => h('button', { type: 'button'
 /** @param {App} app */
 const cancelButton = (app) => button('Cancel', () => restart(app), app, { class: 'secondary', 'data-focus-key': 'import-cancel' });
 
-/** @param {string} iso */
-function localDate(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-}
-
 /** @param {unknown} err */
 const detail = (err) => (err instanceof Error ? err.message : String(err));
 
@@ -198,7 +191,7 @@ async function onPick(app, picked) {
     restart(app, [`The files could not be read. ${detail(err)}`]);
     return;
   }
-  const notes = result.blocked.map((b) => `"${b.name}" was already imported on ${localDate(b.importedAt)} into ${b.accountName}.`);
+  const notes = result.blocked.map((b) => `"${b.name}" was already imported on ${formatLocalDate(b.importedAt)} into ${b.accountName}.`);
   if (result.signatureError) {
     restart(app, [...notes, `${result.signatureError}. Choose files for one account at a time.`]);
     return;

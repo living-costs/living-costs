@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDate, formatDate, addDays, daysBetween, monthOf, monthStart, monthEnd, monthRange, formatMonth, periodKey } from '../../src/dates.js';
+import {
+  parseDate, formatDate, addDays, daysBetween, monthOf, monthStart, monthEnd, monthRange, formatMonth, periodKey,
+  localDay, formatLocalDate,
+} from '../../src/dates.js';
 
 test('parseDate', () => {
   assert.equal(parseDate('24/09/2026', 'DD/MM/YYYY'), '2026-09-24');
@@ -34,4 +37,13 @@ test('periodKey', () => {
   assert.equal(periodKey('2026-10-05', 'week'), '2026-10-05');
   assert.equal(periodKey('2026-10-08', 'month'), '2026-10');
   assert.equal(periodKey('2026-10-08', 'year'), '2026');
+});
+
+test('localDay and formatLocalDate use the local calendar date', () => {
+  assert.equal(localDay(new Date(2026, 0, 5, 23, 59, 30)), '2026-01-05');
+  assert.equal(localDay(new Date(2026, 10, 4, 0, 0, 1)), '2026-11-04');
+  const lateEvening = new Date(2026, 0, 5, 23, 59, 30);
+  assert.equal(formatLocalDate(lateEvening.toISOString()), '05/01/2026');
+  assert.equal(formatLocalDate('not a date'), '');
+  assert.equal(formatLocalDate(''), '');
 });

@@ -3,8 +3,8 @@
 
 /** @import {App} from '../main.js' */
 import { h } from '../dom.js';
-import { formatDate } from '../dates.js';
-import { buildBackup, validateBackup, restoreChanges, backupFileName, localDay } from '../backup.js';
+import { formatLocalDate } from '../dates.js';
+import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
 import { field } from './form.js';
 import { whileSaving } from './saving.js';
 
@@ -27,15 +27,14 @@ export function reset() {
 export function render(root, app) {
   const heading = h('h2', { tabindex: '-1' }, 'Backup');
   const last = app.store.state.settings.lastBackupAt;
-  const lastDate = last ? new Date(last) : null;
+  const lastShown = last ? formatLocalDate(last) : '';
   const input = h('input', {
     type: 'file', accept: '.json,application/json', 'data-focus-key': 'backup-restore',
     onChange: () => restore(app, root, /** @type {HTMLInputElement} */ (input), heading),
   });
   root.append(
     heading,
-    h('p', { id: 'backup-last' }, lastDate && !Number.isNaN(lastDate.getTime())
-      ? `Last backup: ${formatDate(localDay(lastDate))}` : 'Not backed up yet.'),
+    h('p', { id: 'backup-last' }, lastShown ? `Last backup: ${lastShown}` : 'Not backed up yet.'),
     h('p', null, "A backup holds your accounts and column settings, buckets, rules, categories and decisions. It doesn't hold your statements."),
     h('p', { class: 'banner' }, WARNING),
     h('div', { class: 'actions' },
@@ -64,18 +63,20 @@ function save(app, root, focusTo) {
   return whileSaving(root, async () => {
     const now = new Date();
     const text = JSON.stringify(buildBackup(app.store.state, now), null, 2);
-    if (!(await writeFile(backupFileName(now), text))) return;
-    view = { status: 'Backup saved.', errors: [] };
+    const outcome = await writeFile(backupFileName(now), text);
+    if (outcome === 'cancelled') return;
+    const status = outcome === 'fallback' ? 'Backup saved to your Downloads folder instead.' : 'Backup saved.';
+    view = { status, errors: [] };
     await app.store.apply({ put: { settings: [{ ...app.store.state.settings, lastBackupAt: now.toISOString() }] } });
   }, focusTo);
 }
 
 /**
- * Save through the file picker when there is one. If the user cancels, nothing is saved and this
- * returns false. Any other picker failure, or no picker, falls back to a download.
+ * Save through the file picker when there is one. If the user cancels, nothing is saved. Any
+ * other picker failure falls back to a download, and so does having no picker.
  * @param {string} name
  * @param {string} text
- * @returns {Promise<boolean>} whether the file was saved
+ * @returns {Promise<'picker'|'download'|'fallback'|'cancelled'>} how the file was saved, if it was
  */
 async function writeFile(name, text) {
   const w = /** @type {any} */ (window);
@@ -88,13 +89,15 @@ async function writeFile(name, text) {
       const writable = await handle.createWritable();
       await writable.write(text);
       await writable.close();
-      return true;
+      return 'picker';
     } catch (err) {
-      if (/** @type {{name?: unknown}} */ (err ?? {}).name === 'AbortError') return false;
+      if (/** @type {{name?: unknown}} */ (err ?? {}).name === 'AbortError') return 'cancelled';
+      download(name, text);
+      return 'fallback';
     }
   }
   download(name, text);
-  return true;
+  return 'download';
 }
 
 /**

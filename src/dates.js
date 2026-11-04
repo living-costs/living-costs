@@ -1,4 +1,5 @@
-// Dates are ISO YYYY-MM-DD, months YYYY-MM. Day arithmetic is UTC.
+// Dates are ISO YYYY-MM-DD, months YYYY-MM. Day arithmetic is UTC. localDay and
+// formatLocalDate are the exceptions: they give the local calendar date of a moment in time.
 const DAY_MS = 86400000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -129,4 +130,24 @@ export function periodKey(iso, period) {
   if (period === 'month') return monthOf(iso);
   const dow = new Date(toMs(iso)).getUTCDay(); // 0 = Sunday
   return addDays(iso, -((dow + 6) % 7));
+}
+
+/**
+ * The local calendar date of a moment, as YYYY-MM-DD.
+ * @param {Date} date
+ * @returns {string}
+ */
+export function localDay(date) {
+  const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
+  return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * The local calendar date of an ISO timestamp, as DD/MM/YYYY, or '' if it isn't a valid time.
+ * @param {string} iso
+ * @returns {string}
+ */
+export function formatLocalDate(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : formatDate(localDay(d));
 }
