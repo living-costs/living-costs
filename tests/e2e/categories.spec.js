@@ -284,3 +284,34 @@ test('new suggested categories can be dismissed, keeping other notices', async (
   await expect(screenHeading(page)).toBeVisible();
   await expect(notice).not.toContainText('New suggested categories');
 });
+
+test('double-clicking Add on the suggestions adds each category once', async ({ page }) => {
+  await withExtraDefaults(page, [
+    { id: 'pets', name: 'Pets', kind: 'spend', budgetType: 'variable' },
+    { id: 'charity', name: 'Charity', kind: 'spend', budgetType: 'fixed' },
+  ]);
+  await page.reload();
+  const notice = page.locator('#notices');
+  await expect(notice).toContainText('New suggested categories: Pets, Charity');
+  await notice.getByRole('button', { name: 'Add' }).dblclick();
+  await expect(notice).not.toContainText('New suggested categories');
+
+  await openCategories(page);
+  const list = await names(page);
+  expect(list.filter((n) => n === 'Pets')).toHaveLength(1);
+  expect(list.filter((n) => n === 'Charity')).toHaveLength(1);
+  const stored = (await readStore(page, 'categories')).map((c) => c.name);
+  expect(stored.filter((n) => n === 'Pets')).toHaveLength(1);
+  expect(stored.filter((n) => n === 'Charity')).toHaveLength(1);
+});
+
+test('double-clicking Add category adds it once', async ({ page }) => {
+  await openCategories(page);
+  await page.getByLabel('Name', { exact: true }).fill('Pets');
+  await page.getByRole('button', { name: 'Add category' }).dblclick();
+  await expect(table(page).getByRole('rowheader').last()).toHaveText('Pets');
+  expect((await readStore(page, 'categories')).filter((c) => c.name === 'Pets')).toHaveLength(1);
+  expect(await names(page)).toHaveLength(26);
+  // The second click is ignored, rather than submitting the cleared form.
+  await expect(page.getByText('Enter a name.')).toHaveCount(0);
+});

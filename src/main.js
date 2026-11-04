@@ -6,6 +6,7 @@ import { h, clear } from './dom.js';
 import tuning from './tuning.js';
 import defaults from './default-categories.js';
 import { SCREEN_LIST, renderNav, markCurrent } from './ui/nav.js';
+import { whileSaving } from './ui/saving.js';
 import * as help from './ui/help.js';
 import * as accounts from './ui/accounts.js';
 import * as categories from './ui/categories.js';
@@ -83,17 +84,18 @@ function showDefaultsNotice(app) {
   noticeShows = ids.join('\n');
   noticesEl.querySelector('#defaults-notice')?.remove();
   if (ids.length === 0) return;
-  noticesEl.append(h('div', { class: 'banner', id: 'defaults-notice' },
+  const notice = h('div', { class: 'banner', id: 'defaults-notice' },
     h('p', { id: 'defaults-notice-text' }, `New suggested categories: ${pending.map((d) => d.name).join(', ')}`),
     h('div', { class: 'actions' },
       h('button', {
-        type: 'button', 'aria-describedby': 'defaults-notice-text',
-        onClick: () => app.store.apply(acceptDefaults(app.store.state, ids, app.defaults)),
+        type: 'button', 'aria-describedby': 'defaults-notice-text', 'data-saves': true,
+        onClick: () => whileSaving(notice, () => app.store.apply(acceptDefaults(app.store.state, ids, app.defaults))),
       }, 'Add'),
       h('button', {
-        type: 'button', class: 'secondary', 'aria-describedby': 'defaults-notice-text',
-        onClick: () => app.store.apply(dismissDefaults(app.store.state, ids)),
-      }, 'Dismiss'))));
+        type: 'button', class: 'secondary', 'aria-describedby': 'defaults-notice-text', 'data-saves': true,
+        onClick: () => whileSaving(notice, () => app.store.apply(dismissDefaults(app.store.state, ids))),
+      }, 'Dismiss')));
+  noticesEl.append(notice);
 }
 
 /** Focus the current screen's h2. */

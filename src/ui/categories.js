@@ -4,6 +4,7 @@
 /** @import {App} from '../main.js' */
 /** @import {Category, CategoryKind, BudgetType, Changes} from '../types.js' */
 import { h } from '../dom.js';
+import { whileSaving } from './saving.js';
 import {
   isBudgeted, createCategory, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
 } from '../categories.js';
@@ -230,7 +231,7 @@ function deletePanel(app, c, list) {
     focusKey(`delete-${c.id}`);
   };
   /** @param {string} [targetId] */
-  const remove = (targetId) => {
+  const remove = (targetId) => whileSaving(panel, async () => {
     const result = deleteCategory(app.store.state, c.id, targetId);
     if ('error' in result) {
       ui.deleteError = result.error;
@@ -240,8 +241,8 @@ function deletePanel(app, c, list) {
     }
     ui.deleteId = null;
     ui.rowError = '';
-    app.store.apply(result);
-  };
+    await app.store.apply(result);
+  });
 
   const panel = h('section', { class: 'card', 'aria-labelledby': 'delete-heading' },
     h('h3', { id: 'delete-heading', tabindex: '-1', 'data-focus-key': 'delete-heading' }, `Delete ${c.name}`));
@@ -249,7 +250,7 @@ function deletePanel(app, c, list) {
     panel.append(
       h('p', null, `Nothing uses ${c.name}, so nothing needs to move.`),
       h('div', { class: 'actions' },
-        h('button', { type: 'button', 'data-focus-key': 'delete-confirm', onClick: () => remove() }, 'Yes, delete'),
+        h('button', { type: 'button', 'data-focus-key': 'delete-confirm', 'data-saves': true, onClick: () => remove() }, 'Yes, delete'),
         h('button', { type: 'button', class: 'secondary', onClick: cancel }, 'Cancel')));
     return panel;
   }
@@ -267,7 +268,9 @@ function deletePanel(app, c, list) {
     h('p', null, `${c.name} is used by ${parts.join(' and ')}.`),
     field('Move its items to', target, ui.deleteError),
     h('div', { class: 'actions' },
-      h('button', { type: 'button', 'data-focus-key': 'delete-confirm', onClick: () => remove(ui.deleteTarget || undefined) }, 'Delete and move'),
+      h('button', {
+        type: 'button', 'data-focus-key': 'delete-confirm', 'data-saves': true, onClick: () => remove(ui.deleteTarget || undefined),
+      }, 'Delete and move'),
       h('button', { type: 'button', class: 'secondary', onClick: cancel }, 'Cancel')));
   return panel;
 }
@@ -284,12 +287,16 @@ function newForm(app) {
   }, ...options(BUDGET_LABELS, d.budgetType)));
   budgetField.hidden = !isBudgeted(d.kind);
 
-  return h('section', { 'aria-labelledby': 'new-category-heading' },
-    h('h3', { id: 'new-category-heading' }, 'New category'),
-    h('form', {
-      novalidate: true,
-      onSubmit: (/** @type {Event} */ e) => {
-        e.preventDefault();
+  const nameInput = h('input', {
+    type: 'text', value: d.name, autocomplete: 'off', 'data-focus-key': 'new-name',
+    onInput: (/** @type {Event} */ e) => { d.name = valueOf(e); },
+  });
+  // After Add category, focus goes to the name, ready for the next one.
+  const form = h('form', {
+    novalidate: true,
+    onSubmit: (/** @type {Event} */ e) => {
+      e.preventDefault();
+      whileSaving(form, async () => {
         const result = createCategory(app.store.state, {
           name: d.name, kind: d.kind, ...(isBudgeted(d.kind) ? { budgetType: d.budgetType } : {}),
         });
@@ -301,21 +308,23 @@ function newForm(app) {
         }
         d.name = '';
         ui.createError = '';
-        app.store.apply(result);
-      },
+        await app.store.apply(result);
+      }, nameInput);
     },
-    field('Name', h('input', {
-      type: 'text', value: d.name, autocomplete: 'off', 'data-focus-key': 'new-name',
-      onInput: (/** @type {Event} */ e) => { d.name = valueOf(e); },
-    }), ui.createError),
-    field('Kind', h('select', {
-      'data-focus-key': 'new-kind',
-      onChange: (/** @type {Event} */ e) => {
-        d.kind = /** @type {CategoryKind} */ (valueOf(e));
-        budgetField.hidden = !isBudgeted(d.kind);
-      },
-    }, ...options(KIND_LABELS, d.kind))),
-    budgetField,
-    h('div', { class: 'actions' }, h('button', { type: 'submit', 'data-focus-key': 'new-add' }, 'Add category'))));
+  },
+  field('Name', nameInput, ui.createError),
+  field('Kind', h('select', {
+    'data-focus-key': 'new-kind',
+    onChange: (/** @type {Event} */ e) => {
+      d.kind = /** @type {CategoryKind} */ (valueOf(e));
+      budgetField.hidden = !isBudgeted(d.kind);
+    },
+  }, ...options(KIND_LABELS, d.kind))),
+  budgetField,
+  h('div', { class: 'actions' }, h('button', { type: 'submit', 'data-focus-key': 'new-add', 'data-saves': true }, 'Add category')));
+
+  return h('section', { 'aria-labelledby': 'new-category-heading' },
+    h('h3', { id: 'new-category-heading' }, 'New category'),
+    form);
 }
 
