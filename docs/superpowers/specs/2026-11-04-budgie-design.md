@@ -63,7 +63,7 @@ Two threats drive the stack: a **compromised package**, and **keeping users' tru
 - **Import batch:** one imported file. Every transaction records its batch, and a batch can be undone.
 - **Transaction:** one row, with raw text kept alongside normalised values.
 - **Bucket:** transactions whose normalised text is the same. A bucket belongs to at most one category.
-- **Category:** has a **kind** (`spend`, `income`, `transfer` or `ignore`). Spend and income categories also have a **budget type** (`fixed`, `variable`, `annual` or `oneoff`). Budget type lives **only** on the category.
+- **Category:** has a **kind** (`spend`, `income`, `contribution`, `transfer` or `ignore`). Spend, income and contribution categories also have a **budget type** (`fixed`, `variable`, `annual` or `oneoff`). Budget type lives **only** on the category.
 - **Override:** a per-transaction exception. It either moves the transaction to another category or splits it across several categories. Overrides never change budget type.
 - **Rule:** routes transactions to a bucket on import. A rule matches text and, optionally, an exact amount with an expected frequency.
 
@@ -265,6 +265,7 @@ Categories can be created, renamed, deleted (with reassignment) and retyped on a
 |---|---|---|
 | Income | Salary | Fixed |
 | Income | Other income | Variable |
+| Contribution | Contributions from others | Fixed |
 | Spend | Housing (rent or mortgage) | Fixed |
 | Spend | Council tax | Fixed |
 | Spend | Utilities | Fixed |
@@ -282,6 +283,7 @@ Categories can be created, renamed, deleted (with reassignment) and retyped on a
 | Spend | Gifts | Annual |
 | Spend | Holidays | Annual |
 | Spend | Household maintenance | Annual |
+| Spend | Joint household | Fixed |
 | Spend | Big one-offs | One-off |
 | Transfer | Between my accounts | (none) |
 | Transfer | Card repayments | (none) |
@@ -299,6 +301,9 @@ Categories can be created, renamed, deleted (with reassignment) and retyped on a
   - Each repayment in that bucket counts as spending in the not-itemised category **unless** it's part of a confirmed transfer pair.
   - When the card's statements are imported later, the user attaches them to the placeholder account, which then becomes a normal card account. The repayments for those months get suggested transfer pairs. Once they're confirmed, the itemised purchases count instead. Earlier months stay as lumped spending. No manual reclassification is needed.
   - **Known edge:** in the first itemised month, a repayment usually pays for purchases made before card coverage starts, so that month can be slightly under-counted. The accounts-by-month table shows where coverage starts.
+- **Joint accounts (owner's decision):** the people sharing a joint account agree which one of them imports it. Nothing is shared or synced between browsers, so this is a human agreement, not a feature.
+  - **The person who imports it (A):** A's own payments into it pair with A's other accounts as transfers. Another person's payments into it go in a **contribution** category, such as "Contributions from others". All the joint account's spending counts in A's categories as usual, and the typical month shows A's own share: living costs, less contributions, gives your share.
+  - **Anyone who doesn't import it (B):** B's payments to the joint account go in a spend category such as "Joint household", with type Fixed. That's B's share of household living costs, and it counts as such. There's no offsetting income, and no synthetic transactions on either side.
 - **Debits and credits** are tracked separately. A credit in a spend category is a refund and offsets that category in its month. It never counts as income.
 
 ## Typical month
@@ -313,13 +318,13 @@ A month is complete when every non-placeholder account that has coverage both be
 
 ### Layout
 
-- **Summary:** three figures at the top: **Income**, **Living costs** and **Left over** (income minus living costs).
+- **Summary:** figures at the top: **Income**, **Living costs**, and **Left over** (income minus living costs). When any contribution-kind category has transactions, Living costs expands to three lines: "Living costs £X", "less contributions from others £Y", and "your share £Z". Left over is then income minus your share.
 - **Main table:** one row per spend category, largest first, with:
   - the budget type, plus the typical range for Variable or the yearly total for Annual
   - **Per month** and **Per year**
   - a decorative proportional bar
 
-  Income categories go in their own table, using the same types.
+  Income categories go in their own table, using the same types. Contribution categories go in a third small table, also using the same types.
 - **One-offs:** a separate list below the main table. Each row shows the transaction, its category, its month and its amount. One-offs are excluded from Living costs.
 - **Uncategorised line:** "Uncategorised: £X spending and £Y income over the window are not included", linking to the categorise card. It covers income too, so "Left over" never looks complete while income is missing.
 - **Excluded:** transfers, Ignore-kind categories, and incomplete months.
@@ -394,7 +399,7 @@ Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gi
     - personal payee names on standing orders
     - truncated text ending in `...`, and HTML in a description
   - **Transactions:** a refund, identical same-day purchases, masked `PAYPAL PAYMENT` subscriptions, an extra masked payment in one month to trigger the amount-rule flag, and a **weekly** standing order (to test the fixed monthly equivalent).
-  - **Across files:** a same-day transfer pair between the two banks' current accounts, a savings-to-current transfer pair a day apart, a card payment matching a bank repayment a day apart, repayments to an untracked card, an overlapping re-export of one month, and an unusually large purchase in a grocery bucket.
+  - **Across files:** a same-day transfer pair between the two banks' current accounts, a monthly contribution from another person into the second bank's (joint) account, a savings-to-current transfer pair a day apart, a card payment matching a bank repayment a day apart, repayments to an untracked card, an overlapping re-export of one month, and an unusually large purchase in a grocery bucket.
 - **Reconciliation:** the expected totals per category and per month are written down alongside the fixtures, so the reconciliation tests have a known answer.
 - **Unit tests** (`node:test`) cover:
   - the parser and amount parsing
@@ -430,11 +435,12 @@ These were agreed with the owner during design:
 8. Real statements in `fixtures/` (gitignored) may be read locally with the owner's consent. Committed test fixtures are synthetic.
 9. Hosting is a final phase. Build and check everything locally first. The dedicated origin, remote, branch protection and deploy come when the owner is ready.
 10. All windows and thresholds live in an owner-editable module, `src/tuning.js`.
+11. **New category kind, `contribution`,** for money another person pays into an account you track, such as a partner's share into a joint account. It reduces your share of living costs instead of counting as income.
 
 These were decided by Claude, and the owner can revisit them:
 
-11. The data model above replaces the starter model, adding Mapping, Batch (with a declared covered period), fingerprint-keyed Override, TransferPair, Settings and placeholder accounts.
-12. Budget-type key `annual` covers "Irregular or annual", and the one-off type is a category.
+12. The data model above replaces the starter model, adding Mapping, Batch (with a declared covered period), fingerprint-keyed Override, TransferPair, Settings and placeholder accounts.
+13. Budget-type key `annual` covers "Irregular or annual", and the one-off type is a category.
 
 The plan's first task updates `CLAUDE.md` to reflect all of the above.
 
