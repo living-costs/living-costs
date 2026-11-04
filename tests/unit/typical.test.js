@@ -260,3 +260,37 @@ test('spend rows are ordered largest per month first', () => {
   }), tuning);
   assert.deepEqual(tm.spend.map((r) => r.categoryId), ['large', 'small']);
 });
+
+test('fixed: a refund counts only from a bucket that is still active', () => {
+  const tm = typicalMonth(build({
+    categories: [cat('broadband', 'spend', 'fixed')],
+    buckets: [bucket('new', 'broadband'), bucket('old', 'broadband')],
+    transactions: [
+      ...monthly('A', YEAR, '05', -3500, 'new'),
+      ...monthly('A', YEAR.slice(0, 3), '06', -3000, 'old'),
+      txn('A', '2026-04-10', 4500, 'old'),
+    ],
+  }), tuning);
+  assert.deepEqual(row(tm, 'broadband'), {
+    categoryId: 'broadband', name: 'broadband', budgetType: 'fixed', perMonth: 3500, perYear: 42000,
+  });
+});
+
+test('fixed: an ended bucket with a refund gives 0, never negative', () => {
+  const tm = typicalMonth(build({
+    categories: [cat('broadband', 'spend', 'fixed')],
+    buckets: [bucket('old', 'broadband')],
+    transactions: [...monthly('A', YEAR.slice(0, 3), '06', -3000, 'old'), txn('A', '2026-04-10', 4500, 'old')],
+  }), tuning);
+  assert.equal(row(tm, 'broadband').perMonth, 0);
+  assert.equal(row(tm, 'broadband').perYear, 0);
+});
+
+test('fixed: a refund in an active bucket still lowers perMonth', () => {
+  const tm = typicalMonth(build({
+    categories: [cat('broadband', 'spend', 'fixed')],
+    buckets: [bucket('new', 'broadband')],
+    transactions: [...monthly('A', YEAR, '05', -3500, 'new'), txn('A', '2026-04-10', 1200, 'new')],
+  }), tuning);
+  assert.equal(row(tm, 'broadband').perMonth, 3500 - 100);
+});

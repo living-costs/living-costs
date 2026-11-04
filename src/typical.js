@@ -22,8 +22,8 @@ import { monthOf } from './dates.js';
 /** @typedef {{mixedCurrencies:true,currencies:string[]}} MixedCurrencies */
 /** @typedef {{windowMonths:number,coverageGapDays:number,fixedActiveMonths:number,variableRange:number[]}} TypicalTuning */
 
-/** @typedef {{count:number,latestDate:string,latest:number}} BucketCharges */
-/** @typedef {{months:Map<string,number>,total:number,opposite:number,buckets:Map<string,BucketCharges>}} AccountSums */
+/** @typedef {{count:number,latestDate:string,latest:number,opposite:number}} BucketCharges */
+/** @typedef {{months:Map<string,number>,total:number,buckets:Map<string,BucketCharges>}} AccountSums */
 
 /**
  * Median of integers; an even count averages the two middle values with divRound. Empty is 0.
@@ -102,20 +102,18 @@ export function typicalMonth(state, tuning) {
       let byAccount = sums.get(categoryId);
       if (!byAccount) sums.set(categoryId, byAccount = new Map());
       let s = byAccount.get(t.accountId);
-      if (!s) byAccount.set(t.accountId, s = { months: new Map(), total: 0, opposite: 0, buckets: new Map() });
+      if (!s) byAccount.set(t.accountId, s = { months: new Map(), total: 0, buckets: new Map() });
       s.months.set(month, (s.months.get(month) ?? 0) + amount);
       s.total += amount;
-      if (amount < 0) s.opposite += amount;
+      let b = s.buckets.get(t.bucketId);
+      if (!b) s.buckets.set(t.bucketId, b = { count: 0, latestDate: '', latest: 0, opposite: 0 });
+      if (amount < 0) b.opposite += amount;
       if (amount > 0) {
-        const b = s.buckets.get(t.bucketId);
-        if (!b) s.buckets.set(t.bucketId, { count: 1, latestDate: t.date, latest: amount });
-        else {
-          b.count += 1;
-          // Newest date wins; on the same date, the larger charge.
-          if (t.date > b.latestDate || (t.date === b.latestDate && amount > b.latest)) {
-            b.latestDate = t.date;
-            b.latest = amount;
-          }
+        b.count += 1;
+        // Newest date wins; on the same date, the larger charge.
+        if (t.date > b.latestDate || (t.date === b.latestDate && amount > b.latest)) {
+          b.latestDate = t.date;
+          b.latest = amount;
         }
       }
     }
@@ -134,9 +132,12 @@ export function typicalMonth(state, tuning) {
       for (const [accountId, s] of byAccount) {
         const n = monthsOf(accountId).size;
         for (const b of s.buckets.values()) {
-          if (activeMonths.has(monthOf(b.latestDate))) row.perMonth += divRound(b.latest * b.count, n);
+          // An ended bucket (no charge in the active months) contributes 0, refunds included.
+          if (b.count > 0 && activeMonths.has(monthOf(b.latestDate))) {
+            row.perMonth += divRound(b.latest * b.count, n);
+            row.perMonth += divRound(b.opposite, n);
+          }
         }
-        row.perMonth += divRound(s.opposite, n);
       }
       row.perYear = row.perMonth * 12;
     } else if (budgetType === 'annual') {
