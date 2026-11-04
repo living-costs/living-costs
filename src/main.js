@@ -12,6 +12,7 @@ import * as accounts from './ui/accounts.js';
 import * as categories from './ui/categories.js';
 import * as categorise from './ui/categorise.js';
 import * as transactions from './ui/transactions.js';
+import * as buckets from './ui/buckets.js';
 import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
@@ -35,7 +36,7 @@ const SCREENS = {
   help: help.render,
   typical: placeholder(label('typical')),
   categorise: categorise.render,
-  buckets: placeholder(label('buckets')),
+  buckets: buckets.render,
   transactions: transactions.render,
   transfers: placeholder(label('transfers')),
   accounts: accounts.render,

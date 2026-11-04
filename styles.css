@@ -132,3 +132,9 @@ dialog {
 }
 dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 dialog h3 { margin-top: 0; }
+
+/* Buckets */
+.field.toggle { padding-top: 1.5em; }
+.field.toggle > label.choice { display: flex; font-weight: normal; }
+table.buckets td, table.buckets th { vertical-align: middle; }
+table.buckets input.select { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; }
