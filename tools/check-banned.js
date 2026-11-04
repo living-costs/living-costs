@@ -38,13 +38,22 @@ const REGEXES = [
   // Static imports/exports; `from` alone also covers multi-line import lists.
   { re: new RegExp(String.raw`\bfrom\s*["']\s*${PR}`, 'g'), name: 'protocol-relative URL' },
   { re: new RegExp(String.raw`\bimport\s*["']\s*${PR}`, 'g'), name: 'protocol-relative URL' },
+  // A DOM property that takes a URL (the set h() refuses as a prop), assigned directly, which
+  // bypasses h()'s URL-key guard. Compound assignment counts; a comparison (==, ===, !=, <=,
+  // >=) does not. The match runs from the start of the target expression to the next `;` or
+  // the end of the line, so an exception can name the statement exactly.
+  {
+    re: /[\w$.[\]'"()]*?\s*\.\s*(?:href|src|srcset|srcdoc|action|formAction|ping|poster|background)\s*(?:\+|\|\||&&|\?\?)?=(?!=)[^;\r\n]*;?/gi,
+    name: 'URL property =',
+  },
 ];
 
 /**
  * Documented exceptions: {file, pattern, match?, reason}. Without `match`, every finding of
  * `pattern` in `file` is exempt (too broad for URLs; avoid). With `match`, only a finding
  * whose matched text equals it exactly is exempt. For `http://` and `https://` the matched
- * text is the whole URL, up to the next whitespace, quote, backtick, `<` or `>`.
+ * text is the whole URL, up to the next whitespace, quote, backtick, `<` or `>`. For
+ * `URL property =` it is the whole assignment, from its target to the `;` or the end of the line.
  */
 export const EXCEPTIONS = [
   {
@@ -58,6 +67,12 @@ export const EXCEPTIONS = [
     pattern: 'https://',
     match: 'https://github.com/living-costs/living-costs',
     reason: 'Page footer link to the source code. Approved by the owner; the only source link.',
+  },
+  {
+    file: 'src/ui/backup.js',
+    pattern: 'URL property =',
+    match: 'link.href = url;',
+    reason: 'Backup download fallback: a hidden link to a blob: object URL for our own JSON, made by URL.createObjectURL and revoked straight after the click.',
   },
 ];
 

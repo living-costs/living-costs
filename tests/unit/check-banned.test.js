@@ -143,6 +143,18 @@ const POSITIVE = [
   ['export from /\\h', 'src/r.js', "export * from '/\\h/m.js'", hit('src/r.js', 'protocol-relative URL')],
   ['import \\\\h', 'src/r.js', "import '\\\\h/m.js'", hit('src/r.js', 'protocol-relative URL')],
   ['nested directory', 'src/a/b/deep.js', 'el.innerHTML = s', hit('src/a/b/deep.js', 'innerHTML')],
+  // DOM properties that take a URL, assigned directly (bypassing h()'s URL-key guard).
+  ...['href', 'src', 'srcset', 'action', 'formAction', 'ping', 'poster', 'background'].flatMap((prop) => [
+    [`.${prop} =`, 'src/p.js', `link.${prop} = u;`, hit('src/p.js', 'URL property =')],
+    [`.${prop}=`, 'src/p.js', `link.${prop}=u`, hit('src/p.js', 'URL property =')],
+    [`. ${prop}\t=`, 'src/p.js', `link . ${prop}\t= u;`, hit('src/p.js', 'URL property =')],
+    [`.${prop} split`, 'src/p.js', `x;\nlink\n  .${prop}\n  = u;`, hitAt('src/p.js', 2, 'URL property =')],
+  ]),
+  ['.srcdoc =', 'src/p.js', 'frame.srcdoc = s;', [
+    { file: 'src/p.js', line: 1, pattern: 'srcdoc' }, { file: 'src/p.js', line: 1, pattern: 'URL property =' },
+  ]],
+  ['.href +=', 'src/p.js', 'link.href += q;', hit('src/p.js', 'URL property =')],
+  ['chained .src =', 'src/p.js', 'a.b[0].img.src = u;', hit('src/p.js', 'URL property =')],
 ];
 
 for (const [label, file, content, expected] of POSITIVE) {
@@ -171,6 +183,15 @@ const NEGATIVE = [
   ['local url', 'styles.css', 'a{b:url(./x.png)}'],
   ['css @import word', 'styles.css', '/* @import notes */'],
   ['css local url', 'styles.css', 'a{background:url(img/x.png)}'],
+  ['.href === x', 'src/n.js', 'if (link.href === x) go();'],
+  ['.href == x', 'src/n.js', 'if (link.href == x) go();'],
+  ['.src !== x', 'src/n.js', 'if (img.src !== x) go();'],
+  ['.action != x', 'src/n.js', 'if (f.action != x) go();'],
+  ['.poster >= x', 'src/n.js', 'if (v.poster >= x) go();'],
+  ['.href read', 'src/n.js', 'const u = link.href;'],
+  ['hrefs = x', 'src/n.js', 'state.hrefs = x;'],
+  ['.source = x', 'src/n.js', 'r.source = x;'],
+  ['.pinged = x', 'src/n.js', 'r.pinged = x;'],
 ];
 
 for (const [label, file, content] of NEGATIVE) {
@@ -192,10 +213,12 @@ const FOOTER =
   `<footer class="site-footer"><p>Copyright 2026. <a href="${AGPL}" target="_blank" rel="noopener noreferrer">AGPL-3.0</a>. ` +
   `<a href="${SOURCE}" target="_blank" rel="noopener noreferrer">Source code</a></p></footer>`;
 
-test('shipped EXCEPTIONS are exactly the two footer links, each naming its literal URL', () => {
+const DOWNLOAD = 'link.href = url;';
+
+test('shipped EXCEPTIONS are the two footer links and the backup download link, each exact', () => {
   assert.deepEqual(
     EXCEPTIONS.map((e) => [e.file, e.pattern, e.match]),
-    [['index.html', 'https://', AGPL], ['index.html', 'https://', SOURCE]],
+    [['index.html', 'https://', AGPL], ['index.html', 'https://', SOURCE], ['src/ui/backup.js', 'URL property =', DOWNLOAD]],
   );
   for (const e of EXCEPTIONS) assert.ok(e.reason.length > 10);
 });
@@ -227,4 +250,20 @@ test('an exception with a match field exempts only that literal text', () => {
   const dir = makeDir({ 'src/a.js': "x = 'https://ok.example/a'; y = 'https://ok.example/ab';" });
   const ex = [{ file: 'src/a.js', pattern: 'https://', match: 'https://ok.example/a', reason: 'test only' }];
   assert.deepEqual(scan(dir, ex), hitAt('src/a.js', 1, 'https://'));
+});
+
+test('the backup download exception exempts only that exact statement in that file', () => {
+  assert.deepEqual(scan(makeDir({ 'src/ui/backup.js': `x;\n  ${DOWNLOAD}\n` })), []);
+  // Any other URL property assignment in that file still fails.
+  assert.deepEqual(scan(makeDir({ 'src/ui/backup.js': `${DOWNLOAD}\nlink.href = other;` })), hitAt('src/ui/backup.js', 2, 'URL property ='));
+  assert.deepEqual(scan(makeDir({ 'src/ui/backup.js': 'link.href = url + q;' })), hit('src/ui/backup.js', 'URL property ='));
+  assert.deepEqual(scan(makeDir({ 'src/ui/backup.js': 'link.src = url;' })), hit('src/ui/backup.js', 'URL property ='));
+  assert.deepEqual(scan(makeDir({ 'src/ui/backup.js': 'img.link.href = url;' })), hit('src/ui/backup.js', 'URL property ='));
+  // The same statement in another file still fails.
+  assert.deepEqual(scan(makeDir({ 'src/ui/other.js': DOWNLOAD })), hit('src/ui/other.js', 'URL property ='));
+});
+
+test('the shipped tree has no URL property assignment besides the backup download', () => {
+  const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+  assert.deepEqual(scan(root, []).filter((f) => f.pattern === 'URL property =').map((f) => f.file), ['src/ui/backup.js']);
 });
