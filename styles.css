@@ -92,6 +92,8 @@ input[aria-invalid="true"] { border: 2px solid var(--error); }
 fieldset { border: 1px solid var(--border); border-radius: 4px; margin: 0.75rem 0; padding: 0.5rem 1rem; min-width: 0; }
 legend { font-weight: 600; padding: 0 0.25rem; overflow-wrap: anywhere; }
 .row { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+/* A field alone on a line may shrink to the line, so a 20rem input fits a 320px screen. */
+.row > .field { min-width: 0; }
 .error { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
 .dropzone { border: 2px dashed var(--border); border-radius: 4px; padding: 1rem; margin: 0.5rem 0; text-align: center; }
 .dropzone.over { background: var(--intro-bg); }
