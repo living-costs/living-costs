@@ -40,4 +40,4 @@ const server = http.createServer((req, res) => {
 
 // Loopback only, so nothing else on the network can reach the dev server. The URL stays
 // localhost (which resolves to it), so the browser origin and its saved data don't change.
-server.listen(port, '127.0.0.1', () => console.log(`Budgie on http://localhost:${port}/`));
+server.listen(port, '127.0.0.1', () => console.log(`Serving on http://localhost:${port}/`));

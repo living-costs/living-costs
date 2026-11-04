@@ -12,7 +12,7 @@ after(() => {
 });
 
 function makeDir(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'budgie-banned-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'living-costs-banned-'));
   tempDirs.push(dir);
   for (const [name, content] of Object.entries(files)) {
     const full = path.join(dir, name);
@@ -41,7 +41,7 @@ test('clean tree has no findings', () => {
 });
 
 test('CLI still scans when run through a symlinked directory', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'budgie-link-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'living-costs-link-'));
   try {
     const real = path.join(base, 'real');
     fs.mkdirSync(path.join(real, 'tools'), { recursive: true });
@@ -173,7 +173,7 @@ const NEGATIVE = [
   ['JSDoc @import', 'src/n.js', "/** @import {A} from './types.js' */"],
   ['local import', 'src/n.js', "import { a } from './local.js'"],
   ['local export', 'src/n.js', "export { a } from './local.js'"],
-  ['indexedDB.open(x)', 'src/n.js', "indexedDB.open('budgie', 1)"],
+  ['indexedDB.open(x)', 'src/n.js', "indexedDB.open('living-costs', 1)"],
   ['foo.open(x)', 'src/n.js', 'foo.open(x)'],
   ['foo\\n.open(x)', 'src/n.js', 'foo\n  .open(x)'],
   ['dialog.open', 'src/n.js', 'dialog.open = true'],

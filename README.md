@@ -1,13 +1,13 @@
-# Budgie
+# Living Costs
 
-Budgie works out what your living costs look like in a typical month. You import CSV statements from your bank and credit card accounts. Budgie groups repeating transactions, you categorise them, and it builds a monthly budget from what you actually spent.
+This app works out what your living costs look like in a typical month. You import CSV statements from your bank and credit card accounts. The app groups repeating transactions, you categorise them, and it builds a monthly budget from what you actually spent.
 
-Everything happens in your browser. Budgie has no server and no account, and your statements are never uploaded.
+Everything happens in your browser. The app has no server and no account, and your statements are never uploaded.
 
 ## Using it
 
 1. Download CSV statements from each bank and card account, ideally covering the last 12 months.
-2. Open Budgie and import them on the **Accounts** screen. Budgie remembers each account's column layout for next time.
+2. Open the app and import them on the **Accounts** screen. It remembers each account's column layout for next time.
 3. Work through the **Categorise** card. It shows the biggest uncategorised groups of transactions first.
 4. Confirm transfers between your own accounts on the **Transfers** screen, so they don't count as spending.
 5. Read your **Typical month**.
@@ -16,7 +16,7 @@ Everything happens in your browser. Budgie has no server and no account, and you
 ## Disclaimer and Terms of Use
 
 **For informational and educational purposes only.**
-Budgie is a budgeting tool. Its figures are estimates based on the statements
+This app is a budgeting tool. Its figures are estimates based on the statements
 you import and the choices you make. They are not financial, investment, tax,
 accounting, or legal advice, and nothing in this project is a recommendation
 to take any particular course of action. Consult a qualified professional
@@ -43,7 +43,7 @@ are responsible for your own deployment, its accuracy, and compliance with
 the laws that apply to you.
 
 **Privacy.**
-Budgie runs entirely in your browser. Your statements and everything derived
+This app runs entirely in your browser. Your statements and everything derived
 from them are stored only in this browser's local storage, and are never sent
 to or stored on any server. A backup is a plain, unencrypted JSON file that
 you save yourself. It can include dates, amounts, transaction descriptions
@@ -61,7 +61,7 @@ acceptance of the current terms.
 
 ## Development
 
-Budgie is static HTML, CSS and JavaScript modules, with no build step and no runtime dependencies. The development tools (Playwright, axe and TypeScript for type checking) are only used for testing and never ship.
+The app is static HTML, CSS and JavaScript modules, with no build step and no runtime dependencies. The development tools (Playwright, axe and TypeScript for type checking) are only used for testing and never ship.
 
 ```sh
 npm ci --ignore-scripts

@@ -40,7 +40,7 @@ export async function trackCspViolations(page) {
 
 /** Read every row of one IndexedDB store. */
 export const readStore = (page, name) => page.evaluate((storeName) => new Promise((resolve, reject) => {
-  const req = indexedDB.open('budgie');
+  const req = indexedDB.open('living-costs');
   req.onerror = () => reject(req.error);
   req.onsuccess = () => {
     const db = req.result;

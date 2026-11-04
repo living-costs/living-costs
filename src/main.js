@@ -166,22 +166,22 @@ async function start() {
 }
 
 /**
- * Show that Budgie could not start, in place of the screen.
+ * Show that the app could not start, in place of the screen.
  * @param {unknown} err
  */
 function failed(err) {
   clear(screenEl);
   const message = err instanceof Error ? err.message : String(err);
   screenEl.append(
-    h('h2', { tabindex: '-1' }, 'Budgie could not start'),
+    h('h2', { tabindex: '-1' }, 'The app could not start'),
     h('p', null, `Saved data could not be opened: ${message}`),
   );
 }
 
-const WAITING = 'Budgie is already open in another tab. Close it and this tab will load automatically.';
+const WAITING = 'Already open in another tab. Close it and this tab will load automatically.';
 
 /**
- * Start while holding the 'budgie' Web Lock, so only one tab works on the saved data at a time:
+ * Start while holding the 'living-costs' Web Lock, so only one tab works on the saved data at a time:
  * two tabs would each keep their own copy of it and overwrite each other. The lock is held until
  * the tab closes. A tab that has to wait says so, and starts when the lock is granted. Without
  * Web Locks, start now.
@@ -193,7 +193,7 @@ function startAlone() {
   }
   let granted = false;
   const waiting = h('p', null, WAITING);
-  navigator.locks.request('budgie', () => {
+  navigator.locks.request('living-costs', () => {
     granted = true;
     waiting.remove();
     start().catch(failed);
@@ -209,7 +209,7 @@ function startAlone() {
   // Show the message only while this tab's request is actually waiting, so a tab that gets the
   // lock straight away never shows it.
   navigator.locks.query().then(({ pending }) => {
-    if (!granted && pending?.some((l) => l.name === 'budgie')) screenEl.append(waiting);
+    if (!granted && pending?.some((l) => l.name === 'living-costs')) screenEl.append(waiting);
   }, () => {});
 }
 

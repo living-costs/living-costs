@@ -18,7 +18,7 @@ All data here is invented: names, account numbers, references and amounts. None 
 
 ## Rows
 
-Amounts are signed minor units, as Budgie stores them. Day numbers are days of the month.
+Amounts are signed minor units, as the app stores them. Day numbers are days of the month.
 
 | Id | Description | Amount | When | Category |
 |---|---|---|---|---|

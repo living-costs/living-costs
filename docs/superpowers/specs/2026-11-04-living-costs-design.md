@@ -1,4 +1,4 @@
-# Budgie design
+# Living Costs design
 
 Date: 2026-11-04
 Status: approved by the owner, 2026-11-04
@@ -9,9 +9,9 @@ Items marked **(Claude's call)** were decided by Claude during design. The owner
 
 ## Intent
 
-Three people each use Budgie in their own Chrome on macOS. Each has their own data, and nothing is shared or synced. Each imports about 12 months of statements from three or four accounts (current, savings, credit cards), then adds new statements every so often.
+Three people each use the app in their own Chrome on macOS. Each has their own data, and nothing is shared or synced. Each imports about 12 months of statements from three or four accounts (current, savings, credit cards), then adds new statements every so often.
 
-The question Budgie answers: **what does my standard of living actually cost per month, broken down by category?** That covers essentials and the things that make life good, such as holidays, eating out, takeaways, and household items like a new vacuum cleaner. With that figure, a person can decide how much income to keep for living and what's free for anything else. Budgie stops at the cost picture. It doesn't plan what the rest is spent on.
+The question the app answers: **what does my standard of living actually cost per month, broken down by category?** That covers essentials and the things that make life good, such as holidays, eating out, takeaways, and household items like a new vacuum cleaner. With that figure, a person can decide how much income to keep for living and what's free for anything else. The app stops at the cost picture. It doesn't plan what the rest is spent on.
 
 ## Goals
 
@@ -30,7 +30,7 @@ Everything listed as out of scope in `CLAUDE.md`, plus:
 
 ## Anti-goals
 
-- **Silent miscounting.** When Budgie is unsure, it leaves the item uncategorised or flagged, never guessed. Examples are an amount rule that matches more often than expected, or a near-duplicate row.
+- **Silent miscounting.** When the app is unsure, it leaves the item uncategorised or flagged, never guessed. Examples are an amount rule that matches more often than expected, or a near-duplicate row.
 - **A complete-looking picture that isn't.** The typical month always shows how much spending is still uncategorised.
 - **Any code path that could send data out**, including through a compromised package.
 
@@ -108,7 +108,7 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
   - **Account check (Claude's call):** two accounts at the same bank share a header row, so the mapping can name an optional account-identifier column, such as Account Number. The value seen in the account's first import is remembered, and any file whose rows show a different value is refused. Formats without such a column rely on the user's account choice.
   - **Order:** files are processed in date order. Each is checked against what's already imported **and** the files before it in the same pick, so overlapping exports in one pick are handled like any other overlap.
   - **Confirming:** one table lists every file with its prefilled covered period to confirm or edit. One summary covers the whole pick, per file and in total: "N new, M already imported, K to review". Files that are blocked as already imported are named, and the rest proceed.
-- **Choosing the account:** the user **always confirms the account**. Budgie suggests accounts whose saved mapping has the same header signature, which is the header row trimmed and lower-cased, with a BOM ignored. A new header opens the mapping form.
+- **Choosing the account:** the user **always confirms the account**. The app suggests accounts whose saved mapping has the same header signature, which is the header row trimmed and lower-cased, with a BOM ignored. A new header opens the mapping form.
 - **Mapping form:** the user picks:
   - the date column and date format (default `DD/MM/YYYY`)
   - the description column
@@ -117,12 +117,12 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
     - **single signed column**, with a "purchases are positive" switch for card files that flip the sign
     - **separate debit and credit columns**
 
-  A preview of the first rows, as Budgie will read them, updates live.
+  A preview of the first rows, as the app will read them, updates live.
 - **Covered period (Claude's call):** every import asks "This file covers from … to …", prefilled from the first and last row dates, and the user can edit it. If every row falls in one calendar month, a one-click "Whole month (*Mon YYYY*)" choice is offered, because some banks export by month and the last transaction is rarely on the last day. This is stored on the batch. Savings accounts have few transactions, so first-to-last row dates understate what a file really covers. Without this, real coverage would look patchy and the typical-month window would shrink.
 - **Parser:** must handle a BOM, quoted and unquoted fields, commas and quotes inside quotes, and CRLF or LF line endings. Amounts can look like `46`, `1.2`, `.51`, `+12.58` or `-1234.56`, and a literal `null` or empty value in an optional column counts as missing. Rows can appear out of date order, and the description can be empty. All four known formats use `DD/MM/YYYY` dates and plain amounts, with no thousands separators, currency symbols or parentheses. An amount with any of those is a parse error, not a guess. Rows that fail to parse are listed with their row number, and the import can't continue until the user cancels or skips them.
 - **Card files** with transaction and cleared dates use the **transaction date**, so card spending counts at purchase.
 - **Accidental re-import** is caught in two layers:
-  1. **The same file:** Budgie computes the SHA-256 of the file's bytes with `crypto.subtle` and checks it against every batch in every account, before parsing. A match is blocked with "This file was already imported on *date* into *account*". Nothing is changed. Undoing that batch removes its hash, so the file can be imported again deliberately.
+  1. **The same file:** The app computes the SHA-256 of the file's bytes with `crypto.subtle` and checks it against every batch in every account, before parsing. A match is blocked with "This file was already imported on *date* into *account*". Nothing is changed. Undoing that batch removes its hash, so the file can be imported again deliberately.
   2. **The same rows in a different file**, for example a re-download, or an export whose dates overlap one already imported:
      - Rows whose fingerprint exactly matches an existing transaction in that account are skipped as already imported.
      - Rows that match an existing row on amount within the transaction-match window, but not exactly, are held for review. Candidates are ranked by text similarity, and the user chooses "same transaction" or "both are real".
@@ -130,7 +130,7 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
      - Before anything is saved, the import summary says "N new, M already imported, K to review". If N is 0 and K is 0, nothing is saved and no batch is created.
 - **Identical rows within one file** are always kept, because they're genuine repeat purchases.
 - **Nothing is ever deleted automatically.**
-- **Wrong account:** if the file's header signature doesn't match the chosen account's saved mapping, Budgie warns before importing.
+- **Wrong account:** if the file's header signature doesn't match the chosen account's saved mapping, the app warns before importing.
 - **Undo** removes a batch's transactions, or every batch from one multi-file import. Fingerprint-keyed decisions stay dormant.
 - **Accounts-by-month table:** accounts as rows and months as columns. Each cell shows covered, partial or missing, with the transaction count. Placeholder accounts show "not itemised". Coverage comes from each batch's declared covered period. A gap of up to `coverageGapDays` between consecutive batches in one account counts as covered, since banks' export boundaries don't always line up.
 
@@ -223,7 +223,7 @@ Any list of transactions has a **Counts as** column. It shows the category and w
 
 1. Put the whole bucket in its most common category, for example Household.
 2. Read through the Amazon order history.
-3. For each order that belongs elsewhere, find its charge in Budgie and move or split it.
+3. For each order that belongs elsewhere, find its charge in the app and move or split it.
 
 To make step 3 quick:
 
@@ -297,7 +297,7 @@ Categories can be created, renamed, deleted (with reassignment) and retyped on a
   - A card's "payment received" row and the bank's repayment row are paired the same way.
 - **Transfers to an account that isn't imported:** the user decides. Putting the bucket in a Transfer-kind category excludes it, and putting it in a spend category counts it.
 - **Repayments to a card that isn't imported:**
-  - The user marks the repayment bucket (for example `EXAMPLE CARD PLC`) as "repays a card I'm not importing". Budgie creates a **placeholder account** for that card, plus a spend category "*Card name* (not itemised)" of type Variable. It links the bucket to both.
+  - The user marks the repayment bucket (for example `EXAMPLE CARD PLC`) as "repays a card I'm not importing". The app creates a **placeholder account** for that card, plus a spend category "*Card name* (not itemised)" of type Variable. It links the bucket to both.
   - Each repayment in that bucket counts as spending in the not-itemised category **unless** it's part of a confirmed transfer pair.
   - When the card's statements are imported later, the user attaches them to the placeholder account, which then becomes a normal card account. The repayments for those months get suggested transfer pairs. Once they're confirmed, the itemised purchases count instead. Earlier months stay as lumped spending. No manual reclassification is needed.
   - **Known edge:** in the first itemised month, a repayment usually pays for purchases made before card coverage starts, so that month can be slightly under-counted. The accounts-by-month table shows where coverage starts.
@@ -354,7 +354,7 @@ As in `CLAUDE.md`, with these additions:
 There's a simple top navigation (Claude's call):
 
 - **Help:** the first panel (owner's request). It's a short, plain page covering:
-  - **What Budgie is for:** the typical month.
+  - **What this app is for:** the typical month.
   - **What you'll need:** about 12 months of CSV statements from each current, savings and card account, and where to download them.
   - **Privacy:** everything stays in this browser.
   - **The steps:**
@@ -384,7 +384,7 @@ Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gi
 - **Real statements stay local.** They live in `fixtures/`, which is gitignored. With the owner's consent, Claude may read them to learn formats. Nothing from them (rows, names, merchants, amounts, account numbers or filenames) may appear in code, tests, docs or commits.
 - **`.gitignore`** blocks real downloads by pattern (Claude's call):
   - `*.csv` everywhere except `tests/fixtures/*.csv`
-  - backup files, `budgie-backup*.json`
+  - backup files, `living-costs-backup*.json`
 
   This covers the four real export naming styles: account-number-and-date names, card-digits-and-date names, a generic `Statements.csv`, and `Transactions_Export_<Mon>_<YYYY>_<digits>.csv`.
 - **Committed fixtures are synthesized from scratch** in `tests/fixtures/`. All use `DD/MM/YYYY` dates. Together they reproduce every quirk of the four real formats:

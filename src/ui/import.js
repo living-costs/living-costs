@@ -399,7 +399,7 @@ function renderMapping(root, app) {
   put(root,
     stepHeading('Set up columns'),
     messages(),
-    h('p', null, `Tell Budgie how to read ${first.name}. This is saved with the account.`),
+    h('p', null, `Tell the app how to read ${first.name}. This is saved with the account.`),
     errors,
     field('Account name', h('input', {
       type: 'text', value: f.name, autocomplete: 'off', 'data-focus-key': 'map-name',
@@ -436,7 +436,7 @@ function renderMapping(root, app) {
 }
 
 /**
- * The live preview: the first 5 rows by date, as Budgie will read them.
+ * The live preview: the first 5 rows by date, as the app will read them.
  * @param {MappingForm} f
  * @param {PreparedFile} file
  * @param {string} signature
@@ -458,7 +458,7 @@ function preview(f, file, signature) {
       h('tbody', null, ...shown.map((r) => h('tr', null,
         h('td', null, formatDate(r.date)), h('td', null, raw(r.rawText)),
         h('td', { class: 'num' }, formatMoney(r.amountMinor, f.currency)))))),
-    h('p', { class: 'muted' }, 'The earliest 5 rows, as Budgie will read them.'),
+    h('p', { class: 'muted' }, 'The earliest 5 rows, as the app will read them.'),
     note);
 }
 

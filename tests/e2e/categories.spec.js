@@ -39,7 +39,7 @@ async function withExtraDefaults(page, entries) {
 
 /** Put rows into an IndexedDB store (test setup only; the app reads it on the next load). */
 const putRows = (page, name, rows) => page.evaluate(({ storeName, items }) => new Promise((resolve, reject) => {
-  const req = indexedDB.open('budgie');
+  const req = indexedDB.open('living-costs');
   req.onerror = () => reject(req.error);
   req.onsuccess = () => {
     const db = req.result;

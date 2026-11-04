@@ -386,7 +386,7 @@ test('a re-download with nothing new creates no batch', async ({ page }, testInf
 
 /** Batches saved in IndexedDB, read directly (the accounts list is hidden during a flow). */
 const storedBatches = (page) => page.evaluate(() => new Promise((resolve, reject) => {
-  const req = indexedDB.open('budgie');
+  const req = indexedDB.open('living-costs');
   req.onerror = () => reject(req.error);
   req.onsuccess = () => {
     const db = req.result;

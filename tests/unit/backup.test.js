@@ -15,7 +15,7 @@ import { NOW, BANK_A, SAVINGS, CARD, BANK_B, pick, run } from './pipeline.js';
 
 /** A small backup that uses every field of every backed-up type. */
 const base = () => ({
-  app: 'budgie',
+  app: 'living-costs',
   schemaVersion: 1,
   exportedAt: '2026-11-04T10:00:00.000Z',
   accounts: [
@@ -90,7 +90,7 @@ test('buildBackup holds the hard-to-recreate work and leaves out transactions, b
     'accounts', 'app', 'buckets', 'categories', 'exportedAt', 'offeredDefaultIds', 'overrides', 'rules',
     'schemaVersion', 'transferPairs',
   ]);
-  assert.equal(b.app, 'budgie');
+  assert.equal(b.app, 'living-costs');
   assert.equal(b.schemaVersion, SCHEMA_VERSION);
   assert.equal(SCHEMA_VERSION, 1);
   assert.equal(b.exportedAt, NOW.toISOString());
@@ -102,8 +102,8 @@ test('buildBackup holds the hard-to-recreate work and leaves out transactions, b
 test('backupFileName and localDay use the local calendar date', () => {
   const lateEvening = new Date(2026, 0, 5, 23, 59, 30);
   assert.equal(localDay(lateEvening), '2026-01-05');
-  assert.equal(backupFileName(lateEvening), 'budgie-backup-2026-01-05.json');
-  assert.equal(backupFileName(new Date(2026, 10, 4, 0, 0, 1)), 'budgie-backup-2026-11-04.json');
+  assert.equal(backupFileName(lateEvening), 'living-costs-backup-2026-01-05.json');
+  assert.equal(backupFileName(new Date(2026, 10, 4, 0, 0, 1)), 'living-costs-backup-2026-11-04.json');
 });
 
 // --- Round trip --------------------------------------------------------------------------------
@@ -217,15 +217,15 @@ test('restoreChanges writes the backup, keeps helpDismissed, sets the schema ver
 
 // --- Rejections --------------------------------------------------------------------------------
 
-test('anything that is not a Budgie backup object is rejected without throwing', () => {
-  for (const json of [null, undefined, [], [base()], 'budgie', '', 42, 0, true, false, {}, { app: 'other' }, { app: 'Budgie' }]) {
-    assert.deepEqual(errorsOf(json), ["This isn't a Budgie backup."], JSON.stringify(json) ?? 'undefined');
+test('anything that is not a backup object from this app is rejected without throwing', () => {
+  for (const json of [null, undefined, [], [base()], 'living-costs', '', 42, 0, true, false, {}, { app: 'other' }, { app: 'Living Costs' }]) {
+    assert.deepEqual(errorsOf(json), ["This file isn't a backup from this app."], JSON.stringify(json) ?? 'undefined');
   }
 });
 
 test('a newer schema version is refused', () => {
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 2 }), ['This backup is from a newer version of Budgie.']);
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 99 }), ['This backup is from a newer version of Budgie.']);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 2 }), ['This backup is from a newer version of this app.']);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 99 }), ['This backup is from a newer version of this app.']);
 });
 
 test('a missing or malformed schema version is refused', () => {
@@ -454,7 +454,7 @@ test('deep nesting is handled without throwing', () => {
   b.accounts[0].mapping = deep;
   b.categories = [deep];
   assert.deepEqual(errorsOf(b).slice(0, 2), ['Account 1 has a missing or invalid column mapping.', 'Category 1 has a missing or invalid ID.']);
-  assert.deepEqual(errorsOf(deep), ["This isn't a Budgie backup."]);
+  assert.deepEqual(errorsOf(deep), ["This file isn't a backup from this app."]);
 });
 
 test('objects without a prototype and inherited names are handled', () => {

@@ -95,7 +95,7 @@ test('mixed currencies are not added together', async ({ page }, testInfo) => {
     covers: ['01/01/2026', '28/02/2026'],
   });
   await openScreen(page, 'Typical month');
-  await expect(page.getByText("Your accounts use more than one currency (EUR, GBP). Budgie doesn't add them together.", { exact: true }))
+  await expect(page.getByText("Your accounts use more than one currency (EUR, GBP). They aren't added together.", { exact: true }))
     .toBeVisible();
   // Only the message: no window, summary, tables or uncategorised line.
   await expect(page.locator('#typical-window')).toHaveCount(0);

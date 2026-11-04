@@ -6,7 +6,7 @@ import {
   expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, importFiles, FIXTURE_ACCOUNTS, readStore,
 } from './helpers.js';
 
-const CONFIRM = 'Replace all Budgie data in this browser with this backup? Imported statements will need re-importing.';
+const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
 const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
 
 /** Init script: no file picker, so saving falls back to a download. */
@@ -45,7 +45,7 @@ async function openBackup(page) {
 
 /** A valid, empty backup. */
 const emptyBackup = () => JSON.stringify({
-  app: 'budgie', schemaVersion: 1, exportedAt: new Date().toISOString(), accounts: [], buckets: [], rules: [],
+  app: 'living-costs', schemaVersion: 1, exportedAt: new Date().toISOString(), accounts: [], buckets: [], rules: [],
   categories: [], overrides: [], transferPairs: [], offeredDefaultIds: [],
 });
 
@@ -61,11 +61,11 @@ test('download fallback', async ({ page }, testInfo) => {
 
   const [download] = await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
   const { iso, shown } = await today(page);
-  expect(download.suggestedFilename()).toBe(`budgie-backup-${iso}.json`);
+  expect(download.suggestedFilename()).toBe(`living-costs-backup-${iso}.json`);
   const file = testInfo.outputPath(download.suggestedFilename());
   await download.saveAs(file);
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  expect(saved).toMatchObject({ app: 'budgie', schemaVersion: 1, accounts: [], overrides: [], transferPairs: [] });
+  expect(saved).toMatchObject({ app: 'living-costs', schemaVersion: 1, accounts: [], overrides: [], transferPairs: [] });
   expect(saved.categories.length).toBeGreaterThan(0);
 
   await expect(page.getByText(`Last backup: ${shown}`, { exact: true })).toBeVisible();
@@ -106,8 +106,8 @@ test('picker path', async ({ page }) => {
   expect(w.closed).toBe(true);
   await expect(page.getByRole('status')).toHaveText('Backup saved.');
   expect(JSON.parse(w.saved).schemaVersion).toBe(1);
-  expect(w.options.suggestedName).toBe(`budgie-backup-${iso}.json`);
-  expect(w.options.types).toEqual([{ description: 'Budgie backup', accept: { 'application/json': ['.json'] } }]);
+  expect(w.options.suggestedName).toBe(`living-costs-backup-${iso}.json`);
+  expect(w.options.types).toEqual([{ description: 'Living Costs backup', accept: { 'application/json': ['.json'] } }]);
   expect(downloads).toBe(0);
 });
 
@@ -135,7 +135,7 @@ test('picker cancelled does nothing; picker failure falls back to a download', a
 
   await page.evaluate(() => { /** @type {any} */ (window).__mode = 'fail'; });
   const [download] = await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
-  expect(download.suggestedFilename()).toMatch(/^budgie-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(download.suggestedFilename()).toMatch(/^living-costs-backup-\d{4}-\d{2}-\d{2}\.json$/);
   await expect(page.getByText(/^Last backup: \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('Backup saved to your Downloads folder instead.');
 });
@@ -220,16 +220,16 @@ test('bad backup', async ({ page }) => {
   const errors = page.getByRole('alert');
 
   await restoreInput(page).setInputFiles(jsonFile('other.json', '{"app":"other"}'));
-  await expect(errors).toContainText("This isn't a Budgie backup.");
+  await expect(errors).toContainText("This file isn't a backup from this app.");
   await expect(errors).toContainText('Nothing was changed.');
   expect(dialogs).toEqual([]);
   expect(await snapshot()).toEqual(start);
   // The input is cleared, so the same file can be chosen again.
   await expect(restoreInput(page)).toHaveValue('');
 
-  await restoreInput(page).setInputFiles(jsonFile('broken.json', '{"app":"budgie",'));
+  await restoreInput(page).setInputFiles(jsonFile('broken.json', '{"app":"living-costs",'));
   await expect(errors).toContainText("This file isn't valid JSON.");
-  await expect(errors).not.toContainText("This isn't a Budgie backup.");
+  await expect(errors).not.toContainText("This file isn't a backup from this app.");
 
   const markup = '<img src=x>SECRET';
   const invalid = JSON.parse(emptyBackup());

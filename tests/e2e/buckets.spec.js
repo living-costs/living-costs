@@ -253,7 +253,7 @@ test('a bucket with several currencies is never added across them', async ({ pag
   const farm = (await readStore(page, 'buckets')).find((b) => b.displayName === 'FARM SHOP');
   const txn = (await readStore(page, 'transactions')).find((t) => t.bucketId === farm.id);
   await page.evaluate((t) => new Promise((resolve, reject) => {
-    const req = indexedDB.open('budgie');
+    const req = indexedDB.open('living-costs');
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       const db = req.result;

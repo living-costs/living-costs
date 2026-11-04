@@ -2,7 +2,7 @@
 .superpowers/
 *.csv
 !tests/fixtures/*.csv
-budgie-backup*.json
+living-costs-backup*.json
 node_modules/
 test-results/
 playwright-report/

@@ -23,8 +23,8 @@ test.afterEach(async ({ page }) => {
 
 test('first launch shows Help', async ({ page }) => {
   await expect(screenHeading(page)).toHaveText('Help');
-  await expect(page.getByRole('heading', { name: 'What Budgie is for' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'What Budgie is for' })).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'What this app is for' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What this app is for' })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Got it' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import a statement' })).toBeVisible();
   await expect(nav(page).getByRole('button', { name: 'Help', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -40,7 +40,7 @@ test('Got it is remembered', async ({ page }) => {
 
   await page.reload();
   await expect(screenHeading(page)).toHaveText('Help');
-  await expect(page.getByRole('heading', { name: 'What Budgie is for' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What this app is for' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import a statement' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Got it' })).toHaveCount(0);
   await expectNoAxeViolations(page);
@@ -93,7 +93,7 @@ test('reflows at 320px without horizontal scroll', async ({ page }) => {
 
 test('defaults are seeded once', async ({ page }) => {
   const count = () => page.evaluate(() => new Promise((resolve, reject) => {
-    const req = indexedDB.open('budgie');
+    const req = indexedDB.open('living-costs');
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       const db = req.result;

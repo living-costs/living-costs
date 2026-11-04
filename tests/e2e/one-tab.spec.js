@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { trackCspViolations, expectNoAxeViolations } from './helpers.js';
 
-const WAITING = 'Budgie is already open in another tab. Close it and this tab will load automatically.';
+const WAITING = 'Already open in another tab. Close it and this tab will load automatically.';
 
 test('a second tab waits until the first closes, then loads', async ({ context }) => {
   const first = await context.newPage();

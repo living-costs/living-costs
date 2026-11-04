@@ -1,9 +1,9 @@
-// IndexedDB access. Every function here talks only to the local `budgie` database.
+// IndexedDB access. Every function here talks only to the local `living-costs` database.
 
 /** @import {State, Changes, StoreName, Settings} from './types.js' */
 import { emptyState } from './changes.js';
 
-const DB_NAME = 'budgie';
+const DB_NAME = 'living-costs';
 const DB_VERSION = 1;
 
 /** @type {Record<StoreName, string>} */
@@ -16,7 +16,7 @@ const KEY_PATHS = {
 export const STORE_NAMES = /** @type {StoreName[]} */ (Object.keys(KEY_PATHS));
 
 /**
- * Open (and on first use create) the `budgie` database.
+ * Open (and on first use create) the `living-costs` database.
  * @returns {Promise<IDBDatabase>}
  */
 export function openDb() {
@@ -40,7 +40,7 @@ export function openDb() {
       resolve(db);
     };
     req.onerror = () => reject(req.error);
-    req.onblocked = () => reject(new Error('Budgie is open in another tab. Close it and reload.'));
+    req.onblocked = () => reject(new Error('Already open in another tab. Close it and reload.'));
   });
 }
 

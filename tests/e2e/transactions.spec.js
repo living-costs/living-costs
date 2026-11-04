@@ -242,7 +242,7 @@ test('a confirmed transfer shows Transfer with no select', async ({ page }) => {
   const amazon = txns.find((t) => t.rawText === AMAZON);
   const other = txns.find((t) => t.rawText !== AMAZON);
   await page.evaluate(({ a, b }) => new Promise((resolve, reject) => {
-    const req = indexedDB.open('budgie');
+    const req = indexedDB.open('living-costs');
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       const db = req.result;

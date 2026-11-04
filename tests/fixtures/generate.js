@@ -1,4 +1,4 @@
-// Deterministic generator for Budgie's synthetic test fixtures. Every name, number and amount
+// Deterministic generator for the synthetic test fixtures. Every name, number and amount
 // is invented. Run `node tests/fixtures/generate.js` to rewrite the CSVs and expected.json in
 // this folder. It imports nothing from src/: expected values come from its own row list.
 import fs from 'node:fs';

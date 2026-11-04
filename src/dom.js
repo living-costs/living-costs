@@ -12,7 +12,7 @@ const URL_PROP = /^(?:href|src(?:set|doc)?|action|formaction|ping|poster|backgro
  *   and `false`, `null` or `undefined` skips it.
  * - A `style` prop, or any prop matching /html/i, throws. Use `el.style.prop` instead.
  * - A URL-bearing prop throws, in any case: href, src, srcset, the iframe document source, action,
- *   formaction, ping, poster, background and xlink:href. Budgie never builds a URL into the DOM.
+ *   formaction, ping, poster, background and xlink:href. The app never builds a URL into the DOM.
  * @param {string} tag
  * @param {Record<string, unknown> | null} [props]
  * @param {...Child} children

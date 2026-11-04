@@ -21,7 +21,7 @@ const MAX_ERRORS = 20;
  * @typedef {{schemaVersion:number,exportedAt:string,accounts:Account[],buckets:Bucket[],rules:Rule[],
  *   categories:Category[],overrides:Override[],transferPairs:TransferPair[],offeredDefaultIds:string[]}} BackupData
  */
-/** @typedef {{app:'budgie'} & BackupData} Backup */
+/** @typedef {{app:'living-costs'} & BackupData} Backup */
 /** @typedef {{ok:true,data:BackupData}|{ok:false,errors:string[]}} Validation */
 
 /**
@@ -32,7 +32,7 @@ const MAX_ERRORS = 20;
  */
 export function buildBackup(state, now) {
   return {
-    app: 'budgie',
+    app: 'living-costs',
     schemaVersion: SCHEMA_VERSION,
     exportedAt: now.toISOString(),
     accounts: state.accounts,
@@ -47,10 +47,10 @@ export function buildBackup(state, now) {
 
 /**
  * @param {Date} now
- * @returns {string} budgie-backup-YYYY-MM-DD.json, using the local date
+ * @returns {string} living-costs-backup-YYYY-MM-DD.json, using the local date
  */
 export function backupFileName(now) {
-  return `budgie-backup-${localDay(now)}.json`;
+  return `living-costs-backup-${localDay(now)}.json`;
 }
 
 /**
@@ -456,10 +456,10 @@ export function validateBackup(json) {
  * @returns {Validation}
  */
 function validate(json) {
-  if (!isObj(json) || get(json, 'app') !== 'budgie') return { ok: false, errors: ["This isn't a Budgie backup."] };
+  if (!isObj(json) || get(json, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
   const version = get(json, 'schemaVersion');
   if (!isInt(version) || version < 1) return { ok: false, errors: ["This backup's version is missing or not valid."] };
-  if (version > SCHEMA_VERSION) return { ok: false, errors: ['This backup is from a newer version of Budgie.'] };
+  if (version > SCHEMA_VERSION) return { ok: false, errors: ['This backup is from a newer version of this app.'] };
 
   const p = new Problems();
   const exportedAt = get(json, 'exportedAt');

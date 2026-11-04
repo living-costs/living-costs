@@ -1,10 +1,10 @@
 # Budget categoriser
 
-Browser-only web app that imports bank and credit card CSV statements, groups repeating transactions into buckets, lets the user categorise them, and builds a monthly picture of lifestyle costs.
+Living Costs is a browser-only web app that imports bank and credit card CSV statements, groups repeating transactions into buckets, lets the user categorise them, and builds a monthly picture of lifestyle costs.
 
 Three users, on macOS and Chrome. Typical use: 12 months of statements from three or four accounts, then periodic updates. Keep it very simple and do not add features outside this file without asking.
 
-The approved design is `docs/superpowers/specs/2026-11-04-budgie-design.md`. It holds the detail. This file holds the rules.
+The approved design is `docs/superpowers/specs/2026-11-04-living-costs-design.md`. It holds the detail. This file holds the rules.
 
 ## Working rules
 

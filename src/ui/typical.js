@@ -28,7 +28,7 @@ export function render(root, app) {
   const tm = typicalMonth(state, app.tuning);
   if ('mixedCurrencies' in tm) {
     root.append(heading, h('p', null,
-      `Your accounts use more than one currency (${tm.currencies.join(', ')}). Budgie doesn't add them together.`));
+      `Your accounts use more than one currency (${tm.currencies.join(', ')}). They aren't added together.`));
     return;
   }
   /** @param {number} minor */

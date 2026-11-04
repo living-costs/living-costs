@@ -56,7 +56,7 @@ test('no requests after load', async ({ page }) => {
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Save backup', exact: true }).click(),
   ]);
-  expect(download.suggestedFilename()).toMatch(/^budgie-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(download.suggestedFilename()).toMatch(/^living-costs-backup-\d{4}-\d{2}-\d{2}\.json$/);
   await expect(page.getByRole('status')).toHaveText('Backup saved.');
 
   expect(requests()).toEqual([]);

@@ -9,7 +9,7 @@ import { field } from './form.js';
 import { whileSaving } from './saving.js';
 
 const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
-const CONFIRM = 'Replace all Budgie data in this browser with this backup? Imported statements will need re-importing.';
+const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
 
 /** @type {{status: string, errors: string[]}} */
 let view = { status: '', errors: [] };
@@ -44,7 +44,7 @@ export function render(root, app) {
       }, 'Save backup')),
     h('p', { role: 'status', class: 'muted' }, view.status),
     h('h3', null, 'Restore'),
-    h('p', null, 'Restoring replaces everything in Budgie in this browser. Afterwards, add your statements again on the Accounts screen.'),
+    h('p', null, 'Restoring replaces everything this app holds in this browser. Afterwards, add your statements again on the Accounts screen.'),
     field('Restore from backup', input),
   );
   if (view.errors.length) {
@@ -84,7 +84,7 @@ async function writeFile(name, text) {
     try {
       const handle = await w.showSaveFilePicker({
         suggestedName: name,
-        types: [{ description: 'Budgie backup', accept: { 'application/json': ['.json'] } }],
+        types: [{ description: 'Living Costs backup', accept: { 'application/json': ['.json'] } }],
       });
       const writable = await handle.createWritable();
       await writable.write(text);
