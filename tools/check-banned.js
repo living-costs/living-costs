@@ -18,6 +18,8 @@ const LITERALS = [
 // are not matched. They keep their old labels.
 // Protocol-relative = two of / or \ (browsers treat \ as / in http(s) URLs).
 const PR = String.raw`[\/\\]{2}`;
+// Attribute names that take a URL (the set h() refuses as a prop), as a string or property key.
+const URL_ATTR = String.raw`(?:href|src|srcset|action|formaction|ping|poster|background|xlink:href)`;
 const REGEXES = [
   { re: /\bfetch\s*\(/g, name: 'fetch(' },
   { re: /\beval\s*\(/g, name: 'eval(' },
@@ -48,6 +50,24 @@ const REGEXES = [
   {
     re: /[\w$.[\]'"()]*?\s*\.\s*(?:href|src|srcset|srcdoc|action|formAction|ping|poster|background)\s*(?:\+|\|\||&&|\?\?)?=(?!=)[^;\r\n]*;?/gi,
     name: 'URL property =',
+  },
+  // The same names set by other routes, in any case and quote style. `[^,)]*` is the namespace
+  // argument; a prefixed qualified name (svg:href) counts.
+  { re: new RegExp(String.raw`\bsetAttribute\s*\(\s*(["'\`])${URL_ATTR}\1`, 'gi'), name: 'setAttribute URL' },
+  {
+    re: new RegExp(String.raw`\bsetAttributeNS\s*\([^,)]*,\s*(["'\`])(?:[\w-]+:)?${URL_ATTR}\1`, 'gi'),
+    name: 'setAttributeNS URL',
+  },
+  // A bracketed name, assigned (as for the dotted form above, to the end of the statement).
+  {
+    re: new RegExp(String.raw`[\w$.[\]()]*?\[\s*(["'\`])${URL_ATTR}\1\s*\]\s*(?:\+|\|\||&&|\?\?)?=(?!=)[^;\r\n]*;?`, 'gi'),
+    name: 'URL property =',
+  },
+  // Object.assign with an object literal that has one of the names as a key: quoted, computed
+  // or shorthand. The key must follow `{` or `,`, and come before the end of the statement.
+  {
+    re: new RegExp(String.raw`\bObject\s*\.\s*assign\s*\([^;]*?[{,]\s*\[?\s*(["'\`]?)${URL_ATTR}\1\s*\]?\s*[:,}]`, 'gi'),
+    name: 'Object.assign URL',
   },
 ];
 

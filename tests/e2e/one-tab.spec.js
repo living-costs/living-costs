@@ -32,3 +32,32 @@ test('without Web Locks the app starts normally', async ({ page }) => {
   await page.goto('./');
   await expect(page.locator('#screen h2')).toHaveText('Help');
 });
+
+/** Init script: navigator.locks.query() rejects, as it may where lock state can't be read. */
+const queryRejects = () => {
+  LockManager.prototype.query = () => Promise.reject(new Error('query failed'));
+};
+
+test('a waiting tab still says so when the lock query fails', async ({ context }) => {
+  const first = await context.newPage();
+  await first.goto('./');
+  await expect(first.locator('#screen h2')).toHaveText('Help');
+
+  const second = await context.newPage();
+  await second.addInitScript(queryRejects);
+  await trackCspViolations(second);
+  await second.goto('./');
+  await expect(second.locator('#screen')).toHaveText(WAITING);
+
+  await first.close();
+  await expect(second.locator('#screen h2')).toHaveText('Help');
+  await expect(second.locator('#screen')).not.toContainText(WAITING);
+  expect(await second.evaluate(() => window.__csp)).toEqual([]);
+});
+
+test('a lone tab starts normally when the lock query fails', async ({ page }) => {
+  await page.addInitScript(queryRejects);
+  await page.goto('./');
+  await expect(page.locator('#screen h2')).toHaveText('Help');
+  await expect(page.locator('#screen')).not.toContainText(WAITING);
+});

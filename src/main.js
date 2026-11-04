@@ -7,6 +7,7 @@ import tuning from './tuning.js';
 import defaults from './default-categories.js';
 import { renderNav, markCurrent } from './ui/nav.js';
 import { whileSaving } from './ui/saving.js';
+import { keyed } from './ui/form.js';
 import * as help from './ui/help.js';
 import * as accounts from './ui/accounts.js';
 import * as categories from './ui/categories.js';
@@ -131,9 +132,8 @@ function createApp(store) {
       const active = document.activeElement;
       const key = active instanceof HTMLElement ? active.dataset.focusKey : undefined;
       drawScreen(app);
-      const again = key ? [...screenEl.querySelectorAll('[data-focus-key]')]
-        .find((el) => el instanceof HTMLElement && el.dataset.focusKey === key) : undefined;
-      if (again instanceof HTMLElement) again.focus();
+      const again = key ? keyed(key, screenEl) : undefined;
+      if (again) again.focus();
       // Focus that was outside the screen (for example in the nav) and survived stays put.
       else if (!active || active === document.body || !active.isConnected || screenEl.contains(active)) focusHeading();
     },
@@ -207,10 +207,13 @@ function startAlone() {
     start().catch(failed);
   });
   // Show the message only while this tab's request is actually waiting, so a tab that gets the
-  // lock straight away never shows it.
+  // lock straight away never shows it. If the query fails, show it anyway unless the lock has
+  // been granted: a message that goes when the lock arrives beats a blank screen.
   navigator.locks.query().then(({ pending }) => {
     if (!granted && pending?.some((l) => l.name === 'living-costs')) screenEl.append(waiting);
-  }, () => {});
+  }, () => {
+    if (!granted) screenEl.append(waiting);
+  });
 }
 
 window.addEventListener('unhandledrejection', (event) => showError(event.reason));

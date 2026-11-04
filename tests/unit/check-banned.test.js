@@ -66,6 +66,9 @@ test('CLI still scans when run through a symlinked directory', () => {
 const hitAt = (file, line, pattern) => [{ file, line, pattern }];
 const hit = (file, pattern) => hitAt(file, 1, pattern);
 
+// The attribute names h() refuses that take a URL, as setAttribute would be given them.
+const URL_ATTRS = ['href', 'src', 'srcset', 'action', 'formaction', 'formAction', 'ping', 'poster', 'background', 'xlink:href'];
+
 // [label, file, content, expected findings]
 const POSITIVE = [
   ...[
@@ -156,7 +159,32 @@ const POSITIVE = [
     { file: 'src/p.js', line: 1, pattern: 'srcdoc' }, { file: 'src/p.js', line: 1, pattern: 'URL property =' },
   ]],
   ['.href +=', 'src/p.js', 'link.href += q;', hit('src/p.js', 'URL property =')],
-  // Script elements in markup, SVG or code.
+  // URL-bearing attributes set by other routes: setAttribute, setAttributeNS, a bracketed
+  // property name, or Object.assign with an object literal.
+  ...URL_ATTRS.flatMap((name) => [
+    [`setAttribute('${name}'`, 'src/a.js', `el.setAttribute('${name}', u);`, hit('src/a.js', 'setAttribute URL')],
+    [`setAttribute("${name}"`, 'src/a.js', `el.setAttribute("${name}", u);`, hit('src/a.js', 'setAttribute URL')],
+    [`setAttributeNS(null, '${name}'`, 'src/a.js', `el.setAttributeNS(null, '${name}', u);`, hit('src/a.js', 'setAttributeNS URL')],
+    [`setAttributeNS(ns, "${name}"`, 'src/a.js', `el.setAttributeNS(ns, "${name}", u);`, hit('src/a.js', 'setAttributeNS URL')],
+    [`['${name}'] =`, 'src/a.js', `el['${name}'] = u;`, hit('src/a.js', 'URL property =')],
+    [`["${name}"]=`, 'src/a.js', `el["${name}"]=u`, hit('src/a.js', 'URL property =')],
+    [`Object.assign {${name}: u}`, 'src/a.js', `Object.assign(el, { '${name}': u });`, hit('src/a.js', 'Object.assign URL')],
+  ]),
+  ['setAttribute upper case', 'src/a.js', "el.setAttribute('HREF', u);", hit('src/a.js', 'setAttribute URL')],
+  ['setAttribute backtick', 'src/a.js', 'el.setAttribute(`src`, u);', hit('src/a.js', 'setAttribute URL')],
+  ['setAttribute spaced and split', 'src/a.js', "x;\nel.setAttribute (\n  'href',\n  u);", hitAt('src/a.js', 2, 'setAttribute URL')],
+  ['setAttributeNS prefixed name', 'src/a.js', "el.setAttributeNS(SVG_NS, 'svg:href', u);", hit('src/a.js', 'setAttributeNS URL')],
+  ['setAttributeNS split', 'src/a.js', "x;\nel.setAttributeNS(\n  XLINK,\n  'xlink:href', u);", hitAt('src/a.js', 2, 'setAttributeNS URL')],
+  ['[] += ', 'src/a.js', "el['href'] += q;", hit('src/a.js', 'URL property =')],
+  ['[ spaced ] =', 'src/a.js', "a[0][ 'formAction' ] ??= u;", hit('src/a.js', 'URL property =')],
+  ['[] = split', 'src/a.js', "x;\nel['src']\n  = u;", hitAt('src/a.js', 2, 'URL property =')],
+  ['Object.assign unquoted key', 'src/a.js', 'Object.assign(el, { href: u });', hit('src/a.js', 'Object.assign URL')],
+  ['Object.assign later key', 'src/a.js', "Object.assign(h('a'), { title: t, src: u });", hit('src/a.js', 'Object.assign URL')],
+  ['Object.assign shorthand', 'src/a.js', 'Object.assign(el, { href });', hit('src/a.js', 'Object.assign URL')],
+  ['Object.assign shorthand first', 'src/a.js', 'Object.assign(el, { ping, title });', hit('src/a.js', 'Object.assign URL')],
+  ['Object.assign computed key', 'src/a.js', "Object.assign(el, { ['poster']: u });", hit('src/a.js', 'Object.assign URL')],
+  ['Object . assign split', 'src/a.js', 'x;\nObject\n  .assign(el, {\n  srcset: u,\n});', hitAt('src/a.js', 2, 'Object.assign URL')],
+  ['Object.assign second source', 'src/a.js', 'Object.assign(el, { title: t }, { action: u });', hit('src/a.js', 'Object.assign URL')],
   ['<script in svg', 'favicon.svg', '<svg><script>alert(1)</script></svg>', hit('favicon.svg', '<script')],
   ['<SCRIPT in svg', 'favicon.svg', '<svg><SCRIPT href="x.js"/></svg>', hit('favicon.svg', '<script')],
   ['<svg:script', 'favicon.svg', '<svg:svg><svg:script>x</svg:script></svg:svg>', hit('favicon.svg', '<script')],
@@ -204,6 +232,29 @@ const NEGATIVE = [
   ['.source = x', 'src/n.js', 'r.source = x;'],
   ['.pinged = x', 'src/n.js', 'r.pinged = x;'],
   ['<scripts', 'src/n.js', "const t = '<scripts>';"],
+  // Near-misses for the attribute routes.
+  ["getAttribute('href')", 'src/n.js', "const u = el.getAttribute('href');"],
+  ['getAttribute("src")', 'src/n.js', 'const u = el.getAttribute("src");'],
+  ["hasAttribute('href')", 'src/n.js', "if (el.hasAttribute('href')) go();"],
+  ["removeAttribute('href')", 'src/n.js', "el.removeAttribute('href');"],
+  ["getAttributeNS(null, 'href')", 'src/n.js', "const u = el.getAttributeNS(null, 'href');"],
+  ["setAttribute('hreflang')", 'src/n.js', "el.setAttribute('hreflang', 'en');"],
+  ["setAttribute('data-href')", 'src/n.js', "el.setAttribute('data-href', x);"],
+  ["setAttribute('title', href)", 'src/n.js', "el.setAttribute('title', href);"],
+  ['setAttribute(key, value)', 'src/n.js', 'el.setAttribute(key, String(value));'],
+  ["setAttributeNS(null, 'hreflang')", 'src/n.js', "el.setAttributeNS(null, 'hreflang', 'en');"],
+  ["['href'] read", 'src/n.js', "const u = el['href'];"],
+  ["['href'] ===", 'src/n.js', "if (el['href'] === x) go();"],
+  ["['href'] <=", 'src/n.js', "if (el['href'] <= x) go();"],
+  ["['hrefs'] =", 'src/n.js', "el['hrefs'] = x;"],
+  ["['data-href'] =", 'src/n.js', "el['data-href'] = x;"],
+  ['Object.assign UI state', 'src/n.js', "Object.assign(ui, { moveId: x, moveTarget: '', moveError: '' });"],
+  ['Object.assign value named href', 'src/n.js', 'Object.assign(a, { title: href });'],
+  ['Object.assign hrefs key', 'src/n.js', 'Object.assign(a, { hrefs: x, srcs: y });'],
+  ['Object.assign href as call argument', 'src/n.js', 'Object.assign(a, { label: f(x, href) });'],
+  ['Object.assign no literal', 'src/n.js', 'Object.assign(store.state, emptyState());'],
+  ['Object.assign then a later literal', 'src/n.js', 'Object.assign(a, b);\nconst o = { href: u };'],
+  ['Object.assign target named href', 'src/n.js', 'Object.assign(href, b);'],
   ['</script> alone', 'favicon.svg', '<svg></script></svg>'],
 ];
 
