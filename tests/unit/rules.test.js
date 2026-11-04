@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, applyToState } from '../../src/changes.js';
-import { assignBuckets } from '../../src/buckets.js';
+import { assignBuckets, mergeBuckets } from '../../src/buckets.js';
 import { createAmountRule, resolveFlag, routeByRule } from '../../src/rules.js';
 
 let n = 0;
@@ -103,4 +103,28 @@ test('routeByRule', () => {
   assert.equal(routeByRule(rule, txn('2026-11-01', -299), counts), 'rule');
   assert.equal(routeByRule(rule, txn('2026-11-02', -299), counts), 'flag');
   assert.equal(routeByRule(rule, txn('2026-12-02', -299), counts), 'rule');
+});
+
+test('rule bucket merged into its source still routes without spurious flags', () => {
+  const { s, src } = setup();
+  const rule = s.rules[0];
+  applyToState(s, assignBuckets(s, [txn('2026-11-02', -999)]));
+  applyToState(s, mergeBuckets(s, src.id, [rule.bucketId], { displayName: 'PayPal' }));
+  assert.equal(s.rules[0].bucketId, src.id);
+  const rows = [txn('2026-11-08', -299)];
+  const c = assignBuckets(s, rows);
+  const t = c.put.transactions[0];
+  assert.equal(t.bucketId, src.id);
+  assert.equal(t.flaggedRuleId, undefined);
+});
+
+test('two merged rule buckets do not count each other', () => {
+  const { s, src } = setup();
+  applyToState(s, createAmountRule(s, { sourceBucketId: src.id, amountMinor: -999, expected: month, displayName: 'Other' }));
+  const [r1, r2] = s.rules;
+  applyToState(s, assignBuckets(s, [txn('2026-11-01', -299)]));
+  applyToState(s, mergeBuckets(s, r1.bucketId, [r2.bucketId], { displayName: 'Both' }));
+  const c = assignBuckets(s, [txn('2026-11-09', -999)]);
+  assert.equal(c.put.transactions[0].bucketId, r1.bucketId);
+  assert.equal(c.put.transactions[0].flaggedRuleId, undefined);
 });

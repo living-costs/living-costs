@@ -56,10 +56,11 @@ test('setBucketCategory sets and clears', () => {
 
 test('examples cap at 5 distinct', () => {
   const s = emptyState();
-  const rows = ['GREGGS', 'GREGGS', 'GREGGS  ', ...[1, 2, 3, 4, 5, 6].map((i) => `GREGGS ${'x'.repeat(i)}`)].map((r, i) => txn(`2026-09-0${i + 1}`, -1, r));
+  const rows = [1234, 5678, 9012, 3456, 7890, 1111, 2222].map((d, i) => txn(`2026-09-0${i + 1}`, -1, `TESCO STORES ${d}`));
   applyToState(s, assignBuckets(s, rows));
-  for (const b of s.buckets) assert.ok(b.exampleRawTexts.length <= 5);
-  assert.equal(new Set(s.buckets[0].exampleRawTexts).size, s.buckets[0].exampleRawTexts.length);
+  assert.equal(s.buckets.length, 1);
+  assert.equal(s.buckets[0].exampleRawTexts.length, 5);
+  assert.equal(new Set(s.buckets[0].exampleRawTexts).size, 5);
 });
 
 test('applyToState: upsert in place, del after put; combine concatenates', () => {

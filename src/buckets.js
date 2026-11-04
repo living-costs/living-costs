@@ -23,7 +23,8 @@ export function assignBuckets(state, incoming) {
   const counts = new Map();
   for (const rule of state.rules) {
     for (const t of state.transactions) {
-      if (t.bucketId !== rule.bucketId) continue;
+      if (t.bucketId !== rule.bucketId || t.amountMinor !== rule.amountMinor) continue;
+      if (normalise(t.rawText, t.rawType) !== rule.pattern) continue;
       const ck = `${rule.id}|${periodKey(t.date, rule.expected.period)}`;
       counts.set(ck, (counts.get(ck) ?? 0) + 1);
     }
