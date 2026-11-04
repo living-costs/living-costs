@@ -15,4 +15,5 @@ export default {
   relatedMaxShown: 3,
   repeatingMinCount: 3,       // "Repeating amounts": same amount at least N times
   firstTenKeys: true,         // number-key shortcuts on the categorise card
+  transactionsShown: 200,     // transaction lists: show at most the first N results
 };

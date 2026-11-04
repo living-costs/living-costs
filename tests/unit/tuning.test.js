@@ -5,7 +5,7 @@ import tuning from '../../src/tuning.js';
 const KEYS = [
   'windowMonths', 'fixedActiveMonths', 'variableRange', 'transactionMatchDays',
   'coverageGapDays', 'unusualMultiple', 'unusualMinMajor', 'relatedMinWordLength',
-  'relatedStopWords', 'relatedMaxShown', 'repeatingMinCount', 'firstTenKeys',
+  'relatedStopWords', 'relatedMaxShown', 'repeatingMinCount', 'firstTenKeys', 'transactionsShown',
 ];
 
 const isInt = (v) => Number.isInteger(v);
@@ -16,7 +16,7 @@ test('tuning has exactly the expected keys', () => {
 
 test('count-like values are integers of at least 1', () => {
   for (const key of ['windowMonths', 'fixedActiveMonths', 'transactionMatchDays',
-    'relatedMinWordLength', 'relatedMaxShown', 'repeatingMinCount']) {
+    'relatedMinWordLength', 'relatedMaxShown', 'repeatingMinCount', 'transactionsShown']) {
     assert.ok(isInt(tuning[key]) && tuning[key] >= 1, `${key} must be an integer >= 1`);
   }
 });

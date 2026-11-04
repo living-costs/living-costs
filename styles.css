@@ -74,7 +74,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .field { margin: 0.75rem 0; }
 .field > label { display: block; font-weight: 600; }
 .hint { margin: 0.25rem 0 0; }
-input[type="text"], select {
+input[type="text"], input[type="search"], input[type="date"], select {
   font: inherit;
   max-width: 100%;
   padding: 0.25rem 0.5rem;
@@ -83,7 +83,7 @@ input[type="text"], select {
   background: var(--surface);
   color: var(--text);
 }
-input[type="text"] { width: 20rem; }
+input[type="text"], input[type="search"] { width: 20rem; }
 input.short, input.date { width: 9rem; }
 input[type="file"] { max-width: 100%; }
 input[aria-invalid="true"] { border: 2px solid var(--error); }
@@ -118,3 +118,17 @@ th, td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.5rem; text-a
 .plain-list > li p { margin: 0.25rem 0; }
 .plain-list .row-actions { margin-top: 0.25rem; }
 .card-form { margin: 0.5rem 0; }
+
+/* Transactions */
+.filters { align-items: flex-start; }
+.counts-as { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+dialog {
+  max-width: min(40rem, calc(100vw - 2rem));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem;
+  background: var(--surface);
+  color: var(--text);
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+dialog h3 { margin-top: 0; }
