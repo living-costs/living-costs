@@ -14,9 +14,46 @@ test('parseAmount empty and null', () => {
 });
 
 test('parseAmount errors', () => {
-  for (const t of ['1,234.56', '£12', '(12.00)', '1.234', '1e3', '-', '.', '12.', 'abc']) {
+  for (const t of ['£12', '(12.00)', '1e3', '-', '.', '12.', 'abc']) {
     assert.ok('error' in parseAmount(t, 2), t);
   }
+});
+
+test('parseAmount UK thousands separators', () => {
+  const cases = [['-1,234.00', -123400], ['2,345.67', 234567], ['1,234,567', 123456700], ['+1,000.5', 100050],
+    ['1,234', 123400], ['999,999.99', 99999999]];
+  for (const [t, m] of cases) assert.deepEqual(parseAmount(t, 2), { minor: m }, t);
+});
+
+test('parseAmount continental decimal comma and dot grouping', () => {
+  const cases = [['1.234,56', 123456], ['-1.234,00', -123400], ['1.234.567', 123456700], ['1234,56', 123456],
+    ['12,34', 1234], [',51', 51], ['1.234', 123400], ['-0,05', -5]];
+  for (const [t, m] of cases) assert.deepEqual(parseAmount(t, 2), { minor: m }, t);
+});
+
+test('parseAmount rejects other separators and bad grouping', () => {
+  const bad = ['1 234.56', "1'234.56", '1,23.00', '12.34.56', '1,234,567.8.9', ',123', '1,,234', '1,234.567,89',
+    '1.234.56', '1,2345.00', '1234,567.00', '1.234,567', '12,', '1,234.', '1.234,', '1.2,34', '1,234,56'];
+  for (const t of bad) assert.ok('error' in parseAmount(t, 2), t);
+});
+
+test('parseAmount exponent 0 with separators', () => {
+  assert.deepEqual(parseAmount('1,234', 0), { minor: 1234 });
+  assert.deepEqual(parseAmount('1.234', 0), { minor: 1234 });
+  assert.deepEqual(parseAmount('1.234.567', 0), { minor: 1234567 });
+  assert.ok('error' in parseAmount('12,34', 0));
+  assert.ok('error' in parseAmount('1,234.5', 0));
+});
+
+test('parseAmount exponent 3: a lone 3-digit group is ambiguous', () => {
+  for (const t of ['1,234', '1.234', '-1,234', '12,345', '999.999']) {
+    const r = parseAmount(t, 3);
+    assert.ok('error' in r && /ambiguous/i.test(r.error), t);
+  }
+  assert.deepEqual(parseAmount('1,234.567', 3), { minor: 1234567 });
+  assert.deepEqual(parseAmount('1.234,567', 3), { minor: 1234567 });
+  assert.deepEqual(parseAmount('1,234,567', 3), { minor: 1234567000 });
+  assert.deepEqual(parseAmount('1,2345', 3), { error: 'Too many decimal places: 1,2345' });
 });
 
 test('parseAmount exponent 0', () => {

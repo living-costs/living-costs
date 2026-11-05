@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { headerSignature, missingColumns, applyMapping, mappingProblems } from '../../src/mapping.js';
+import { parseCsv } from '../../src/csv.js';
 
 /** @import {Mapping} from '../../src/types.js' */
 
@@ -38,7 +39,7 @@ test('debit/credit errors', () => {
     row(3, ['01/02/2025', 'B', '', '1.00', '2.00', '']),
     row(4, ['01/02/2025', 'C', '', '-1.00', '', '']),
     row(5, ['01/02/2025', 'D', '', '', '+2.00', '']),
-    row(6, ['01/02/2025', 'E', '', '1,000.00', '', '']),
+    row(6, ['01/02/2025', 'E', '', '1,00.00', '', '']),
   ], 'GBP');
   assert.deepEqual(r.rows, []);
   assert.deepEqual(r.errors.map((e) => e.rowNumber), [2, 3, 4, 5, 6]);
@@ -46,7 +47,23 @@ test('debit/credit errors', () => {
   assert.equal(r.errors[1].message, 'Both debit and credit');
   assert.match(r.errors[2].message, /-1\.00/);
   assert.match(r.errors[3].message, /\+2\.00/);
-  assert.match(r.errors[4].message, /1,000\.00/);
+  assert.match(r.errors[4].message, /1,00\.00/);
+});
+
+test('quoted amounts with thousands separators, from CSV text', () => {
+  const csv = parseCsv('Date,Desc,Amt\n01/02/2025,A,"-1,234.00"\n02/02/2025,B,"2,345.67"\n'
+    + '03/02/2025,C,"1.234,56"\n04/02/2025,D,"-1.234,00"\n');
+  /** @type {Mapping} */
+  const m = { headerSignature: headerSignature(csv.header), dateColumn: 'Date', dateFormat: 'DD/MM/YYYY',
+    descriptionColumn: 'Desc', amount: { single: 'Amt', signFlipped: false } };
+  const r = applyMapping(m, csv.header, csv.rows, 'GBP');
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.rows.map((x) => x.amountMinor), [-123400, 234567, 123456, -123400]);
+
+  const dcCsv = parseCsv('Date,Details,Type,Debit,Credit,Account\n01/02/2025,A,,"1,234.00",,\n02/02/2025,B,,,"1.234,56",\n');
+  const d = applyMapping(dc, dcCsv.header, dcCsv.rows, 'GBP');
+  assert.deepEqual(d.errors, []);
+  assert.deepEqual(d.rows.map((x) => x.amountMinor), [-123400, 123456]);
 });
 
 test('single amount, signed and flipped', () => {
