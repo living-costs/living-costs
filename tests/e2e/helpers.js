@@ -178,9 +178,18 @@ export const FIXTURE_ACCOUNTS = {
 /** The main screen's heading. */
 const screenH2 = (page) => page.locator('#screen h2');
 
+/**
+ * A nav button by its screen's label. Its accessible name may go on after the label, as in
+ * "Transfers, 3 suggestions" or "Categorise (at 56%)".
+ * @param {Page} page
+ * @param {string} name
+ */
+export const navButton = (page, name) => page.getByRole('navigation', { name: 'Main' })
+  .getByRole('button', { name: new RegExp(`^${name}(?:$|[ ,])`) });
+
 /** Go to a screen from the nav and wait for its heading. */
 export async function openScreen(page, name) {
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name, exact: true }).click();
+  await navButton(page, name).click();
   await expect(screenH2(page)).toHaveText(name);
 }
 

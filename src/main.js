@@ -5,7 +5,7 @@ import { openStore } from './store.js';
 import { h, clear } from './dom.js';
 import tuning from './tuning.js';
 import defaults from './default-categories.js';
-import { renderNav, markCurrent } from './ui/nav.js';
+import { renderNav, updateNav } from './ui/nav.js';
 import { whileSaving } from './ui/saving.js';
 import { keyed } from './ui/form.js';
 import * as help from './ui/help.js';
@@ -142,13 +142,13 @@ function createApp(store) {
 }
 
 /**
- * Render the current screen into #screen and mark it in the nav. Does not move focus.
+ * Render the current screen into #screen and refresh the nav. Does not move focus.
  * @param {App} app
  */
 function drawScreen(app) {
   clear(screenEl);
   SCREENS[app.session.screen](screenEl, app);
-  markCurrent(navEl, app.session.screen);
+  updateNav(navEl, app);
 }
 
 async function start() {

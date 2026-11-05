@@ -10,7 +10,7 @@
 import { analysisWindow } from './coverage.js';
 import { buildContext, resolve } from './resolve.js';
 import { monthOf } from './dates.js';
-import { divRound } from './money.js';
+import { divRound, soleCurrency } from './money.js';
 import { cmp, compareNames } from './order.js';
 
 /** @typedef {{windowMonths:number, coverageGapDays:number}} ProgressTuning */
@@ -68,16 +68,50 @@ export function bucketCounts(state, tuning) {
  */
 export function progress(state, tuning) {
   const ctx = buildContext(state);
+  const { categorisedAbs, totalAbs } = valueTotals(countedSpending(state, tuning, ctx), ctx);
+  return { categorisedAbs, totalAbs, bucketsLeft: cardQueue(state, tuning, new Set()).length };
+}
+
+/**
+ * Absolute value of some transactions' parts, and of the parts with a category.
+ * @param {Transaction[]} txns
+ * @param {ResolveContext} ctx
+ * @returns {{categorisedAbs:number, totalAbs:number}}
+ */
+function valueTotals(txns, ctx) {
   let categorisedAbs = 0;
   let totalAbs = 0;
-  for (const t of countedSpending(state, tuning, ctx)) {
+  for (const t of txns) {
     for (const part of resolve(t, ctx).parts) {
       const abs = Math.abs(part.amountMinor);
       totalAbs += abs;
       if (part.categoryId) categorisedAbs += abs;
     }
   }
-  return { categorisedAbs, totalAbs, bucketsLeft: cardQueue(state, tuning, new Set()).length };
+  return { categorisedAbs, totalAbs };
+}
+
+/**
+ * Whole percent categorised by value, rounded down so 100 means everything is categorised.
+ * @param {number} categorisedAbs
+ * @param {number} totalAbs more than zero
+ * @returns {number}
+ */
+export const percentDone = (categorisedAbs, totalAbs) => Math.floor((categorisedAbs * 100) / totalAbs);
+
+/**
+ * The percent categorised by value, or null when it would mislead: nothing is counted, or the
+ * counted transactions are in more than one currency (see the caveat at the top).
+ * @param {State} state
+ * @param {ProgressTuning} tuning
+ * @returns {number|null}
+ */
+export function categorisedPercent(state, tuning) {
+  const ctx = buildContext(state);
+  const txns = countedSpending(state, tuning, ctx);
+  if (!soleCurrency(txns)) return null;
+  const { categorisedAbs, totalAbs } = valueTotals(txns, ctx);
+  return totalAbs > 0 ? percentDone(categorisedAbs, totalAbs) : null;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../src/changes.js';
-import { countedTransactions, progress, cardQueue, monthlyFigure } from '../../src/progress.js';
+import { countedTransactions, progress, categorisedPercent, cardQueue, monthlyFigure } from '../../src/progress.js';
 import tuning from '../../src/tuning.js';
 
 let n = 0;
@@ -142,4 +142,18 @@ test('equal totals fall back to name order ignoring case, as the Buckets screen 
   s.transactions.push(txn('lower', -700, '2026-10-02'), txn('upper', -700, '2026-10-03'));
   // Code-unit order would put BAKERY before apple stall.
   assert.deepEqual(ids(cardQueue(s, tuning, new Set())).slice(-2), ['lower', 'upper']);
+});
+
+test('categorisedPercent is by value, rounded down, and null when it would mislead', () => {
+  const s = build();
+  // 350 of 260350 is 0.13%.
+  assert.equal(categorisedPercent(s, tuning), 0);
+  s.buckets.find((b) => b.id === 'salary').categoryId = 'eating';
+  // 250350 of 260350 is 96.2%.
+  assert.equal(categorisedPercent(s, tuning), 96);
+  s.buckets.find((b) => b.id === 'tesco').categoryId = 'groceries';
+  assert.equal(categorisedPercent(s, tuning), 100);
+  s.transactions.find((t) => t.bucketId === 'cafe').currency = 'EUR';
+  assert.equal(categorisedPercent(s, tuning), null);
+  assert.equal(categorisedPercent(emptyState(), tuning), null);
 });
