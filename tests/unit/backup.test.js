@@ -12,11 +12,12 @@ import {
 import { localDay } from '../../src/dates.js';
 import { fixtureState, wholeMonths } from './helpers/fixture-state.js';
 import { NOW, BANK_A, SAVINGS, CARD, BANK_B, pick, run } from './pipeline.js';
+import { prepareFiles } from '../../src/import.js';
 
 /** A small backup that uses every field of every backed-up type. */
 const base = () => ({
   app: 'living-costs',
-  schemaVersion: 1,
+  schemaVersion: 2,
   exportedAt: '2026-11-04T10:00:00.000Z',
   accounts: [
     {
@@ -92,7 +93,7 @@ test('buildBackup holds the hard-to-recreate work and leaves out transactions, b
   ]);
   assert.equal(b.app, 'living-costs');
   assert.equal(b.schemaVersion, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 1);
+  assert.equal(SCHEMA_VERSION, 2);
   assert.equal(b.exportedAt, NOW.toISOString());
   assert.ok(Array.isArray(b.overrides) && Array.isArray(b.transferPairs));
   assert.equal(b.transferPairs.length, s.transferPairs.size);
@@ -224,8 +225,12 @@ test('anything that is not a backup object from this app is rejected without thr
 });
 
 test('a newer schema version is refused', () => {
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 2 }), ['This backup is from a newer version of this app.']);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 3 }), ['This backup is from a newer version of this app.']);
   assert.deepEqual(errorsOf({ ...base(), schemaVersion: 99 }), ['This backup is from a newer version of this app.']);
+});
+
+test('an older schema version is refused', () => {
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 1 }), ["This backup is from an older version of this app and can't be restored."]);
 });
 
 test('a missing or malformed schema version is refused', () => {
@@ -479,5 +484,223 @@ test('messages never echo backup content', () => {
   b.rules[0].bucketId = evil;
   const errors = errorsOf(b);
   assert.ok(errors.length >= 3);
+  for (const e of errors) assert.doesNotMatch(e, /SECRET|img|evil/);
+});
+
+// --- Full backup (with transactions and batches) -----------------------------------------------
+
+/** base() plus two batches and three transactions that use every transaction and batch field. */
+const fullBase = () => ({
+  ...base(),
+  batches: [
+    {
+      id: 'k1', importId: 'i1', accountId: 'a1', fileName: 'current.csv', fileHash: 'h1',
+      importedAt: '2026-11-01T09:00:00.000Z', rowCount: 2, coversFrom: '2026-10-01', coversTo: '2026-10-31',
+    },
+    {
+      id: 'k2', importId: 'i1', accountId: 'a2', fileName: 'card.csv', fileHash: 'h2',
+      importedAt: '2026-11-01T09:00:00.000Z', rowCount: 1, coversFrom: '2026-10-01', coversTo: '2026-10-31',
+    },
+  ],
+  transactions: [
+    {
+      id: 't1', fingerprint: 'f1', accountId: 'a1', batchId: 'k1', date: '2026-10-02', amountMinor: -999,
+      currency: 'GBP', rawText: 'SHOP 123', rawType: 'DEB', bucketId: 'b1', flaggedRuleId: 'r1',
+    },
+    {
+      id: 't2', fingerprint: 'f2', accountId: 'a1', batchId: 'k1', date: '2026-10-03', amountMinor: -800,
+      currency: 'GBP', rawText: 'SHOP 456', bucketId: 'b3',
+    },
+    {
+      id: 't3', fingerprint: 'f3', accountId: 'a2', batchId: 'k2', date: '2026-10-04', amountMinor: 5000,
+      currency: 'GBP', rawText: 'CARD CO', bucketId: 'b2',
+    },
+  ],
+});
+
+test('buildBackup leaves out transactions and batches unless asked', async () => {
+  const s = await fixtureState();
+  const b = buildBackup(s, NOW);
+  assert.equal('transactions' in b, false);
+  assert.equal('batches' in b, false);
+  assert.equal('transactions' in buildBackup(s, NOW, { full: false }), false);
+});
+
+test('a full buildBackup also holds every transaction and batch', async () => {
+  const s = await fixtureState();
+  const b = buildBackup(s, NOW, { full: true });
+  assert.deepEqual(b.transactions, s.transactions);
+  assert.deepEqual(b.batches, s.batches);
+  assert.ok(s.transactions.length > 100 && s.batches.length > 1);
+  assert.doesNotMatch(JSON.stringify(b), /helpDismissed|lastBackupAt/);
+});
+
+test('a full backup has its own file name', () => {
+  const day = new Date(2026, 10, 4, 12, 0, 0);
+  assert.equal(backupFileName(day, true), 'living-costs-full-backup-2026-11-04.json');
+  assert.equal(backupFileName(day, false), 'living-costs-backup-2026-11-04.json');
+});
+
+test('full round trip: every field of every transaction and batch is copied', () => {
+  const b = fullBase();
+  const data = dataOf(JSON.parse(JSON.stringify(b)));
+  const { app: _app, ...rest } = b;
+  assert.deepEqual(data, rest);
+});
+
+test('a decisions-only backup validates without transaction or batch lists', () => {
+  const data = dataOf(base());
+  assert.equal('transactions' in data, false);
+  assert.equal('batches' in data, false);
+});
+
+test('restoring a full backup brings back the same app, with no re-import', async () => {
+  const before = await fixtureState();
+  const data = dataOf(JSON.parse(JSON.stringify(buildBackup(before, NOW, { full: true }))));
+  const after = emptyState();
+  applyToState(after, restoreChanges(data, after.settings));
+  assert.deepEqual(after.transactions, before.transactions);
+  assert.deepEqual(after.batches, before.batches);
+  const ctxB = buildContext(before);
+  const ctxA = buildContext(after);
+  assert.deepEqual(after.transactions.map((t) => resolve(t, ctxA)), before.transactions.map((t) => resolve(t, ctxB)));
+  assert.deepEqual(typicalMonth(after, tuning), typicalMonth(before, tuning));
+});
+
+test('after a full restore, importing an identical file is still blocked', async () => {
+  const before = await fixtureState();
+  const data = dataOf(JSON.parse(JSON.stringify(buildBackup(before, NOW, { full: true }))));
+  const after = emptyState();
+  applyToState(after, restoreChanges(data, after.settings));
+  const { blocked, files } = await prepareFiles(after, [pick(CARD)]);
+  assert.equal(files.length, 0);
+  assert.deepEqual(blocked.map((x) => x.name), [CARD]);
+});
+
+test('restoreChanges for a decisions-only backup writes no transactions or batches', () => {
+  const c = restoreChanges(dataOf(base()), emptyState().settings);
+  assert.equal(c.put?.transactions, undefined);
+  assert.equal(c.put?.batches, undefined);
+});
+
+test('a full backup needs both lists, not one', () => {
+  const { batches: _b, ...noBatches } = fullBase();
+  assert.deepEqual(errorsOf(noBatches), ['The backup has no list of batches.']);
+  const { transactions: _t, ...noTxns } = fullBase();
+  assert.deepEqual(errorsOf(noTxns), ['The backup has no list of transactions.']);
+  assert.deepEqual(errorsOf({ ...fullBase(), transactions: {} }), ['The backup has no list of transactions.']);
+});
+
+test('transaction and batch fields are checked field by field', () => {
+  const b = /** @type {any} */ (fullBase());
+  b.batches[0].importId = '';
+  b.batches[0].fileName = 3;
+  b.batches[0].fileHash = null;
+  b.batches[0].importedAt = '2026-11-01';
+  b.batches[1].rowCount = 0;
+  b.batches[1].coversFrom = '2026-02-30';
+  b.batches[1].coversTo = '31/10/2026';
+  b.transactions[0].date = '2026-13-01';
+  b.transactions[0].amountMinor = -9.99;
+  b.transactions[0].rawText = 5;
+  b.transactions[0].rawType = 7;
+  b.transactions[1].fingerprint = '';
+  b.transactions[1].currency = 'gbp';
+  b.transactions[2].flaggedRuleId = '';
+  assert.deepEqual(errorsOf(b), [
+    'Batch 1 has a missing or invalid import ID.',
+    'Batch 1 has a missing or invalid file name.',
+    'Batch 1 has a missing or invalid file hash.',
+    'Batch 1 has a missing or invalid import time.',
+    'Batch 2 has a missing or invalid row count.',
+    'Batch 2 has a missing or invalid covered period.',
+    'Transaction 1 has a missing or invalid date.',
+    'Transaction 1 has a missing or invalid amount.',
+    'Transaction 1 has a missing or invalid description.',
+    'Transaction 1 has a missing or invalid type.',
+    'Transaction 2 has a missing or invalid fingerprint.',
+    'Transaction 2 has a missing or invalid currency.',
+    'Transaction 3 has a missing or invalid flagged rule.',
+  ]);
+});
+
+test("a batch's covered period must not end before it starts", () => {
+  const b = fullBase();
+  b.batches[0].coversFrom = '2026-11-01';
+  assert.deepEqual(errorsOf(b), ['Batch 1 has a missing or invalid covered period.']);
+});
+
+test('duplicate transaction and batch IDs are refused, but a repeated fingerprint is allowed', () => {
+  const b = /** @type {any} */ (fullBase());
+  b.batches.push({ ...b.batches[0] });
+  b.transactions[1].id = 't1';
+  assert.deepEqual(errorsOf(b), [
+    'Batch 3 has the same ID as batch 1.',
+    'Transaction 2 has the same ID as transaction 1.',
+  ]);
+  const c = fullBase();
+  c.transactions[1].fingerprint = 'f1';
+  dataOf(c);
+});
+
+test('every transaction and batch reference must resolve and agree', () => {
+  const b = /** @type {any} */ (fullBase());
+  b.batches[1].accountId = 'gone';
+  b.transactions[0].bucketId = 'gone';
+  b.transactions[0].flaggedRuleId = 'gone';
+  b.transactions[1].accountId = 'a2';
+  b.transactions[2].batchId = 'gone';
+  assert.deepEqual(errorsOf(b), [
+    'Batch 2 points at a missing account.',
+    'Transaction 1 points at a missing bucket.',
+    'Transaction 1 points at a missing rule.',
+    'Transaction 2 is in a different account from its batch.',
+    'Transaction 3 points at a missing batch.',
+    'Batch 2 has 1 row, but the backup holds 0 transactions for it.',
+  ]);
+  const c = /** @type {any} */ (fullBase());
+  c.transactions[2].accountId = 'gone';
+  c.batches[1].accountId = 'gone';
+  assert.deepEqual(errorsOf(c), [
+    'Batch 2 points at a missing account.',
+    'Transaction 3 points at a missing account.',
+  ]);
+});
+
+test("a batch's row count must match its transactions", () => {
+  const b = fullBase();
+  b.transactions[2].batchId = 'k1';
+  b.transactions[2].accountId = 'a1';
+  assert.deepEqual(errorsOf(b), [
+    'Batch 1 has 2 rows, but the backup holds 3 transactions for it.',
+    'Batch 2 has 1 row, but the backup holds 0 transactions for it.',
+  ]);
+  const c = fullBase();
+  c.batches[0].rowCount = 5;
+  assert.deepEqual(errorsOf(c), ['Batch 1 has 5 rows, but the backup holds 2 transactions for it.']);
+});
+
+test("a transaction's currency must match its account's", () => {
+  const b = fullBase();
+  b.transactions[0].currency = 'EUR';
+  assert.deepEqual(errorsOf(b), ["Transaction 1 has a different currency from its account."]);
+});
+
+test('unknown keys are dropped from transactions and batches', () => {
+  const b = /** @type {any} */ (fullBase());
+  b.batches[0].extra = 1;
+  b.transactions[0].extra = 1;
+  assert.doesNotMatch(JSON.stringify(dataOf(b)), /extra/);
+});
+
+test('transaction and batch messages never echo backup content', () => {
+  const b = /** @type {any} */ (fullBase());
+  const evil = '<img src=x onerror=alert(1)>SECRET MERCHANT';
+  b.transactions[0].bucketId = evil;
+  b.transactions[1].batchId = evil;
+  b.transactions[2].rawText = { evil };
+  b.batches[0].fileName = { evil };
+  const errors = errorsOf(b);
+  assert.ok(errors.length >= 4);
   for (const e of errors) assert.doesNotMatch(e, /SECRET|img|evil/);
 });

@@ -345,8 +345,9 @@ Category totals are net of refunds. Each type is worked out as follows (Claude's
 As in `CLAUDE.md`, with these additions:
 
 - **Contents:** accounts and mappings, buckets, rules (including amount rules), categories, `offeredDefaultIds`, transfer decisions, and all fingerprint-keyed overrides: category moves, splits, dismissed unusual-amount flags, and decisions on flagged amount-rule rows.
-- **Not included:** transactions and batches. The user re-imports the original CSVs, and fingerprints reattach every decision.
-- **Restore:** validates the schema version and structure first. It then **replaces** all data after an explicit confirmation (Claude's call: no merging).
+- **Transactions and batches (changed 2026-11-05, owner's decision):** left out by default. The user re-imports the original CSVs, and fingerprints reattach every decision. Ticking **Include transactions** (unticked each time the screen opens) adds both lists, saved as `living-costs-full-backup-YYYY-MM-DD.json`. They're restored exactly as saved, without re-bucketing. Validation also checks that every transaction's account, batch, bucket and flagged rule exist, that it's in its batch's account and currency, and that each batch's row count matches the transactions it holds. Repeated fingerprints are allowed, because overlapping imports can legitimately repeat one.
+- **Schema version 2** is the only version accepted (Claude's call: no backups existed before it).
+- **Restore:** validates the schema version and structure first. It then **replaces** all data after an explicit confirmation (Claude's call: no merging). The confirmation and the notice afterwards say whether the transactions come back or the statements need importing again.
 - **Saving:** uses `showSaveFilePicker()`, with a download as the fallback. The UI shows the last backup date and warns that a Google Drive copy isn't encrypted and can include dates, amounts and descriptions.
 
 ## Screens
@@ -385,7 +386,7 @@ Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gi
 - **Real statements stay local.** They live in `fixtures/`, which is gitignored. With the owner's consent, Claude may read them to learn formats. Nothing from them (rows, names, merchants, amounts, account numbers or filenames) may appear in code, tests, docs or commits.
 - **`.gitignore`** blocks real downloads by pattern (Claude's call):
   - `*.csv` everywhere except `tests/fixtures/*.csv`
-  - backup files, `living-costs-backup*.json`
+  - backup files, `living-costs-backup*.json` and `living-costs-full-backup*.json`
 
   This covers the four real export naming styles: account-number-and-date names, card-digits-and-date names, a generic `Statements.csv`, and `Transactions_Export_<Mon>_<YYYY>_<digits>.csv`.
 - **Committed fixtures are synthesized from scratch** in `tests/fixtures/`. All use `DD/MM/YYYY` dates. Together they reproduce every quirk of the four real formats:

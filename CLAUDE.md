@@ -146,12 +146,13 @@ Exclude incomplete months from calculations.
 
 ### Backup
 
-- Back up only the work that is hard to recreate: account setup and CSV mappings, buckets, amount rules, categories and offered defaults, transfer decisions, and fingerprint-keyed overrides, including splits and flag decisions.
-- Everything else can be rebuilt by re-importing the original CSVs.
+- Every backup holds the work that is hard to recreate: account setup and CSV mappings, buckets, amount rules, categories and offered defaults, transfer decisions, and fingerprint-keyed overrides, including splits and flag decisions.
+- An "Include transactions" checkbox, unticked by default, also saves every transaction and import batch, in a separate `living-costs-full-backup-*.json` file. Restoring that needs no re-import, and undo by batch and the identical-file block still work.
+- Without the tick, transactions and batches are rebuilt by re-importing the original CSVs.
 - Use plain JSON with a schema version.
 - Save with `showSaveFilePicker()`, falling back to a normal download. Chrome may block a Google Drive folder under `~/Library/CloudStorage`, so test this on macOS.
 - Show the date of the last backup in the UI.
-- Tell users that a backup saved to Google Drive is unencrypted and may include dates, amounts, transaction descriptions, and account details.
+- Tell users that a backup saved to Google Drive is unencrypted and may include dates, amounts, transaction descriptions, and account details. With transactions included, say it holds every imported transaction.
 
 ## Build order
 
