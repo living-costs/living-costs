@@ -7,7 +7,7 @@
 import { h } from '../dom.js';
 import { buildContext } from '../resolve.js';
 import { searchTransactions } from '../search.js';
-import { orderedCategories } from '../categories.js';
+import { sortedCategories } from '../categories.js';
 import { formatMoney } from '../money.js';
 import { cmp, compareNames } from '../order.js';
 import { formatDate } from '../dates.js';
@@ -103,7 +103,7 @@ function drawResults(app, results, countEl, v, fixed, prefix) {
     return;
   }
   const ctx = buildContext(state);
-  const cats = orderedCategories(state);
+  const cats = sortedCategories(state);
   const accounts = new Map(state.accounts.map((a) => [a.id, a.name]));
   /** @param {Transaction} t */
   const row = (t) => h('tr', null,

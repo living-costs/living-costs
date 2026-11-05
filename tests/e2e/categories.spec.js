@@ -215,6 +215,10 @@ test('deleting a category in use asks where its items go', async ({ page }) => {
   await expect(page.getByText('Gifts is used by 1 bucket and 2 transactions.')).toBeVisible();
   const target = page.getByLabel('Move its items to');
   await expect(target.locator('option', { hasText: /^Gifts$/ })).toHaveCount(0);
+  const names = (await readStore(page, 'categories')).map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b, 'en-GB', { sensitivity: 'base' }))
+    .filter((n) => n !== 'Gifts');
+  await expect(target.locator('option')).toHaveText(['Choose a category', ...names]);
   await expectNoAxeViolations(page);
 
   // Cancel returns focus to the row's Delete button.

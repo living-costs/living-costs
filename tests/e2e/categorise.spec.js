@@ -217,6 +217,9 @@ test('unusual: move to another category', async ({ page }) => {
   await skipToCard(page, 'TESCO STORES');
   const row = section(page, 'Unusual amounts').getByRole('listitem').filter({ hasText: '£650.00' });
   await row.getByRole('button', { name: 'Move to another category…' }).click();
+  const names = (await readStore(page, 'categories')).map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b, 'en-GB', { sensitivity: 'base' }));
+  await expect(row.getByLabel('Move to').locator('option')).toHaveText(['Choose a category', ...names]);
   await row.getByLabel('Move to').selectOption({ label: 'Big one-offs' });
   await row.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(section(page, 'Unusual amounts')).toHaveCount(0);
