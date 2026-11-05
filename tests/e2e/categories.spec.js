@@ -75,13 +75,14 @@ test('lists the defaults in order', async ({ page }) => {
 
 test('explains each kind and budget type, with thresholds from tuning', async ({ page }) => {
   await openCategories(page);
-  const kinds = page.getByRole('table', { name: 'Kinds' });
-  await expect(kinds.getByRole('rowheader')).toHaveText(['Spend', 'Income', 'Contribution', 'Transfer', 'Ignore']);
-  const types = page.getByRole('table', { name: /^Budget types/ });
-  await expect(types.getByRole('rowheader')).toHaveText(['Fixed', 'Variable', 'Annual', 'One-off']);
-  await expect(types.getByRole('row', { name: /^Fixed/ })).toContainText('in the last 2 complete months');
-  await expect(types.getByRole('row', { name: /^Variable/ })).toContainText('between percentiles 25 and 75');
-  // Both tables sit inside the screen's help block, under its one bar.
+  const kinds = page.getByRole('region', { name: 'Kinds' });
+  await expect(kinds.getByRole('term')).toHaveText(['Spend', 'Income', 'Contribution', 'Transfer', 'Ignore']);
+  const types = page.getByRole('region', { name: /^Budget types/ });
+  await expect(types.getByRole('heading')).toHaveAccessibleName('Budget types Spend, Income and Contribution only');
+  await expect(types.getByRole('term')).toHaveText(['Fixed', 'Variable', 'Annual', 'One-off']);
+  await expect(types.getByRole('definition').nth(0)).toContainText('in the last 2 complete months');
+  await expect(types.getByRole('definition').nth(1)).toContainText('between percentiles 25 and 75');
+  // Both panels sit inside the screen's help block, under its one bar.
   await expect(page.locator('.help-group .guide')).toHaveCount(2);
   await expectNoAxeViolations(page);
 });
