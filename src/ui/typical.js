@@ -18,7 +18,7 @@ import { help, plural } from './form.js';
  */
 export function render(root, app) {
   const state = app.store.state;
-  const heading = h('h2', { tabindex: '-1' }, 'Typical month');
+  const heading = h('h2', { tabindex: '-1', class: 'visually-hidden' }, 'Typical month');
   if (state.transactions.length === 0) {
     root.append(heading,
       h('p', null, 'Nothing to show yet. Add your statements on the Accounts screen first.'),

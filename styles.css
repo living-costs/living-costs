@@ -12,6 +12,8 @@
   --focus: #0b3d91;
   --error: #a4000f;
   --tab-border: #8c8c86;
+  --tab-back: #deded8;
+  --tab-back-hover: #e9e9e4;
   --attention-bg: #ffd84d;
   --attention-text: #1a1a1a;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -61,18 +63,31 @@ header nav {
 nav button { position: relative; }
 nav button:focus-visible { z-index: 2; }
 
+/* Folder tabs. The tabs behind are darker and shorter, with the header's bottom line in front
+   of them. The current tab is taller, the page colour, and overlaps that line to join the page. */
+.nav-tabs { align-items: flex-end; }
 .nav-tabs button {
   padding: 0.25rem 1.25rem;
   border: 1px solid var(--tab-border);
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
-  margin-bottom: -2px;
-  background: var(--bg);
+  background: var(--tab-back);
   color: var(--accent);
-  min-height: 44px;
+  min-height: 40px;
+  box-shadow: inset 0 -6px 6px -6px rgb(0 0 0 / 25%);
 }
-.nav-tabs button:hover { background: var(--intro-bg); }
-.nav-tabs button[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); font-weight: bold; }
+.nav-tabs button:hover { background: var(--tab-back-hover); }
+.nav-tabs button[aria-current="page"] {
+  z-index: 1;
+  border: 2px solid var(--accent);
+  border-bottom: 0;
+  margin-bottom: -2px;
+  padding-bottom: calc(0.25rem + 2px);
+  background: var(--bg);
+  min-height: 48px;
+  box-shadow: none;
+  font-weight: bold;
+}
 .nav-tabs .pct { font-weight: normal; font-size: 0.875rem; }
 
 .nav-group { display: flex; flex-direction: column; gap: 2px; }
