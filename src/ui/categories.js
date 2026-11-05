@@ -6,7 +6,7 @@
 import { h } from '../dom.js';
 import { whileSaving } from './saving.js';
 import {
-  KIND_LABELS, BUDGET_LABELS, focusKey, plural, valueOf, field, options, emptyDraft, categoryForm,
+  KIND_LABELS, BUDGET_LABELS, focusKey, plural, valueOf, field, help, options, emptyDraft, categoryForm,
 } from './form.js';
 import {
   isBudgeted, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
@@ -58,7 +58,7 @@ export function render(root, app) {
 
   root.append(
     h('h2', { tabindex: '-1' }, 'Categories'),
-    h('p', null, 'Kind decides how a category counts. Budget type decides how it shows in your typical month.'));
+    help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'));
   if (ui.rowError) root.append(h('p', { class: 'error', role: 'alert' }, ui.rowError));
   root.append(table(app, list));
   if (deleting) root.append(deletePanel(app, deleting, list));

@@ -19,7 +19,7 @@ import { cmp, compareNames } from '../order.js';
 import { analysisWindow } from '../coverage.js';
 import { formatMonth } from '../dates.js';
 import { whileSaving, queueSave } from './saving.js';
-import { field, focusKey, plural, valueOf, showModalWhenConnected } from './form.js';
+import { field, focusKey, help, plural, valueOf, showModalWhenConnected } from './form.js';
 import { renderTransactionList } from './transactions.js';
 
 /** @typedef {'total'|'name'|'count'} SortKey */
@@ -102,8 +102,9 @@ export function render(root, app) {
   if (months.length > 0) {
     const first = formatMonth(months[0]);
     const last = formatMonth(months[months.length - 1]);
-    root.append(h('p', { id: 'buckets-window', class: 'muted' },
-      `Totals and counts cover ${first === last ? first : `${first} to ${last}`}. Opening a bucket shows all its transactions.`));
+    root.append(
+      help('Opening a bucket shows all its transactions.'),
+      h('p', { id: 'buckets-window' }, `Totals and counts cover ${first === last ? first : `${first} to ${last}`}.`));
   }
   const results = h('div');
   const update = () => drawList(app, results, rows, cats);
@@ -223,7 +224,7 @@ function mergeBar(app) {
       type: 'button', disabled: n < 2, 'aria-describedby': 'buckets-selected', 'data-focus-key': 'buckets-merge',
       onClick: () => startMerge(app),
     }, 'Merge selected…'),
-    h('p', { id: 'buckets-selected', class: 'muted', 'aria-live': 'polite' }, `${plural(n, 'bucket', 'buckets')} selected`));
+    h('p', { id: 'buckets-selected', 'aria-live': 'polite' }, `${plural(n, 'bucket', 'buckets')} selected`));
 }
 
 /**

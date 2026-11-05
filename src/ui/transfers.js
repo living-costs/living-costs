@@ -16,7 +16,7 @@ import { formatMoney, currenciesOf } from '../money.js';
 import { cmp, compareNames } from '../order.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
-import { field, focusKey, keyed, plural, valueOf } from './form.js';
+import { field, focusKey, help, keyed, plural, valueOf } from './form.js';
 
 /** The Add a card you don't import form. Not saved; it survives redraws until reset(). */
 const form = {
@@ -44,7 +44,7 @@ export function reset() {
 export function render(root, app) {
   root.append(
     h('h2', { tabindex: '-1' }, 'Transfers'),
-    h('p', null, 'Money moving between your own accounts is neither spending nor income. Confirmed transfers are left out of every total.'),
+    help('Money moving between your own accounts is neither spending nor income. Confirmed transfers are left out of every total.'),
     suggestedSection(app),
     decidedSection(app, {
       status: 'confirmed', id: 'confirmed', title: 'Confirmed transfers',
@@ -117,7 +117,8 @@ const suggestionOrder = (/** @type {Suggestion} */ x, /** @type {Suggestion} */ 
 function suggestedSection(app) {
   const state = app.store.state;
   const heading = h('h3', { id: 'suggested-heading', tabindex: '-1', 'data-focus-key': 'suggested-heading' }, 'Suggested transfers');
-  const section = h('section', { 'aria-labelledby': 'suggested-heading' }, heading);
+  const section = h('section', { 'aria-labelledby': 'suggested-heading' }, heading,
+    help(`A suggestion is the same amount out of one account and into another within ${plural(app.tuning.transactionMatchDays, 'day', 'days')}.`));
   const shown = suggestPairs(state, app.tuning).sort(suggestionOrder);
   if (shown.length === 0) {
     section.append(h('p', null, state.transactions.length === 0
@@ -142,8 +143,7 @@ function suggestedSection(app) {
   }, 'Confirm all');
 
   section.append(
-    h('p', { id: 'suggested-count', class: 'muted' },
-      `${plural(shown.length, 'pair', 'pairs')}: the same amount out of one account and into another within ${plural(app.tuning.transactionMatchDays, 'day', 'days')}.`),
+    h('p', { id: 'suggested-count' }, `${plural(shown.length, 'pair', 'pairs')}.`),
     h('div', { class: 'actions' }, all),
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': 'suggested-heading' },
       h('table', { 'aria-labelledby': 'suggested-heading' },
@@ -181,7 +181,7 @@ function decidedSection(app, { status, id, title, intro }) {
   const state = app.store.state;
   const headingId = `${id}-heading`;
   const heading = h('h3', { id: headingId, tabindex: '-1', 'data-focus-key': headingId }, title);
-  const section = h('section', { 'aria-labelledby': headingId }, heading);
+  const section = h('section', { 'aria-labelledby': headingId }, heading, help(intro));
   const byFingerprint = new Map(state.transactions.map((t) => [t.fingerprint, t]));
   /** @type {{pair: TransferPair, a: Transaction|undefined, b: Transaction|undefined, date: string}[]} */
   const rows = [...state.transferPairs.values()].filter((p) => p.status === status).map((pair) => {
@@ -196,7 +196,7 @@ function decidedSection(app, { status, id, title, intro }) {
   const accounts = new Map(state.accounts.map((a) => [a.id, a.name]));
   const keys = rows.map((r) => `transfer-undo-${r.pair.key}`);
   section.append(
-    h('p', { class: 'muted' }, `${plural(rows.length, 'pair', 'pairs')}. ${intro}`),
+    h('p', null, `${plural(rows.length, 'pair', 'pairs')}.`),
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': headingId },
       h('table', { 'aria-labelledby': headingId },
         h('thead', null, headerRow('Undo')),
@@ -225,7 +225,7 @@ function cardsSection(app) {
   const state = app.store.state;
   const section = h('section', { 'aria-labelledby': 'cards-heading' },
     h('h3', { id: 'cards-heading', tabindex: '-1', 'data-focus-key': 'cards-heading' }, "Cards you don't import"),
-    h('p', null, `If you repay a card whose statements you don't import, its repayments count as spending in a "(not itemised)" category. `
+    help(`If you repay a card whose statements you don't import, its repayments count as spending in a "(not itemised)" category. `
       + 'Import its statements into it later, and confirm the repayments as transfers, to see what you spent instead.'));
   const buckets = new Map(state.buckets.map((b) => [b.id, b]));
   const placeholders = state.accounts.filter((a) => a.kind === 'placeholder');
@@ -303,6 +303,6 @@ function addCardForm(app) {
   field('Card name', nameInput, { error: form.errors.name }),
   h('div', { class: 'actions' },
     h('button', { type: 'submit', 'data-saves': true, 'data-focus-key': 'card-add' }, 'Add card')),
-  h('p', { role: 'status', class: 'muted' }, form.status));
+  h('p', { role: 'status' }, form.status));
   return el;
 }

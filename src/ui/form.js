@@ -53,6 +53,15 @@ export function showModalWhenConnected(dialog) {
   if (dialog.isConnected) show(); else queueMicrotask(show);
 }
 
+/**
+ * Fixed text that explains how a screen or control works, styled apart from status text (text
+ * about the user's data, such as counts), which stays a plain paragraph.
+ * @param {string} text
+ * @param {Record<string, unknown>} [props]
+ * @returns {HTMLElement}
+ */
+export const help = (text, props = {}) => h('p', { ...props, class: 'help' }, text);
+
 let seq = 0;
 
 /**
@@ -66,12 +75,27 @@ let seq = 0;
 export function field(label, control, { hint, error } = {}) {
   const id = `f${++seq}`;
   control.id = id;
-  const hintEl = hint ? h('p', { class: 'muted hint', id: `${id}-hint` }, hint) : null;
+  const hintEl = hint ? help(hint, { id: `${id}-hint` }) : null;
   const errorEl = error ? h('p', { class: 'error', id: `${id}-error` }, error) : null;
   const described = [errorEl?.id, hintEl?.id].filter(Boolean).join(' ');
   if (described) control.setAttribute('aria-describedby', described);
   if (error) control.setAttribute('aria-invalid', 'true');
   return h('div', { class: 'field' }, h('label', { for: id }, label), control, hintEl, errorEl);
+}
+
+/**
+ * A checkbox with its label beside it, and an optional hint below the label linked with
+ * aria-describedby.
+ * @param {string} label
+ * @param {HTMLElement} checkbox
+ * @param {{hint?: string}} [extra]
+ * @returns {HTMLElement}
+ */
+export function checkboxField(label, checkbox, { hint } = {}) {
+  const id = `f${++seq}`;
+  const hintEl = hint ? help(hint, { id: `${id}-hint` }) : null;
+  if (hintEl) checkbox.setAttribute('aria-describedby', hintEl.id);
+  return h('div', { class: 'field' }, h('label', { class: 'choice' }, checkbox, label), hintEl);
 }
 
 /**

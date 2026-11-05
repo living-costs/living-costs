@@ -57,9 +57,10 @@ test.afterEach(async ({ page }) => {
 });
 
 test('filter and search', async ({ page }) => {
-  // The window the totals cover, and that a drill-in shows everything.
+  // The window the totals cover (status), and that a drill-in shows everything (help).
   await expect(page.locator('#buckets-window')).toHaveText(
-    /^Totals and counts cover [A-Z][a-z]{2} \d{4}( to [A-Z][a-z]{2} \d{4})?\. Opening a bucket shows all its transactions\.$/);
+    /^Totals and counts cover [A-Z][a-z]{2} \d{4}( to [A-Z][a-z]{2} \d{4})?\.$/);
+  await expect(page.locator('.help', { hasText: 'Opening a bucket shows all its transactions.' })).toBeVisible();
   const buckets = await readStore(page, 'buckets');
   // One header row plus one row per bucket.
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(buckets.length + 1);

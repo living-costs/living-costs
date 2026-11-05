@@ -11,7 +11,7 @@ import { formatDate, formatMonth } from '../dates.js';
 import { renderImport, importActive } from './import.js';
 import { whileSaving, isSaving } from './saving.js';
 import { cmp } from '../order.js';
-import { plural } from './form.js';
+import { help, plural } from './form.js';
 
 const KIND_LABELS = { bank: 'Bank', card: 'Card', placeholder: 'Card (not imported)' };
 
@@ -132,7 +132,7 @@ function byMonth(app) {
     return section;
   }
   section.append(
-    h('p', { class: 'muted' }, 'Each month shows whether your statements cover it, and how many transactions it has.'),
+    help('Each month shows whether your statements cover it, and how many transactions it has.'),
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': 'by-month-heading' },
       h('table', { 'aria-labelledby': 'by-month-heading' },
         h('thead', null, h('tr', null,
