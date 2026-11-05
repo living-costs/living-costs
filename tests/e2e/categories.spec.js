@@ -73,6 +73,18 @@ test('lists the defaults in order', async ({ page }) => {
   await expectNoAxeViolations(page);
 });
 
+test('selects draw their own arrow with room beside the border', async ({ page }) => {
+  // Chrome's native arrow sits against the border.
+  await openCategories(page);
+  const style = await page.getByLabel('Kind for Insurance').evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { appearance: s.appearance, image: s.backgroundImage, paddingRight: parseFloat(s.paddingRight) };
+  });
+  expect(style.appearance).toBe('none');
+  expect(style.image).toContain('linear-gradient');
+  expect(style.paddingRight).toBeGreaterThanOrEqual(32);
+});
+
 test('create, retype and delete', async ({ page }) => {
   await openCategories(page);
 
