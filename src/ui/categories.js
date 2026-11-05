@@ -58,7 +58,6 @@ export function render(root, app) {
 
   root.append(
     h('h2', { tabindex: '-1' }, 'Categories'),
-    help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'),
     guide(app));
   if (ui.rowError) root.append(h('p', { class: 'error', role: 'alert' }, ui.rowError));
   root.append(table(app, list));
@@ -81,14 +80,15 @@ function guideTable(caption, heading, rows) {
 }
 
 /**
- * What each kind and budget type means. Thresholds come from tuning, so the text stays true
- * when the owner changes them.
+ * The screen's help: one line, then what each kind and budget type means, all under one help
+ * bar. Thresholds come from tuning, so the text stays true when the owner changes them.
  * @param {App} app
  * @returns {HTMLElement}
  */
 function guide(app) {
   const { fixedActiveMonths, variableRange: [lo, hi] } = app.tuning;
-  return h('div', { class: 'guides' },
+  return h('div', { class: 'help-group' },
+    help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'),
     guideTable('Kinds', 'Kind', [
       [KIND_LABELS.spend, 'Day-to-day living costs. Refunds reduce them.'],
       [KIND_LABELS.income, 'Salary and other earnings. Left over is income minus your share of living costs.'],
