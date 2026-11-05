@@ -58,11 +58,50 @@ export function render(root, app) {
 
   root.append(
     h('h2', { tabindex: '-1' }, 'Categories'),
-    help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'));
+    help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'),
+    guide(app));
   if (ui.rowError) root.append(h('p', { class: 'error', role: 'alert' }, ui.rowError));
   root.append(table(app, list));
   if (deleting) root.append(deletePanel(app, deleting, list));
   root.append(newForm(app));
+}
+
+/**
+ * A two-column table of help text: each row is a name and what it means.
+ * @param {string} caption
+ * @param {string} heading
+ * @param {[string, string][]} rows
+ * @returns {HTMLElement}
+ */
+function guideTable(caption, heading, rows) {
+  return h('table', { class: 'guide' },
+    h('caption', null, caption),
+    h('thead', null, h('tr', null, h('th', { scope: 'col' }, heading), h('th', { scope: 'col' }, 'Meaning'))),
+    h('tbody', null, ...rows.map(([name, text]) => h('tr', null, h('th', { scope: 'row' }, name), h('td', null, text)))));
+}
+
+/**
+ * What each kind and budget type means. Thresholds come from tuning, so the text stays true
+ * when the owner changes them.
+ * @param {App} app
+ * @returns {HTMLElement}
+ */
+function guide(app) {
+  const { fixedActiveMonths, variableRange: [lo, hi] } = app.tuning;
+  return h('div', { class: 'guides' },
+    guideTable('Kinds', 'Kind', [
+      [KIND_LABELS.spend, 'Day-to-day living costs. Refunds reduce them.'],
+      [KIND_LABELS.income, 'Salary and other earnings. Left over is income minus your share of living costs.'],
+      [KIND_LABELS.contribution, 'Money someone else pays in towards shared costs. It reduces your share of living costs and is not income.'],
+      [KIND_LABELS.transfer, 'Money moving between your own accounts, and card repayments. Left out of your typical month.'],
+      [KIND_LABELS.ignore, 'Anything else you do not want counted. Left out of your typical month, the same as Transfer.'],
+    ]),
+    guideTable('Budget types (Spend, Income and Contribution only)', 'Budget type', [
+      [BUDGET_LABELS.fixed, `Regular charges such as rent or subscriptions. Uses the latest charge, as often as it is charged. A charge with nothing in the last ${plural(fixedActiveMonths, 'complete month', 'complete months')} has ended.`],
+      [BUDGET_LABELS.variable, `Costs that change month to month, such as groceries. Uses the middle month, with a typical range between percentiles ${lo} and ${hi}.`],
+      [BUDGET_LABELS.annual, 'Irregular or yearly costs, such as insurance. Uses the yearly total divided by 12.'],
+      [BUDGET_LABELS.oneoff, 'Costs you do not expect again. Listed on their own, outside every total.'],
+    ]));
 }
 
 /**
