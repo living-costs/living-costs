@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading, readStore,
+  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading, readStore, navButton,
 } from './helpers.js';
 
 const BANK_A = { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' };
@@ -19,6 +19,8 @@ const summary = (page) => page.locator('#card-summary');
 
 /** @param {string} text */
 const bucketsLeft = (text) => Number(/· (\d+) buckets? left$/.exec(text)?.[1]);
+/** @param {string} text */
+const percent = (text) => Number(/\((\d+)%\)/.exec(text)?.[1]);
 /** @param {string} text */
 const txnCount = (text) => Number(/· (\d+) transactions?/.exec(text)?.[1]);
 
@@ -44,6 +46,7 @@ test('largest first', async ({ page }) => {
   await expect(cardHeading(page)).toHaveText(SALARY);
   await expect(summary(page)).toHaveText('£30,000.00 over 12 months · 12 transactions · about £2,500.00 a month');
   await expect(progressLine(page)).toHaveText(/^£0\.00 of £[\d,]+\.\d\d categorised \(0%\) · \d+ buckets left$/);
+  await expect(navButton(page, 'Categorise')).toHaveAccessibleName('Categorise (at 0%)');
   const buttons = card(page).getByRole('group', { name: 'Category' }).getByRole('button');
   await expect(buttons.first()).toHaveText('1 Salary');
   await expect(buttons.nth(9)).toHaveText('0 Takeaway');
@@ -58,7 +61,11 @@ test('number key assigns', async ({ page }) => {
   await page.keyboard.press('1');
   await expect(cardHeading(page)).not.toHaveText(SALARY);
   await expect(progressLine(page)).toHaveText(/^£30,000\.00 of /);
-  expect(bucketsLeft(await progressLine(page).textContent())).toBe(bucketsLeft(before) - 1);
+  const after = await progressLine(page).textContent();
+  expect(bucketsLeft(after)).toBe(bucketsLeft(before) - 1);
+  // The nav tab shows the same percent as the progress line.
+  expect(percent(after)).toBeGreaterThan(0);
+  await expect(navButton(page, 'Categorise')).toHaveAccessibleName(`Categorise (at ${percent(after)}%)`);
   const salary = (await readStore(page, 'buckets')).find((b) => b.displayName === SALARY);
   const categories = await readStore(page, 'categories');
   expect(categories.find((c) => c.id === salary.categoryId)?.name).toBe('Salary');

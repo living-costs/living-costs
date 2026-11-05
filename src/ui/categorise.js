@@ -7,7 +7,7 @@
 /** @import {BucketCount} from '../progress.js' */
 import { h } from '../dom.js';
 import { analysisWindow } from '../coverage.js';
-import { bucketCounts, cardQueue, progress, monthlyFigure } from '../progress.js';
+import { bucketCounts, cardQueue, progress, percentDone, monthlyFigure } from '../progress.js';
 import { relatedBuckets, unusualTransactions, repeatingAmounts } from '../insights.js';
 import { createAmountRule, resolveFlag } from '../rules.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
@@ -104,9 +104,9 @@ function progressLine(app, counts) {
   const { categorisedAbs, totalAbs, bucketsLeft } = progress(app.store.state, app.tuning);
   const left = `${plural(bucketsLeft, 'bucket', 'buckets')} left`;
   const currency = soleCurrency([...counts.values()].flatMap((c) => c.txns));
-  // Rounded down, so 100% means everything is categorised.
+  // The nav's Categorise tab shows the same percent, under the same conditions (categorisedPercent).
   const text = currency && totalAbs > 0
-    ? `${formatMoney(categorisedAbs, currency)} of ${formatMoney(totalAbs, currency)} categorised (${Math.floor((categorisedAbs * 100) / totalAbs)}%) · ${left}`
+    ? `${formatMoney(categorisedAbs, currency)} of ${formatMoney(totalAbs, currency)} categorised (${percentDone(categorisedAbs, totalAbs)}%) · ${left}`
     : left;
   return h('p', { id: 'categorise-progress' }, text);
 }

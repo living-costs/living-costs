@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations, importFiles, readStore, fixturePath } from './helpers.js';
+import { expectNoAxeViolations, trackCspViolations, importFiles, readStore, fixturePath, openScreen, navButton } from './helpers.js';
 
 const expected = JSON.parse(fs.readFileSync(fixturePath('expected.json'), 'utf8'));
 
@@ -20,11 +20,6 @@ const notTransfers = (page) => page.getByRole('table', { name: 'Not transfers' }
 /** Body rows of a table (the header row has no cells). */
 const bodyRows = (table) => table.getByRole('row').filter({ has: table.page().getByRole('cell') });
 
-/** @param {import('@playwright/test').Page} page @param {string} name */
-async function openScreen(page, name) {
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name, exact: true }).click();
-  await expect(screenHeading(page)).toHaveText(name);
-}
 
 test.beforeEach(async ({ page }) => {
   await trackCspViolations(page);
@@ -42,8 +37,12 @@ test.afterEach(async ({ page }) => {
 });
 
 test('confirm all', async ({ page }) => {
+  const navTransfers = navButton(page, 'Transfers');
   await expect(bodyRows(suggested(page))).toHaveCount(expected.transferPairs);
   await expect(confirmed(page)).toHaveCount(0);
+  // The nav shows how many suggestions are left, and is highlighted while any are.
+  await expect(navTransfers).toHaveAccessibleName(`Transfers, ${expected.transferPairs} suggestions`);
+  await expect(navTransfers).toHaveClass(/\battention\b/);
   await expectNoAxeViolations(page);
 
   await page.getByRole('button', { name: 'Confirm all' }).click();
@@ -51,6 +50,8 @@ test('confirm all', async ({ page }) => {
   await expect(page.getByText('No suggestions.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Suggested transfers' })).toBeFocused();
   await expect(bodyRows(confirmed(page))).toHaveCount(expected.transferPairs);
+  await expect(navTransfers).toHaveAccessibleName('Transfers');
+  await expect(navTransfers).not.toHaveClass(/\battention\b/);
   const pairs = await readStore(page, 'transferPairs');
   expect(pairs).toHaveLength(expected.transferPairs);
   expect(pairs.every((p) => p.status === 'confirmed')).toBe(true);
@@ -62,6 +63,7 @@ test('confirm all', async ({ page }) => {
   await firstUndo.click();
   await expect(bodyRows(confirmed(page))).toHaveCount(expected.transferPairs - 1);
   await expect(bodyRows(suggested(page))).toHaveCount(1);
+  await expect(navTransfers).toHaveAccessibleName('Transfers, 1 suggestion');
   await expect(page.getByRole('button', { name: secondUndoName, exact: true })).toBeFocused();
   expect(await readStore(page, 'transferPairs')).toHaveLength(expected.transferPairs - 1);
 });

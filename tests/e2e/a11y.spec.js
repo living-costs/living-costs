@@ -30,14 +30,15 @@ test.afterAll(async () => {
 });
 
 /**
- * Visible controls shorter than 44px, described for the failure message.
+ * Visible controls shorter than 44px, described for the failure message. The documented
+ * exception: the small nav buttons (Review and Set up) need only 24px, the WCAG 2.2 AA minimum.
  * @param {Page} p
  */
 const shortTargets = (p) => p.evaluate(() => {
   const controls = document.querySelectorAll('button, select, input:not([type=checkbox]):not([type=radio])');
   return [...controls].filter((el) => el.checkVisibility())
     .map((el) => ({ el, height: el.getBoundingClientRect().height }))
-    .filter(({ height }) => height < 44)
+    .filter(({ el, height }) => height < (el.matches('nav .nav-row button') ? 24 : 44))
     .map(({ el, height }) => `${el.tagName.toLowerCase()} "${el.textContent?.trim() || el.getAttribute('aria-label') || el.id}" is ${height}px`);
 });
 
