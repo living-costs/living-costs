@@ -9,7 +9,7 @@ import {
   KIND_LABELS, BUDGET_LABELS, focusKey, plural, valueOf, field, help, options, emptyDraft, categoryForm,
 } from './form.js';
 import {
-  isBudgeted, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
+  isBudgeted, updateCategory, deleteCategory, orderedCategories, sortedCategories, categoryUseCount,
 } from '../categories.js';
 
 /**
@@ -61,7 +61,7 @@ export function render(root, app) {
     help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'));
   if (ui.rowError) root.append(h('p', { class: 'error', role: 'alert' }, ui.rowError));
   root.append(table(app, list));
-  if (deleting) root.append(deletePanel(app, deleting, list));
+  if (deleting) root.append(deletePanel(app, deleting, sortedCategories(app.store.state)));
   root.append(newForm(app));
 }
 
@@ -175,7 +175,7 @@ function renameForm(app, c) {
  * Confirm a delete. When anything uses the category, ask where it should move to.
  * @param {App} app
  * @param {Category} c
- * @param {Category[]} list
+ * @param {Category[]} list in name order, for the move-to choice
  * @returns {HTMLElement}
  */
 function deletePanel(app, c, list) {

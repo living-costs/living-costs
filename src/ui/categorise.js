@@ -11,7 +11,7 @@ import { bucketCounts, cardQueue, progress, percentDone, monthlyFigure } from '.
 import { relatedBuckets, unusualTransactions, repeatingAmounts } from '../insights.js';
 import { createAmountRule, resolveFlag } from '../rules.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
-import { orderedCategories } from '../categories.js';
+import { orderedCategories, sortedCategories } from '../categories.js';
 import { setCategoryOverride, dismissUnusual } from '../overrides.js';
 import { combine } from '../changes.js';
 import { formatMoney, soleCurrency } from '../money.js';
@@ -179,7 +179,7 @@ function card(app, bucket, counts) {
     categoryGroup(app, cats, assign),
     ui.newOpen ? newCategoryForm(app, bucket, el) : null,
     related(app, bucket, counts, save),
-    unusual(app, all, cats, save),
+    unusual(app, all, sortedCategories(state), save),
     repeating(app, bucket, all, save),
     flagged(app, all, save),
     h('div', { class: 'actions' },
@@ -335,7 +335,7 @@ function related(app, bucket, counts, save) {
  * Unusual amounts, each with Move to another category… and It's normal.
  * @param {App} app
  * @param {Transaction[]} all the whole bucket
- * @param {Category[]} cats
+ * @param {Category[]} cats in name order, for Move to
  * @param {Save} save
  * @returns {HTMLElement|null}
  */
@@ -368,7 +368,7 @@ function unusual(app, all, cats, save) {
  * Pick a category for one transaction.
  * @param {App} app
  * @param {Transaction} t
- * @param {Category[]} cats
+ * @param {Category[]} cats in name order
  * @param {Save} save
  * @returns {HTMLElement}
  */
