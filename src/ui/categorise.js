@@ -71,7 +71,7 @@ const absMoney = (t) => formatMoney(Math.abs(t.amountMinor), t.currency);
  */
 export function render(root, app) {
   const state = app.store.state;
-  root.append(h('h2', { tabindex: '-1' }, 'Categorise'));
+  root.append(h('h2', { tabindex: '-1', class: 'visually-hidden' }, 'Categorise'));
   if (state.transactions.length === 0) {
     root.append(
       h('p', null, 'Nothing to categorise yet. Add your statements on the Accounts screen first.'),

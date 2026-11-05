@@ -11,6 +11,9 @@ const SCREENS = [
   'Help', 'Typical month', 'Categorise', 'Buckets', 'Transactions', 'Transfers', 'Accounts', 'Categories', 'Backup',
 ];
 
+/** The main tabs: their selected tab names the screen, so the h2 is for screen readers only. */
+const MAIN_TABS = ['Help', 'Typical month', 'Categorise'];
+
 /** @type {BrowserContext} */
 let context;
 /** @type {Page} */
@@ -85,6 +88,8 @@ for (const name of SCREENS) {
 
     await page.setViewportSize({ width: 320, height: 640 });
     await expect(page.locator('#screen h2')).toHaveText(name);
+    const box = await page.locator('#screen h2').boundingBox();
+    expect((box?.height ?? 0) <= 1, `${name} heading is visually hidden`).toBe(MAIN_TABS.includes(name));
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   });
 }

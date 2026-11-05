@@ -24,7 +24,7 @@ export function render(root, app) {
     onClick: () => app.store.apply({ put: { settings: [{ ...app.store.state.settings, helpDismissed: true }] } }),
   }, 'Got it');
   root.append(
-    h('h2', { tabindex: '-1' }, 'Help'),
+    h('h2', { tabindex: '-1', class: 'visually-hidden' }, 'Help'),
     content ?? h('p', null, 'Help text is missing.'),
     h('div', { class: 'actions' },
       gotIt,
