@@ -9,6 +9,7 @@
   --banner-bg: #fff4d6;
   --intro-bg: #e8f1fb;
   --help-rule: #8aa6d6;
+  --hairline: #d4d4ce;
   --focus: #0b3d91;
   --error: #a4000f;
   --tab-border: #8c8c86;
@@ -222,8 +223,17 @@ th, td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.5rem; text-a
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .inline-form .name-input { width: 14rem; }
 .inline-form .error { white-space: normal; }
-.guide { max-width: 48rem; }
-.guide th { white-space: nowrap; }
+/* Help panels: two side by side when there is room, stacked when not. */
+.guides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); gap: 1rem; max-width: 64rem; margin-top: 0.75rem; }
+.guide { background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px; padding: 0.5rem 1rem 0.75rem; }
+.guide h3 { margin: 0 0 0.25rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.guide .qualifier { font-size: 0.85rem; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.guide .qualifier::before { content: "\00A0\00B7\00A0" / " "; }
+.guide dl { margin: 0; }
+.guide dl > div { padding: 0.375rem 0; border-top: 1px solid var(--hairline); }
+.guide dl > div:first-child { border-top: 0; }
+.guide dt { font-weight: 600; color: var(--text); }
+.guide dd { margin: 0; font-size: 0.95rem; }
 
 /* Categorise card */
 .category-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
