@@ -49,6 +49,8 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # A normal run takes about 3 minutes. Fail fast if a download stalls.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,7 +61,11 @@ jobs:
       - run: npm ci --ignore-scripts
       # CI=true (set by GitHub) makes playwright.config.js start its own server.
       # The privacy spec runs on full Chromium (channel: 'chromium'), so don't add --only-shell.
-      - run: npx playwright install --with-deps chromium && npm run e2e
+      # No --with-deps: the runner image already has Chromium's libraries, and --with-deps
+      # only added fonts via apt, which once took 10 minutes on a slow Ubuntu mirror.
+      # If Chrome fails to launch with a missing library, add --with-deps back.
+      - run: npx playwright install chromium
+      - run: npm run e2e
 
   deploy:
     needs: [banned, unit, types, e2e]
