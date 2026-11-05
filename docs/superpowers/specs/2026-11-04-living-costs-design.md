@@ -51,7 +51,7 @@ Two threats drive the stack: a **compromised package**, and **keeping users' tru
   - The owner tries the app at `http://localhost` using the same dev static server Playwright uses.
 - **Look and accessibility follow Mortgage Split** (`~/git/shared-amortization-calculator`, https://mortgage-split.org/):
   - Style: system font stack, `#0b3d91` accent, white cards on a `#f4f4f2` page, and its colour tokens.
-  - Interaction: 3px focus outlines, 44px minimum targets, and reflow at 320px without horizontal scroll. One exception (owner's decision): the six small nav buttons in the Review and Set up groups are at least 24px, the WCAG 2.2 AA minimum.
+  - Interaction: 3px focus outlines, 32px minimum targets (WCAG 2.2 AA asks for 24px; owner's decision, as all users are on macOS with a mouse), and reflow at 320px without horizontal scroll. One exception (owner's decision): the six small nav buttons in the Review and Set up groups are at least 24px, the WCAG 2.2 AA minimum.
   - Tests: axe against the WCAG 2.x A and AA tags, run on every screen and state the e2e tests reach.
   - Charts: decorative bars are `aria-hidden`, and the table is the data.
 - **Single-key shortcuts**, such as the category number keys, are active only while focus is inside the categorise card. This meets WCAG 2.1.4.
@@ -420,7 +420,7 @@ Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gi
   - confirming transfers
   - the typical-month figures
   - backup and restore
-  - axe checks, 320px reflow, 44px targets, and focus outlines
+  - axe checks, 320px reflow, 32px targets, and focus outlines
   - **no requests after the initial page load**, using Playwright request interception
 
 ## Changes to CLAUDE.md

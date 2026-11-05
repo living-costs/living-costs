@@ -82,7 +82,8 @@ test('selects draw their own arrow with room beside the border', async ({ page }
   });
   expect(style.appearance).toBe('none');
   expect(style.image).toContain('linear-gradient');
-  expect(style.paddingRight).toBeGreaterThanOrEqual(32);
+  // The triangle reaches 20px in from the right edge; 28px leaves 8px before the text.
+  expect(style.paddingRight).toBeGreaterThanOrEqual(28);
 });
 
 test('create, retype and delete', async ({ page }) => {
