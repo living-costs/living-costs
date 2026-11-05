@@ -8,6 +8,7 @@
   --accent-contrast: #ffffff;
   --banner-bg: #fff4d6;
   --intro-bg: #e8f1fb;
+  --help-rule: #8aa6d6;
   --focus: #0b3d91;
   --error: #a4000f;
   --tab-border: #8c8c86;
@@ -144,7 +145,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .field { margin: 0.75rem 0; }
 /* The gap clears the focus ring (3px wide, 2px out) so it never touches the label. */
 .field > label { display: block; font-weight: 600; margin-bottom: 0.375rem; }
-.hint { margin: 0.25rem 0 0; }
+/* Help: fixed text that explains a screen or control. Status (text about the user's data) stays plain. */
+.help { border-left: 4px solid var(--help-rule); padding: 0.125rem 0 0.125rem 0.75rem; color: var(--muted); }
+.help::before { content: "\24D8\00A0" / ""; color: var(--accent); font-weight: 700; }
+.field .help { margin: 0.25rem 0 0; }
+/* A checkbox's hint lines up with its label text: the box's width plus the gap. */
+.field > .choice + .help { margin-left: 2rem; }
 input[type="text"], input[type="search"], input[type="date"], select {
   font: inherit;
   max-width: 100%;
@@ -171,8 +177,8 @@ input.short, input.date { width: 9rem; }
 input[type="file"] { max-width: 100%; }
 input[aria-invalid="true"] { border: 2px solid var(--error); }
 .choice { display: flex; align-items: center; gap: 0.5rem; min-height: 32px; }
-/* A checkbox label inside a field is a choice row, not a field label above a control. */
-.field > label.choice { display: flex; font-weight: normal; margin-bottom: 0; }
+/* A checkbox label inside a field is a row beside its box, so no gap below for a control. */
+.field > label.choice { display: flex; margin-bottom: 0; }
 .choice input { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; flex: none; }
 fieldset { border: 1px solid var(--border); border-radius: 4px; margin: 0.75rem 0; padding: 0.5rem 1rem; min-width: 0; }
 legend { font-weight: 600; padding: 0 0.25rem; overflow-wrap: anywhere; }
@@ -223,6 +229,7 @@ dialog h3 { margin-top: 0; }
 /* Buckets */
 /* Matches a sibling field's label line plus its gap, so the toggle lines up with the inputs. */
 .field.toggle { padding-top: calc(1.5em + 0.375rem); }
+.field.toggle > label.choice { font-weight: normal; }
 table.buckets td, table.buckets th { vertical-align: middle; }
 table.buckets input.select { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; }
 

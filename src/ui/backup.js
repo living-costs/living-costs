@@ -7,7 +7,7 @@ import { h } from '../dom.js';
 import { formatLocalDate } from '../dates.js';
 import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
 import { firstRunChanges } from '../categories.js';
-import { field } from './form.js';
+import { checkboxField, field, help } from './form.js';
 import { whileSaving, isSaving } from './saving.js';
 import { resetImport } from './import.js';
 
@@ -43,30 +43,28 @@ export function render(root, app) {
   root.append(
     heading,
     h('p', { id: 'backup-last' }, lastShown ? `Last backup: ${lastShown}` : 'Not backed up yet.'),
-    h('p', null, 'A backup holds your accounts and column settings, buckets, rules, categories and decisions. '
+    help('A backup holds your accounts and column settings, buckets, rules, categories and decisions. '
       + "Include your transactions too, and you won't need to import your statements again after restoring."),
-    h('div', { class: 'field' }, h('label', { class: 'choice' },
-      h('input', {
-        type: 'checkbox', checked: view.full, 'data-focus-key': 'backup-full',
-        onChange: (/** @type {Event} */ e) => {
-          view.full = /** @type {HTMLInputElement} */ (e.target).checked;
-          warning.textContent = view.full ? FULL_WARNING : WARNING;
-        },
-      }),
-      'Include transactions')),
+    checkboxField('Include transactions', h('input', {
+      type: 'checkbox', checked: view.full, 'data-focus-key': 'backup-full',
+      onChange: (/** @type {Event} */ e) => {
+        view.full = /** @type {HTMLInputElement} */ (e.target).checked;
+        warning.textContent = view.full ? FULL_WARNING : WARNING;
+      },
+    })),
     warning,
     h('div', { class: 'actions' },
       h('button', {
         type: 'button', 'data-saves': true, 'data-focus-key': 'backup-save',
         onClick: () => save(app, root, heading),
       }, 'Save backup')),
-    h('p', { role: 'status', class: 'muted' }, view.status),
+    h('p', { role: 'status' }, view.status),
     h('h3', null, 'Restore'),
-    h('p', null, 'Restoring replaces everything this app holds in this browser. '
+    help('Restoring replaces everything this app holds in this browser. '
       + "If the backup doesn't include transactions, add your statements again on the Accounts screen afterwards."),
     field('Restore from backup', input),
     h('h3', null, 'Delete loaded data'),
-    h('p', null, 'This removes everything this app holds in this browser.'),
+    help('This removes everything this app holds in this browser.'),
     h('div', { class: 'actions' },
       h('button', {
         type: 'button', 'data-saves': true, 'data-focus-key': 'backup-delete',

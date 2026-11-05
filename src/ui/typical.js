@@ -9,7 +9,7 @@ import { h } from '../dom.js';
 import { typicalMonth } from '../typical.js';
 import { formatMoney } from '../money.js';
 import { formatDate, formatMonth } from '../dates.js';
-import { plural } from './form.js';
+import { help, plural } from './form.js';
 
 /**
  * @param {HTMLElement} root
@@ -172,7 +172,7 @@ function oneOffList(state, tm, money) {
   const names = new Map(state.categories.map((c) => [c.id, c.name]));
   return h('section', { 'aria-labelledby': 'typical-oneoffs' },
     h('h3', { id: 'typical-oneoffs' }, 'One-offs'),
-    h('p', { class: 'muted' }, 'Not included in living costs.'),
+    help('Not included in living costs.'),
     h('ul', { class: 'plain-list', 'aria-labelledby': 'typical-oneoffs' }, ...tm.oneOffs.map((o) => h('li', null,
       `${formatDate(o.txn.date)} · `,
       h('span', { class: 'raw' }, o.txn.rawText),
