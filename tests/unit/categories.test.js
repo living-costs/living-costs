@@ -4,7 +4,7 @@ import { emptyState, applyToState } from '../../src/changes.js';
 import defaults from '../../src/default-categories.js';
 import {
   seedDefaults, firstRunChanges, pendingDefaults, acceptDefaults, dismissDefaults,
-  createCategory, updateCategory, deleteCategory, orderedCategories, categoryUseCount,
+  createCategory, updateCategory, deleteCategory, orderedCategories, sortedCategories, categoryUseCount,
 } from '../../src/categories.js';
 
 /** A fresh state seeded from the real defaults. */
@@ -255,4 +255,16 @@ test('orderedCategories sorts by position without changing state', () => {
   ];
   assert.deepEqual(orderedCategories(s).map((c) => c.id), ['a', 'b', 'c']);
   assert.deepEqual(s.categories.map((c) => c.id), ['c', 'a', 'b']);
+});
+
+test('sortedCategories sorts by name, ignoring case and accents, without changing state', () => {
+  const s = emptyState();
+  s.categories = [
+    { id: 'x', name: 'groceries', kind: 'spend', position: 1 },
+    { id: 'y', name: 'Café', kind: 'spend', position: 2 },
+    { id: 'z', name: 'Bills', kind: 'spend', position: 3 },
+    { id: 'w', name: 'cafe', kind: 'spend', position: 4 },
+  ];
+  assert.deepEqual(sortedCategories(s).map((c) => c.id), ['z', 'w', 'y', 'x']);
+  assert.deepEqual(s.categories.map((c) => c.id), ['x', 'y', 'z', 'w']);
 });

@@ -4,6 +4,7 @@
 /** @import {State, Changes, Settings, Category, CategoryKind, BudgetType, Override} from './types.js' */
 import DEFAULTS from './default-categories.js';
 import { emptyState } from './changes.js';
+import { cmp, compareNames } from './order.js';
 
 /** @typedef {{id:string,name:string,kind:CategoryKind,budgetType?:BudgetType}} Default */
 /** @typedef {{error:string}} Invalid */
@@ -236,4 +237,14 @@ export function deleteCategory(state, id, targetId) {
  */
 export function orderedCategories(state) {
   return [...state.categories].sort((a, b) => a.position - b.position);
+}
+
+/**
+ * For dropdowns, where people scan for a name. Ties (names equal ignoring case and accents)
+ * fall back to id, so the order is fixed.
+ * @param {State} state
+ * @returns {Category[]} a new array, sorted by name
+ */
+export function sortedCategories(state) {
+  return [...state.categories].sort((a, b) => compareNames(a.name, b.name) || cmp(a.id, b.id));
 }

@@ -56,6 +56,12 @@ test.afterEach(async ({ page }) => {
   expect(await page.evaluate(() => window.__csp)).toEqual([]);
 });
 
+test('category choices are in name order, with (none) last', async ({ page }) => {
+  const names = (await readStore(page, 'categories')).map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b, 'en-GB', { sensitivity: 'base' }));
+  await expect(category(page, 'MARKET STALL').locator('option')).toHaveText([...names, '(none)']);
+});
+
 test('filter and search', async ({ page }) => {
   // The window the totals cover (status), and that a drill-in shows everything (help).
   await expect(page.locator('#buckets-window')).toHaveText(

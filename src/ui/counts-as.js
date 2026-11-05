@@ -8,7 +8,7 @@
 /** @import {ResolveContext} from '../resolve.js' */
 import { h } from '../dom.js';
 import { resolve, buildContext } from '../resolve.js';
-import { orderedCategories } from '../categories.js';
+import { sortedCategories } from '../categories.js';
 import { setCategoryOverride, setSplit, resetOverride } from '../overrides.js';
 import { parseAmount, formatMoney, currencyExponent, decimalString, withoutCurrencySymbol } from '../money.js';
 import { formatDate } from '../dates.js';
@@ -70,7 +70,7 @@ function parseUnsigned(text, exp) {
  * @param {App} app
  * @param {Transaction} t
  * @param {ResolveContext} ctx
- * @param {Category[]} cats in order
+ * @param {Category[]} cats in name order
  * @param {string} prefix the list's prefix for ids and focus keys
  * @returns {HTMLElement}
  */
@@ -185,7 +185,7 @@ export function appendSplitDialog(root, app, prefix) {
  * @returns {HTMLElement}
  */
 function splitDialog(app, t, d) {
-  const cats = orderedCategories(app.store.state);
+  const cats = sortedCategories(app.store.state);
   const exp = currencyExponent(t.currency);
   const total = Math.abs(t.amountMinor);
   const sign = Math.sign(t.amountMinor);

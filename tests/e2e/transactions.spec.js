@@ -74,6 +74,20 @@ test('lists transactions with filters and the first 200', async ({ page }) => {
   await expectNoAxeViolations(page);
 });
 
+test('category choices are in name order, in Counts as and the split dialog', async ({ page }) => {
+  const names = (await readStore(page, 'categories')).map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b, 'en-GB', { sensitivity: 'base' }));
+  await find(page, '£60.69');
+  const select = page.getByLabel(AMAZON_LABEL);
+  await expect(select.locator('option:not([hidden])'))
+    .toHaveText([...names, "Use bucket's category (none)", 'Split…']);
+  await select.selectOption({ label: 'Split…' });
+  const dialog = splitDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Category').first().locator('option'))
+    .toHaveText(['Choose a category', ...names]);
+});
+
 test('find by amount and split', async ({ page }) => {
   await find(page, '£60.69');
   await expect(countLine(page)).toHaveText('Showing 1 of 1.');

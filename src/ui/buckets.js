@@ -13,7 +13,7 @@
 import { h } from '../dom.js';
 import { countedTransactions } from '../progress.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
-import { orderedCategories } from '../categories.js';
+import { sortedCategories } from '../categories.js';
 import { formatMoney, currenciesOf, soleCurrency } from '../money.js';
 import { cmp, compareNames } from '../order.js';
 import { analysisWindow } from '../coverage.js';
@@ -97,7 +97,7 @@ export function render(root, app) {
   }
 
   const rows = bucketRows(app);
-  const cats = orderedCategories(state);
+  const cats = sortedCategories(state);
   const { months } = analysisWindow(state, app.tuning);
   if (months.length > 0) {
     const first = formatMonth(months[0]);
