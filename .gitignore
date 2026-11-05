@@ -3,7 +3,7 @@
 *.csv
 !tests/fixtures/*.csv
 living-costs-backup*.json
-node_modules/
+node_modules
 test-results/
 playwright-report/
 .DS_Store
