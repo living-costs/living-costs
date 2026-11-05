@@ -9,8 +9,14 @@ export function currencyExponent(currency) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
 }
 
+// Optional sign; a whole part that is plain digits or correctly grouped in threes; optional decimals.
+const UK_AMOUNT = /^([+-])?(\d{1,3}(?:,\d{3})+|\d+)?(?:\.(\d+))?$/;
+const CONTINENTAL_AMOUNT = /^([+-])?(\d{1,3}(?:\.\d{3})+|\d+)?(?:,(\d+))?$/;
+
 /**
- * Parse a plain decimal amount into minor units.
+ * Parse an amount into minor units. Accepts UK style (1,234.56) and continental style (1.234,56),
+ * with or without thousands separators. Each value is read on its own: where both styles fit but
+ * give different values, as 1,234 does in a 3-decimal currency, it is an error, never a guess.
  * @param {string} text
  * @param {number} exponent
  * @returns {{minor: number|null} | {error: string}}
@@ -18,15 +24,31 @@ export function currencyExponent(currency) {
 export function parseAmount(text, exponent) {
   const t = String(text).trim();
   if (t === '' || t.toLowerCase() === 'null') return { minor: null };
-  const m = /^([+-])?(\d+)?(?:\.(\d+))?$/.exec(t);
-  if (!m) return { error: `Not a plain number: ${t}` };
-  const whole = m[2] ?? '';
-  const frac = m[3] ?? '';
-  if (whole === '' && frac === '') return { error: `Not a plain number: ${t}` };
+  const readings = [];
+  for (const [re, sep] of /** @type {const} */ ([[UK_AMOUNT, ','], [CONTINENTAL_AMOUNT, '.']])) {
+    const m = re.exec(t);
+    if (m && (m[2] || m[3])) readings.push(toMinor(m[1] === '-', (m[2] ?? '').replaceAll(sep, ''), m[3] ?? '', exponent, t));
+  }
+  if (readings.length === 0) return { error: `Not a plain number: ${t}` };
+  const values = new Set(readings.flatMap((r) => ('minor' in r ? [r.minor] : [])));
+  if (values.size > 1) return { error: `Ambiguous amount: ${t}` };
+  return readings.find((r) => 'minor' in r) ?? readings[0];
+}
+
+/**
+ * Whole and fractional digit strings to signed minor units.
+ * @param {boolean} negative
+ * @param {string} whole digits only, possibly empty
+ * @param {string} frac digits only, possibly empty
+ * @param {number} exponent
+ * @param {string} t the original text, for error messages
+ * @returns {{minor: number} | {error: string}}
+ */
+function toMinor(negative, whole, frac, exponent, t) {
   if (frac.length > exponent) return { error: `Too many decimal places: ${t}` };
   const minor = Number(whole === '' ? '0' : whole) * 10 ** exponent + Number(frac.padEnd(exponent, '0') || '0');
   if (!Number.isSafeInteger(minor)) return { error: `Amount too large: ${t}` };
-  return { minor: m[1] === '-' && minor !== 0 ? -minor : minor };
+  return { minor: negative && minor !== 0 ? -minor : minor };
 }
 
 /**
