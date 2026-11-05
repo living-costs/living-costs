@@ -1,25 +1,29 @@
-// Backup screen: save a backup file, restore one after checking it, and delete loaded data.
-// Restoring and deleting replace everything this app holds in this browser, after the user confirms.
+// Backup screen: save a backup file (with or without transactions), restore one after checking
+// it, and delete loaded data. Restoring and deleting replace everything this app holds in this
+// browser, after the user confirms.
 
 /** @import {App} from '../main.js' */
 import { h } from '../dom.js';
 import { formatLocalDate } from '../dates.js';
 import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
 import { firstRunChanges } from '../categories.js';
-import { field, help } from './form.js';
+import { checkboxField, field, help } from './form.js';
 import { whileSaving, isSaving } from './saving.js';
 import { resetImport } from './import.js';
 
 const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
+const FULL_WARNING = "A backup saved to Google Drive isn't encrypted. With transactions included, it holds every transaction you've imported: dates, amounts, descriptions and account details.";
 const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
+const FULL_CONFIRM = 'Replace all data in this browser with this backup? It includes your transactions, so nothing needs re-importing.';
 const DELETE_CONFIRM = 'Delete all data in this browser? Save a backup first if you might want it.';
 
-/** @type {{status: string, errors: string[]}} */
-let view = { status: '', errors: [] };
+/** `full` is the Include transactions tick, which starts unticked each time the screen is entered. */
+/** @type {{status: string, errors: string[], full: boolean}} */
+let view = { status: '', errors: [], full: false };
 
-/** Forget the last status and errors (on entering the screen). */
+/** Forget the last status, errors and tick (on entering the screen). */
 export function reset() {
-  view = { status: '', errors: [] };
+  view = { status: '', errors: [], full: false };
 }
 
 /**
@@ -35,11 +39,20 @@ export function render(root, app) {
     type: 'file', accept: '.json,application/json', 'data-focus-key': 'backup-restore',
     onChange: () => restore(app, root, /** @type {HTMLInputElement} */ (input), heading),
   });
+  const warning = h('p', { class: 'banner' }, view.full ? FULL_WARNING : WARNING);
   root.append(
     heading,
     h('p', { id: 'backup-last' }, lastShown ? `Last backup: ${lastShown}` : 'Not backed up yet.'),
-    help("A backup holds your accounts and column settings, buckets, rules, categories and decisions. It doesn't hold your statements."),
-    h('p', { class: 'banner' }, WARNING),
+    help('A backup holds your accounts and column settings, buckets, rules, categories and decisions. '
+      + "Include your transactions too, and you won't need to import your statements again after restoring."),
+    checkboxField('Include transactions', h('input', {
+      type: 'checkbox', checked: view.full, 'data-focus-key': 'backup-full',
+      onChange: (/** @type {Event} */ e) => {
+        view.full = /** @type {HTMLInputElement} */ (e.target).checked;
+        warning.textContent = view.full ? FULL_WARNING : WARNING;
+      },
+    })),
+    warning,
     h('div', { class: 'actions' },
       h('button', {
         type: 'button', 'data-saves': true, 'data-focus-key': 'backup-save',
@@ -47,7 +60,8 @@ export function render(root, app) {
       }, 'Save backup')),
     h('p', { role: 'status' }, view.status),
     h('h3', null, 'Restore'),
-    help('Restoring replaces everything this app holds in this browser. Afterwards, add your statements again on the Accounts screen.'),
+    help('Restoring replaces everything this app holds in this browser. '
+      + "If the backup doesn't include transactions, add your statements again on the Accounts screen afterwards."),
     field('Restore from backup', input),
     h('h3', null, 'Delete loaded data'),
     help('This removes everything this app holds in this browser.'),
@@ -72,11 +86,12 @@ export function render(root, app) {
 function save(app, root, focusTo) {
   return whileSaving(root, async () => {
     const now = new Date();
-    const text = JSON.stringify(buildBackup(app.store.state, now), null, 2);
-    const outcome = await writeFile(backupFileName(now), text);
+    const { full } = view;
+    const text = JSON.stringify(buildBackup(app.store.state, now, { full }), null, 2);
+    const outcome = await writeFile(backupFileName(now, full), text);
     if (outcome === 'cancelled') return;
     const status = outcome === 'fallback' ? 'Backup saved to your Downloads folder instead.' : 'Backup saved.';
-    view = { status, errors: [] };
+    view = { status, errors: [], full };
     await app.store.apply({ put: { settings: [{ ...app.store.state.settings, lastBackupAt: now.toISOString() }] } });
   }, focusTo);
 }
@@ -143,7 +158,7 @@ function restore(app, root, input, focusTo) {
   return whileSaving(root, async () => {
     /** @param {string[]} errors */
     const refuse = (errors) => {
-      view = { status: '', errors };
+      view = { ...view, status: '', errors };
       app.rerender();
     };
     let text;
@@ -166,8 +181,9 @@ function restore(app, root, input, focusTo) {
       refuse(result.errors);
       return;
     }
-    if (!window.confirm(CONFIRM)) {
-      view = { status: 'Nothing was restored.', errors: [] };
+    const full = result.data.transactions !== undefined;
+    if (!window.confirm(full ? FULL_CONFIRM : CONFIRM)) {
+      view = { ...view, status: 'Nothing was restored.', errors: [] };
       app.rerender();
       return;
     }
@@ -175,7 +191,9 @@ function restore(app, root, input, focusTo) {
     reset();
     resetImport();
     app.navigate('help');
-    showNotice('Backup restored. Import your statements again to see your transactions.');
+    showNotice(full
+      ? 'Backup restored, including your transactions.'
+      : 'Backup restored. Import your statements again to see your transactions.');
   }, focusTo);
 }
 

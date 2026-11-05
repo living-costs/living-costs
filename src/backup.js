@@ -1,37 +1,43 @@
 // Plain JSON backup and validated restore.
-// A backup holds only the work that is hard to recreate: accounts and their column mappings,
-// buckets, amount rules, categories, offered defaults, overrides and transfer decisions.
-// Transactions and batches come back by re-importing the original CSVs; fingerprints reattach
-// every decision. A backup file is untrusted: validateBackup builds every object afresh from
-// known keys only, and its messages never repeat what the file contains.
+// Every backup holds the work that is hard to recreate: accounts and their column mappings,
+// buckets, amount rules, categories, offered defaults, overrides and transfer decisions. A
+// decisions-only backup stops there, and transactions and batches come back by re-importing the
+// original CSVs, where fingerprints reattach every decision. A full backup also holds every
+// transaction and batch, restored exactly as saved. A backup file is untrusted: validateBackup
+// builds every object afresh from known keys only, and its messages never repeat what the file
+// contains.
 
-/** @import {State, Changes, Settings, Account, Mapping, Bucket, Rule, Category, Override, TransferPair} from './types.js' */
+/** @import {State, Changes, Settings, Account, Mapping, Bucket, Rule, Category, Override, TransferPair, Batch, Transaction} from './types.js' */
 import { emptyState } from './changes.js';
 import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
 import { localDay } from './dates.js';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** Validation stops listing problems after this many. */
 const MAX_ERRORS = 20;
 
 /**
+ * `transactions` and `batches` are both present in a full backup and both absent otherwise.
  * @typedef {{schemaVersion:number,exportedAt:string,accounts:Account[],buckets:Bucket[],rules:Rule[],
- *   categories:Category[],overrides:Override[],transferPairs:TransferPair[],offeredDefaultIds:string[]}} BackupData
+ *   categories:Category[],overrides:Override[],transferPairs:TransferPair[],offeredDefaultIds:string[],
+ *   batches?:Batch[],transactions?:Transaction[]}} BackupData
  */
 /** @typedef {{app:'living-costs'} & BackupData} Backup */
 /** @typedef {{ok:true,data:BackupData}|{ok:false,errors:string[]}} Validation */
 
 /**
- * The backup of `state`, ready for JSON.stringify.
+ * The backup of `state`, ready for JSON.stringify. A full backup also holds transactions and batches.
  * @param {State} state
  * @param {Date} now
+ * @param {{full?: boolean}} [options]
  * @returns {Backup}
  */
-export function buildBackup(state, now) {
-  return {
+export function buildBackup(state, now, { full = false } = {}) {
+  /** @type {Backup} */
+  const backup = {
     app: 'living-costs',
     schemaVersion: SCHEMA_VERSION,
     exportedAt: now.toISOString(),
@@ -43,14 +49,21 @@ export function buildBackup(state, now) {
     transferPairs: [...state.transferPairs.values()],
     offeredDefaultIds: state.settings.offeredDefaultIds,
   };
+  if (full) {
+    backup.batches = state.batches;
+    backup.transactions = state.transactions;
+  }
+  return backup;
 }
 
 /**
  * @param {Date} now
- * @returns {string} living-costs-backup-YYYY-MM-DD.json, using the local date
+ * @param {boolean} [full]
+ * @returns {string} living-costs-backup-YYYY-MM-DD.json, or living-costs-full-backup-YYYY-MM-DD.json,
+ *   using the local date
  */
-export function backupFileName(now) {
-  return `living-costs-backup-${localDay(now)}.json`;
+export function backupFileName(now, full = false) {
+  return `living-costs-${full ? 'full-' : ''}backup-${localDay(now)}.json`;
 }
 
 /**
@@ -69,17 +82,21 @@ export function restoreChanges(data, current) {
     offeredDefaultIds: [...data.offeredDefaultIds],
     helpDismissed: current.helpDismissed === true,
   };
-  return {
-    put: {
-      settings: [settings],
-      accounts: data.accounts,
-      buckets: data.buckets,
-      rules: data.rules,
-      categories: data.categories,
-      overrides: data.overrides,
-      transferPairs: data.transferPairs,
-    },
+  /** @type {NonNullable<Changes['put']>} */
+  const put = {
+    settings: [settings],
+    accounts: data.accounts,
+    buckets: data.buckets,
+    rules: data.rules,
+    categories: data.categories,
+    overrides: data.overrides,
+    transferPairs: data.transferPairs,
   };
+  if (data.batches && data.transactions) {
+    put.batches = data.batches;
+    put.transactions = data.transactions;
+  }
+  return { put };
 }
 
 // --- Validation --------------------------------------------------------------------------------
@@ -131,11 +148,18 @@ function isCurrency(v) {
   try { currencyExponent(v); return true; } catch { return false; }
 }
 
-/** An ISO timestamp exactly as Date.prototype.toISOString writes it. @param {unknown} v */
+/** An ISO timestamp exactly as Date.prototype.toISOString writes it. @param {unknown} v @returns {v is string} */
 function isTimestamp(v) {
   if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)) return false;
   const d = new Date(v);
   return !Number.isNaN(d.getTime()) && d.toISOString() === v;
+}
+
+/** A real calendar date as ISO YYYY-MM-DD. @param {unknown} v @returns {v is string} */
+function isIsoDate(v) {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
 /** Collects problems, up to MAX_ERRORS. */
@@ -397,6 +421,131 @@ function readPair(o, label, p) {
   };
 }
 
+/** @param {Obj} o @param {string} label @param {Problems} p @returns {Batch} */
+function readBatch(o, label, p) {
+  const c = checker(label, p);
+  const id = get(o, 'id');
+  const importId = get(o, 'importId');
+  const accountId = get(o, 'accountId');
+  const fileName = get(o, 'fileName');
+  const fileHash = get(o, 'fileHash');
+  const importedAt = get(o, 'importedAt');
+  const rowCount = get(o, 'rowCount');
+  const coversFrom = get(o, 'coversFrom');
+  const coversTo = get(o, 'coversTo');
+  c.need(isId(id), 'ID');
+  c.need(isId(importId), 'import ID');
+  c.need(isId(accountId), 'account');
+  c.need(isText(fileName), 'file name');
+  c.need(isId(fileHash), 'file hash');
+  c.need(isTimestamp(importedAt), 'import time');
+  const countOk = isInt(rowCount) && rowCount >= 1;
+  c.need(countOk, 'row count');
+  const coversOk = isIsoDate(coversFrom) && isIsoDate(coversTo) && coversFrom <= coversTo;
+  c.need(coversOk, 'covered period');
+  return {
+    id: isId(id) ? id : '',
+    importId: isId(importId) ? importId : '',
+    accountId: isId(accountId) ? accountId : '',
+    fileName: isText(fileName) ? fileName : '',
+    fileHash: isId(fileHash) ? fileHash : '',
+    importedAt: isTimestamp(importedAt) ? importedAt : '',
+    // 0 marks a count that is not valid, so the row count check skips it.
+    rowCount: countOk ? rowCount : 0,
+    coversFrom: coversOk ? coversFrom : '',
+    coversTo: coversOk ? coversTo : '',
+  };
+}
+
+/** @param {Obj} o @param {string} label @param {Problems} p @returns {Transaction} */
+function readTransaction(o, label, p) {
+  const c = checker(label, p);
+  const id = get(o, 'id');
+  const fingerprint = get(o, 'fingerprint');
+  const accountId = get(o, 'accountId');
+  const batchId = get(o, 'batchId');
+  const date = get(o, 'date');
+  const amountMinor = get(o, 'amountMinor');
+  const currency = get(o, 'currency');
+  const rawText = get(o, 'rawText');
+  const rawType = get(o, 'rawType');
+  const bucketId = get(o, 'bucketId');
+  const flaggedRuleId = get(o, 'flaggedRuleId');
+  c.need(isId(id), 'ID');
+  c.need(isId(fingerprint), 'fingerprint');
+  c.need(isId(accountId), 'account');
+  c.need(isId(batchId), 'batch');
+  c.need(isIsoDate(date), 'date');
+  c.need(isInt(amountMinor), 'amount');
+  c.need(isCurrency(currency), 'currency');
+  c.need(isText(rawText), 'description');
+  if (has(o, 'rawType')) c.need(isText(rawType), 'type');
+  c.need(isId(bucketId), 'bucket');
+  if (has(o, 'flaggedRuleId')) c.need(isId(flaggedRuleId), 'flagged rule');
+  /** @type {Transaction} */
+  const t = {
+    id: isId(id) ? id : '',
+    fingerprint: isId(fingerprint) ? fingerprint : '',
+    accountId: isId(accountId) ? accountId : '',
+    batchId: isId(batchId) ? batchId : '',
+    date: isIsoDate(date) ? date : '',
+    amountMinor: isInt(amountMinor) ? amountMinor : 0,
+    currency: isCurrency(currency) ? currency : '',
+    rawText: isText(rawText) ? rawText : '',
+    bucketId: isId(bucketId) ? bucketId : '',
+  };
+  if (isText(rawType)) t.rawType = rawType;
+  if (isId(flaggedRuleId)) t.flaggedRuleId = flaggedRuleId;
+  return t;
+}
+
+/**
+ * Report a transaction or batch that points at something missing or disagrees with what it
+ * points at, and a batch whose row count doesn't match the transactions it holds.
+ * @param {Batch[]} batches
+ * @param {Transaction[]} transactions
+ * @param {Account[]} accounts
+ * @param {Set<string>} bucketIds
+ * @param {Rule[]} rules
+ * @param {Problems} p
+ */
+function checkTransactionRefs(batches, transactions, accounts, bucketIds, rules, p) {
+  const accountById = new Map(accounts.filter((a) => a.id).map((a) => [a.id, a]));
+  /** @type {Map<string, Batch>} */
+  const batchById = new Map();
+  for (const b of batches) if (b.id && !batchById.has(b.id)) batchById.set(b.id, b);
+  const ruleIds = new Set(rules.map((r) => r.id).filter(Boolean));
+  batches.forEach((b, i) => {
+    if (b.accountId !== '' && !accountById.has(b.accountId)) p.add(`Batch ${i + 1} points at a missing account.`);
+  });
+  /** @type {Map<string, number>} */
+  const held = new Map();
+  transactions.forEach((t, i) => {
+    const label = `Transaction ${i + 1}`;
+    const account = accountById.get(t.accountId);
+    const batch = batchById.get(t.batchId);
+    if (t.accountId !== '' && !account) p.add(`${label} points at a missing account.`);
+    if (t.batchId !== '' && !batch) p.add(`${label} points at a missing batch.`);
+    if (batch && t.accountId !== '' && batch.accountId !== '' && batch.accountId !== t.accountId) {
+      p.add(`${label} is in a different account from its batch.`);
+    }
+    if (account && t.currency !== '' && account.currency !== '' && account.currency !== t.currency) {
+      p.add(`${label} has a different currency from its account.`);
+    }
+    if (t.bucketId !== '' && !bucketIds.has(t.bucketId)) p.add(`${label} points at a missing bucket.`);
+    if (t.flaggedRuleId !== undefined && !ruleIds.has(t.flaggedRuleId)) p.add(`${label} points at a missing rule.`);
+    if (t.batchId !== '') held.set(t.batchId, (held.get(t.batchId) ?? 0) + 1);
+  });
+  const plural = (/** @type {number} */ n, /** @type {string} */ word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  batches.forEach((b, i) => {
+    if (b.id === '' || b.rowCount === 0) return;
+    const n = held.get(b.id) ?? 0;
+    if (n !== b.rowCount) {
+      p.add(`Batch ${i + 1} has ${plural(b.rowCount, 'row')}, but the backup holds ${plural(n, 'transaction')} for it.`);
+    }
+  });
+}
+
 /**
  * Read one top-level list, entry by entry, and report entries whose key repeats an earlier one.
  * @template T
@@ -460,6 +609,7 @@ function validate(json) {
   const version = get(json, 'schemaVersion');
   if (!isInt(version) || version < 1) return { ok: false, errors: ["This backup's version is missing or not valid."] };
   if (version > SCHEMA_VERSION) return { ok: false, errors: ['This backup is from a newer version of this app.'] };
+  if (version < SCHEMA_VERSION) return { ok: false, errors: ["This backup is from an older version of this app and can't be restored."] };
 
   const p = new Problems();
   const exportedAt = get(json, 'exportedAt');
@@ -474,6 +624,12 @@ function validate(json) {
     (o) => o.fingerprint, 'has the same fingerprint as', p);
   const transferPairs = readList(json, 'transferPairs', 'transfer pairs', 'Transfer pair', readPair,
     (x) => x.key, 'is the same pair as', p);
+  // A full backup has both lists. Either one present means the other is needed too.
+  const full = has(json, 'batches') || has(json, 'transactions');
+  const batches = full ? readList(json, 'batches', 'batches', 'Batch', readBatch, byId, 'has the same ID as', p) : [];
+  const transactions = full
+    ? readList(json, 'transactions', 'transactions', 'Transaction', readTransaction, byId, 'has the same ID as', p)
+    : [];
 
   const offered = get(json, 'offeredDefaultIds');
   /** @type {string[]} */
@@ -524,15 +680,22 @@ function validate(json) {
     const used = [...(o.categoryId !== undefined ? [o.categoryId] : []), ...(o.splits ?? []).map((s) => s.categoryId)];
     if (used.some((id) => !categoryIds.has(id))) p.add(`Override ${i + 1} points at a missing category.`);
   });
+  // Without both lists, every reference would fail; the missing list is already reported.
+  if (full && Array.isArray(get(json, 'batches')) && Array.isArray(get(json, 'transactions'))) {
+    checkTransactionRefs(batches, transactions, accounts, bucketIds, rules, p);
+  }
 
   const errors = p.result();
   if (errors.length) return { ok: false, errors };
-  return {
-    ok: true,
-    data: {
-      schemaVersion: version,
-      exportedAt: /** @type {string} */ (exportedAt),
-      accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds,
-    },
+  /** @type {BackupData} */
+  const data = {
+    schemaVersion: version,
+    exportedAt: /** @type {string} */ (exportedAt),
+    accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds,
   };
+  if (full) {
+    data.batches = batches;
+    data.transactions = transactions;
+  }
+  return { ok: true, data };
 }
