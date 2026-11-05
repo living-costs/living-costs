@@ -43,6 +43,9 @@ test('confirm all', async ({ page }) => {
   // The nav shows how many suggestions are left, and is highlighted while any are.
   await expect(navTransfers).toHaveAccessibleName(`Transfers, ${expected.transferPairs} suggestions`);
   await expect(navTransfers).toHaveClass(/\battention\b/);
+  // Help and status are separate paragraphs: the count alone is status.
+  await expect(page.locator('#suggested-count')).toHaveText(`${expected.transferPairs} pairs.`);
+  await expect(page.locator('.help', { hasText: 'A suggestion is the same amount' })).toBeVisible();
   await expectNoAxeViolations(page);
 
   await page.getByRole('button', { name: 'Confirm all' }).click();
@@ -50,6 +53,8 @@ test('confirm all', async ({ page }) => {
   await expect(page.getByText('No suggestions.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Suggested transfers' })).toBeFocused();
   await expect(bodyRows(confirmed(page))).toHaveCount(expected.transferPairs);
+  await expect(page.getByText(`${expected.transferPairs} pairs.`, { exact: true })).toBeVisible();
+  await expect(page.locator('.help', { hasText: 'Undo puts a pair back into your totals' })).toBeVisible();
   await expect(navTransfers).toHaveAccessibleName('Transfers');
   await expect(navTransfers).not.toHaveClass(/\battention\b/);
   const pairs = await readStore(page, 'transferPairs');

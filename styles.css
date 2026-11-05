@@ -8,6 +8,7 @@
   --accent-contrast: #ffffff;
   --banner-bg: #fff4d6;
   --intro-bg: #e8f1fb;
+  --help-rule: #8aa6d6;
   --focus: #0b3d91;
   --error: #a4000f;
   --tab-border: #8c8c86;
@@ -141,7 +142,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Forms */
 .field { margin: 0.75rem 0; }
 .field > label { display: block; font-weight: 600; }
-.hint { margin: 0.25rem 0 0; }
+.field > label.choice { display: flex; }
+/* Help: fixed text that explains a screen or control. Status (text about the user's data) stays plain. */
+.help { border-left: 4px solid var(--help-rule); padding: 0.125rem 0 0.125rem 0.75rem; color: var(--muted); }
+.help::before { content: "\24D8\00A0" / ""; color: var(--accent); font-weight: 700; }
+.field .help { margin: 0.25rem 0 0; }
+/* A checkbox's hint lines up with its label text: the box's width plus the gap. */
+.field > .choice + .help { margin-left: 2rem; }
 input[type="text"], input[type="search"], input[type="date"], select {
   font: inherit;
   max-width: 100%;
@@ -217,7 +224,7 @@ dialog h3 { margin-top: 0; }
 
 /* Buckets */
 .field.toggle { padding-top: 1.5em; }
-.field.toggle > label.choice { display: flex; font-weight: normal; }
+.field.toggle > label.choice { font-weight: normal; }
 table.buckets td, table.buckets th { vertical-align: middle; }
 table.buckets input.select { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; }
 

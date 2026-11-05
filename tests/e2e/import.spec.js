@@ -88,8 +88,18 @@ test('imports Bank A with a new mapping', async ({ page }) => {
   await page.getByRole('radio', { name: 'One signed column' }).check();
   await page.getByLabel('Amount column').selectOption({ label: 'Debit Amount' });
   await expect(acmeAmount).toHaveText('£900.00');
-  await page.getByLabel('Purchases are positive').check();
+  const flip = page.getByLabel('Purchases are positive');
+  await flip.check();
   await expect(acmeAmount).toHaveText('-£900.00');
+  // The checkbox is centred on its label, and its hint is linked and starts under the label text.
+  await expect(flip).toHaveAccessibleDescription('Tick this for card files that show spending as positive amounts.');
+  const box = /** @type {{x: number, y: number, width: number, height: number}} */ (await flip.boundingBox());
+  const label = /** @type {{x: number, y: number, width: number, height: number}} */ (
+    await page.locator('label', { has: flip }).boundingBox());
+  const hint = /** @type {{x: number, y: number, width: number, height: number}} */ (
+    await page.locator('.help', { hasText: 'Tick this for card files' }).boundingBox());
+  expect(Math.abs((box.y + box.height / 2) - (label.y + label.height / 2))).toBeLessThanOrEqual(1);
+  expect(Math.abs(hint.x - (box.x + box.width + 8))).toBeLessThanOrEqual(1);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
   await expectNoAxeViolations(page);
   await fillMapping(page, BANK_A.new, 'bankA');

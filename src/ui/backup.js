@@ -6,7 +6,7 @@ import { h } from '../dom.js';
 import { formatLocalDate } from '../dates.js';
 import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
 import { firstRunChanges } from '../categories.js';
-import { field } from './form.js';
+import { field, help } from './form.js';
 import { whileSaving, isSaving } from './saving.js';
 import { resetImport } from './import.js';
 
@@ -38,19 +38,19 @@ export function render(root, app) {
   root.append(
     heading,
     h('p', { id: 'backup-last' }, lastShown ? `Last backup: ${lastShown}` : 'Not backed up yet.'),
-    h('p', null, "A backup holds your accounts and column settings, buckets, rules, categories and decisions. It doesn't hold your statements."),
+    help("A backup holds your accounts and column settings, buckets, rules, categories and decisions. It doesn't hold your statements."),
     h('p', { class: 'banner' }, WARNING),
     h('div', { class: 'actions' },
       h('button', {
         type: 'button', 'data-saves': true, 'data-focus-key': 'backup-save',
         onClick: () => save(app, root, heading),
       }, 'Save backup')),
-    h('p', { role: 'status', class: 'muted' }, view.status),
+    h('p', { role: 'status' }, view.status),
     h('h3', null, 'Restore'),
-    h('p', null, 'Restoring replaces everything this app holds in this browser. Afterwards, add your statements again on the Accounts screen.'),
+    help('Restoring replaces everything this app holds in this browser. Afterwards, add your statements again on the Accounts screen.'),
     field('Restore from backup', input),
     h('h3', null, 'Delete loaded data'),
-    h('p', null, 'This removes everything this app holds in this browser.'),
+    help('This removes everything this app holds in this browser.'),
     h('div', { class: 'actions' },
       h('button', {
         type: 'button', 'data-saves': true, 'data-focus-key': 'backup-delete',

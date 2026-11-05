@@ -6,7 +6,7 @@
 /** @import {Account, Mapping} from '../types.js' */
 /** @import {PreparedFile, MappedFile, PlannedFile, ImportPlan} from '../import.js' */
 import { h } from '../dom.js';
-import { focusKey, field, plural } from './form.js';
+import { checkboxField, focusKey, field, help, plural } from './form.js';
 import { whileSaving } from './saving.js';
 import { cmp } from '../order.js';
 /** @import {Child} from '../dom.js' */
@@ -176,7 +176,7 @@ function renderPick(root, app) {
   put(root,
     stepHeading('Choose files'),
     messages(),
-    h('p', null, 'Choose one or more CSV statements for one account. Each file is checked before anything is saved.'),
+    help('Choose one or more CSV statements for one account. Each file is checked before anything is saved.'),
     field('Choose CSV files', h('input', {
       type: 'file', multiple: true, accept: '.csv,text/csv', 'data-focus-key': 'import-files',
       onChange: (/** @type {Event} */ e) => take(/** @type {HTMLInputElement} */ (e.target).files),
@@ -371,17 +371,13 @@ function renderMapping(root, app) {
     amountBox.replaceChildren(...(f.amountStyle === 'single'
       ? [
         columnSelect('Amount column', 'amountColumn', false),
-        h('div', { class: 'field' },
-          h('label', { class: 'choice' },
-            h('input', {
-              type: 'checkbox', checked: f.signFlipped, 'data-focus-key': 'map-flip',
-              onChange: (/** @type {Event} */ e) => {
-                f.signFlipped = /** @type {HTMLInputElement} */ (e.target).checked;
-                refreshPreview();
-              },
-            }),
-            'Purchases are positive'),
-          h('p', { class: 'muted hint' }, 'Tick this for card files that show spending as positive amounts.')),
+        checkboxField('Purchases are positive', h('input', {
+          type: 'checkbox', checked: f.signFlipped, 'data-focus-key': 'map-flip',
+          onChange: (/** @type {Event} */ e) => {
+            f.signFlipped = /** @type {HTMLInputElement} */ (e.target).checked;
+            refreshPreview();
+          },
+        }), { hint: 'Tick this for card files that show spending as positive amounts.' }),
       ]
       : [columnSelect('Debit column', 'debitColumn', false), columnSelect('Credit column', 'creditColumn', false)]));
   };
@@ -404,7 +400,7 @@ function renderMapping(root, app) {
   put(root,
     stepHeading('Set up columns'),
     messages(),
-    h('p', null, `Tell the app how to read ${first.name}. This is saved with the account.`),
+    help(`Tell the app how to read ${first.name}. This is saved with the account.`),
     errors,
     field('Account name', h('input', {
       type: 'text', value: f.name, autocomplete: 'off', 'data-focus-key': 'map-name',
@@ -449,12 +445,12 @@ function renderMapping(root, app) {
  */
 function preview(f, file, signature) {
   const mapping = buildMapping(f, signature);
-  if (!mapping) return h('p', { class: 'muted' }, 'Choose the date, description and amount columns to see a preview.');
-  if (!validCurrency(f.currency)) return h('p', { class: 'muted' }, 'Enter a currency code to see a preview.');
+  if (!mapping) return h('p', null, 'Choose the date, description and amount columns to see a preview.');
+  if (!validCurrency(f.currency)) return h('p', null, 'Enter a currency code to see a preview.');
   const { rows, errors } = applyMapping(mapping, file.header, file.rows, f.currency);
   const shown = [...rows].sort((a, b) => cmp(a.date, b.date)).slice(0, 5);
-  const note = errors.length ? h('p', { class: 'muted' }, `${plural(errors.length, 'row', 'rows')} can't be read with these columns.`) : null;
-  if (shown.length === 0) return h('div', null, h('p', { class: 'muted' }, 'No rows can be read with these columns.'), note);
+  const note = errors.length ? h('p', null, `${plural(errors.length, 'row', 'rows')} can't be read with these columns.`) : null;
+  if (shown.length === 0) return h('div', null, h('p', null, 'No rows can be read with these columns.'), note);
   return h('div', null,
     h('table', null,
       h('caption', null, 'Preview'),
@@ -463,7 +459,7 @@ function preview(f, file, signature) {
       h('tbody', null, ...shown.map((r) => h('tr', null,
         h('td', null, formatDate(r.date)), h('td', null, raw(r.rawText)),
         h('td', { class: 'num' }, formatMoney(r.amountMinor, f.currency)))))),
-    h('p', { class: 'muted' }, 'The earliest 5 rows, as the app will read them.'),
+    help('The earliest 5 rows, as the app will read them.'),
     note);
 }
 
@@ -556,7 +552,7 @@ function renderPeriod(root, app) {
   put(root,
     stepHeading('Covered period'),
     messages(),
-    h('p', null, 'Check the dates each file covers. They start as the first and last transaction dates. '
+    help('Check the dates each file covers. They start as the first and last transaction dates. '
       + 'Widen them if the statement covers more, for example a whole month.'),
     ...flow.files.map((f, i) => {
       const p = /** @type {PeriodInput} */ (flow.periods.get(f.hash));
@@ -636,7 +632,7 @@ function renderReview(root, app) {
   put(root,
     stepHeading('Check possible duplicates'),
     messages(),
-    h('p', null, 'These rows look like ones already imported, but not exactly. Say whether each is the same transaction or a separate one.'),
+    help('These rows look like ones already imported, but not exactly. Say whether each is the same transaction or a separate one.'),
     ...items.map((it, i) => {
       /** @param {'same'|'both'} value @param {string} label */
       const choice = (value, label) => h('label', { class: 'choice' },
