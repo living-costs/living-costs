@@ -217,6 +217,8 @@ th, td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.5rem; text-a
 .row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .inline-form .name-input { width: 14rem; }
 .inline-form .error { white-space: normal; }
+.guide { max-width: 48rem; margin-bottom: 1rem; }
+.guide th { white-space: nowrap; }
 
 /* Categorise card */
 .category-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }

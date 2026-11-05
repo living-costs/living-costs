@@ -73,6 +73,17 @@ test('lists the defaults in order', async ({ page }) => {
   await expectNoAxeViolations(page);
 });
 
+test('explains each kind and budget type, with thresholds from tuning', async ({ page }) => {
+  await openCategories(page);
+  const kinds = page.getByRole('table', { name: 'Kinds' });
+  await expect(kinds.getByRole('rowheader')).toHaveText(['Spend', 'Income', 'Contribution', 'Transfer', 'Ignore']);
+  const types = page.getByRole('table', { name: /^Budget types/ });
+  await expect(types.getByRole('rowheader')).toHaveText(['Fixed', 'Variable', 'Annual', 'One-off']);
+  await expect(types.getByRole('row', { name: /^Fixed/ })).toContainText('in the last 2 complete months');
+  await expect(types.getByRole('row', { name: /^Variable/ })).toContainText('between percentiles 25 and 75');
+  await expectNoAxeViolations(page);
+});
+
 test('selects draw their own arrow with room beside the border', async ({ page }) => {
   // Chrome's native arrow sits against the border.
   await openCategories(page);
