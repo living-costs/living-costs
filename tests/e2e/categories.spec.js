@@ -81,6 +81,8 @@ test('explains each kind and budget type, with thresholds from tuning', async ({
   await expect(types.getByRole('rowheader')).toHaveText(['Fixed', 'Variable', 'Annual', 'One-off']);
   await expect(types.getByRole('row', { name: /^Fixed/ })).toContainText('in the last 2 complete months');
   await expect(types.getByRole('row', { name: /^Variable/ })).toContainText('between percentiles 25 and 75');
+  // Both tables sit inside the screen's help block, under its one bar.
+  await expect(page.locator('.help-group .guide')).toHaveCount(2);
   await expectNoAxeViolations(page);
 });
 
