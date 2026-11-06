@@ -8,10 +8,8 @@ import {
 } from './helpers.js';
 import defaults from '../../src/default-categories.js';
 
-const CONFIRM = 'Replace all data in this browser with this backup? Imported statements will need re-importing.';
-const WARNING = "A backup saved to Google Drive isn't encrypted. It can include dates, amounts, transaction descriptions and account details.";
-const FULL_WARNING = "A backup saved to Google Drive isn't encrypted. With transactions included, it holds every transaction you've imported: dates, amounts, descriptions and account details.";
-const FULL_CONFIRM = 'Replace all data in this browser with this backup? It includes your transactions, so nothing needs re-importing.';
+const CONFIRM = 'Replace all data in this browser with this backup?';
+const WARNING = "A backup saved to Google Drive isn't encrypted. It holds every transaction you've imported: dates, amounts, descriptions and account details.";
 
 /** Init script: no file picker, so saving falls back to a download. */
 const noPicker = () => { delete (/** @type {any} */ (window)).showSaveFilePicker; };
@@ -22,8 +20,6 @@ const heading = (page) => page.locator('#screen h2');
 const saveButton = (page) => page.getByRole('button', { name: 'Save backup', exact: true });
 /** @param {Page} page */
 const restoreInput = (page) => page.getByLabel('Restore from backup', { exact: true });
-/** @param {Page} page */
-const includeBox = (page) => page.getByRole('checkbox', { name: 'Include transactions', exact: true });
 
 /**
  * Today's local calendar date in the page, as YYYY-MM-DD and DD/MM/YYYY, worked out the way the
@@ -52,7 +48,7 @@ async function openBackup(page) {
 /** A valid, empty backup. */
 const emptyBackup = () => JSON.stringify({
   app: 'living-costs', schemaVersion: 2, exportedAt: new Date().toISOString(), accounts: [], buckets: [], rules: [],
-  categories: [], overrides: [], transferPairs: [], offeredDefaultIds: [],
+  categories: [], overrides: [], transferPairs: [], offeredDefaultIds: [], batches: [], transactions: [],
 });
 
 /** @param {string} name @param {string} text */
@@ -73,8 +69,8 @@ test('download fallback', async ({ page }, testInfo) => {
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   expect(saved).toMatchObject({ app: 'living-costs', schemaVersion: 2, accounts: [], overrides: [], transferPairs: [] });
   expect(saved.categories.length).toBeGreaterThan(0);
-  expect(saved.transactions).toBeUndefined();
-  expect(saved.batches).toBeUndefined();
+  expect(Array.isArray(saved.transactions)).toBe(true);
+  expect(Array.isArray(saved.batches)).toBe(true);
 
   await expect(page.getByText(`Last backup: ${shown}`, { exact: true })).toBeVisible();
   await expect(page.getByText('Not backed up yet.')).toHaveCount(0);
@@ -153,17 +149,26 @@ test('restore replaces', async ({ browser, baseURL }, testInfo) => {
   const first = await browser.newContext({ baseURL });
   const before = await first.newPage();
   await before.addInitScript(noPicker);
+  await trackCspViolations(before);
   await setupFixtureApp(before);
   await expect(subscriptionsPerMonth(before)).toHaveText('£89.97');
   await openScreen(before, 'Backup');
+  await expectNoAxeViolations(before);
   const [download] = await Promise.all([before.waitForEvent('download'), saveButton(before).click()]);
   const file = testInfo.outputPath('restore-me.json');
   await download.saveAs(file);
-  const counts = {
-    accounts: (await readStore(before, 'accounts')).length,
-    overrides: (await readStore(before, 'overrides')).length,
-    transferPairs: (await readStore(before, 'transferPairs')).length,
+  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const stores = {
+    accounts: await readStore(before, 'accounts'),
+    overrides: await readStore(before, 'overrides'),
+    transferPairs: await readStore(before, 'transferPairs'),
+    transactions: await readStore(before, 'transactions'),
+    batches: await readStore(before, 'batches'),
   };
+  expect(stores.transactions.length).toBeGreaterThan(100);
+  expect(saved.transactions.length).toBe(stores.transactions.length);
+  expect(saved.batches.length).toBe(stores.batches.length);
+  expect(await before.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
   await first.close();
 
   // A fresh context has no data.
@@ -180,88 +185,21 @@ test('restore replaces', async ({ browser, baseURL }, testInfo) => {
   });
   await restoreInput(page).setInputFiles(file);
 
-  // No transactions yet, so Help shows.
   await expect(heading(page)).toHaveText('Help');
   await expect(page.getByRole('status').filter({ hasText: 'Backup restored.' })).toBeVisible();
   expect(dialogs).toEqual([`confirm: ${CONFIRM}`]);
-  expect((await readStore(page, 'accounts')).length).toBe(counts.accounts);
-  expect((await readStore(page, 'transferPairs')).length).toBe(counts.transferPairs);
-  expect((await readStore(page, 'overrides')).length).toBe(counts.overrides);
-  expect(await readStore(page, 'transactions')).toEqual([]);
-  expect(await readStore(page, 'batches')).toEqual([]);
+  expect((await readStore(page, 'accounts')).length).toBe(stores.accounts.length);
+  expect((await readStore(page, 'transferPairs')).length).toBe(stores.transferPairs.length);
+  expect((await readStore(page, 'overrides')).length).toBe(stores.overrides.length);
+  const byId = (/** @type {any[]} */ rows) => rows.toSorted((a, b) => (a.id < b.id ? -1 : 1));
+  expect(byId(await readStore(page, 'transactions'))).toEqual(byId(stores.transactions));
+  expect(byId(await readStore(page, 'batches'))).toEqual(byId(stores.batches));
   const [settings] = await readStore(page, 'settings');
   expect(settings.lastBackupAt).toBeUndefined();
   expect(settings.helpDismissed).toBe(false);
   expect(settings.schemaVersion).toBe(2);
 
-  // Re-import the statements into the restored accounts.
-  const wholeYear = /** @type {[string, string]} */ (['01/11/2025', '31/10/2026']);
-  await importFiles(page, { files: ['bank-a-current.csv'], account: { existing: FIXTURE_ACCOUNTS.bankA.new.name }, covers: wholeYear });
-  await importFiles(page, { files: ['bank-a-savings.csv'], account: { existing: FIXTURE_ACCOUNTS.savings.new.name }, covers: wholeYear });
-  await importFiles(page, { files: ['card.csv'], account: { existing: FIXTURE_ACCOUNTS.card.new.name }, covers: wholeYear });
-  await importFiles(page, {
-    files: ['bank-b-2026-08.csv', 'bank-b-2026-09.csv', 'bank-b-2026-10.csv'],
-    account: { existing: FIXTURE_ACCOUNTS.bankB.new.name }, covers: 'whole-month',
-  });
-  expect((await readStore(page, 'accounts')).length).toBe(counts.accounts);
-
-  await openScreen(page, 'Typical month');
-  await expect(subscriptionsPerMonth(page)).toHaveText('£89.97');
-  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
-  await second.close();
-});
-
-test('full backup: ticking the box saves transactions, and restoring needs no re-import', async ({ browser, baseURL }, testInfo) => {
-  // First browser: the full fixture set-up, saved with transactions as a download.
-  const first = await browser.newContext({ baseURL });
-  const before = await first.newPage();
-  await before.addInitScript(noPicker);
-  await trackCspViolations(before);
-  await setupFixtureApp(before);
-  await openScreen(before, 'Backup');
-  const box = includeBox(before);
-  await expect(box).not.toBeChecked();
-  await expect(before.getByText(WARNING, { exact: true })).toBeVisible();
-  await box.check();
-  await expect(before.getByText(FULL_WARNING, { exact: true })).toBeVisible();
-  await expect(before.getByText(WARNING, { exact: true })).toHaveCount(0);
-  await expectNoAxeViolations(before);
-
-  const [download] = await Promise.all([before.waitForEvent('download'), saveButton(before).click()]);
-  const { iso } = await today(before);
-  expect(download.suggestedFilename()).toBe(`living-costs-full-backup-${iso}.json`);
-  // The tick survives the redraw after saving.
-  await expect(box).toBeChecked();
-  const file = testInfo.outputPath('full.json');
-  await download.saveAs(file);
-  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const stores = {
-    transactions: await readStore(before, 'transactions'),
-    batches: await readStore(before, 'batches'),
-  };
-  expect(stores.transactions.length).toBeGreaterThan(100);
-  expect(saved.transactions.length).toBe(stores.transactions.length);
-  expect(saved.batches.length).toBe(stores.batches.length);
-  expect(await before.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
-  await first.close();
-
-  // Second browser: restore, and everything is there without importing anything.
-  const second = await browser.newContext({ baseURL });
-  const page = await second.newPage();
-  await openBackup(page);
-  /** @type {string[]} */
-  const dialogs = [];
-  page.on('dialog', async (dialog) => {
-    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
-    await dialog.accept();
-  });
-  await restoreInput(page).setInputFiles(file);
-  await expect(page.getByRole('status').filter({ hasText: 'Backup restored, including your transactions.' })).toBeVisible();
-  expect(dialogs).toEqual([`confirm: ${FULL_CONFIRM}`]);
-  const byId = (/** @type {any[]} */ rows) => rows.toSorted((a, b) => (a.id < b.id ? -1 : 1));
-  expect(byId(await readStore(page, 'transactions'))).toEqual(byId(stores.transactions));
-  expect(byId(await readStore(page, 'batches'))).toEqual(byId(stores.batches));
-
+  // Everything is there without importing anything.
   await openScreen(page, 'Typical month');
   await expect(subscriptionsPerMonth(page)).toHaveText('£89.97');
   // Import batches came back, so each import can still be undone.

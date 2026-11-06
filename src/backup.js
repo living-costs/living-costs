@@ -1,9 +1,7 @@
 // Plain JSON backup and validated restore.
 // Every backup holds the work that is hard to recreate: accounts and their column mappings,
-// buckets, amount rules, categories, offered defaults, overrides and transfer decisions. A
-// decisions-only backup stops there, and transactions and batches come back by re-importing the
-// original CSVs, where fingerprints reattach every decision. A full backup also holds every
-// transaction and batch, restored exactly as saved. A backup file is untrusted: validateBackup
+// buckets, amount rules, categories, offered defaults, overrides and transfer decisions, and
+// every transaction and import batch, restored exactly as saved. A backup file is untrusted: validateBackup
 // builds every object afresh from known keys only, and its messages never repeat what the file
 // contains.
 
@@ -19,24 +17,21 @@ import { localDay } from './dates.js';
 const MAX_ERRORS = 20;
 
 /**
- * `transactions` and `batches` are both present in a full backup and both absent otherwise.
  * @typedef {{schemaVersion:number,exportedAt:string,accounts:Account[],buckets:Bucket[],rules:Rule[],
  *   categories:Category[],overrides:Override[],transferPairs:TransferPair[],offeredDefaultIds:string[],
- *   batches?:Batch[],transactions?:Transaction[]}} BackupData
+ *   batches:Batch[],transactions:Transaction[]}} BackupData
  */
 /** @typedef {{app:'living-costs'} & BackupData} Backup */
 /** @typedef {{ok:true,data:BackupData}|{ok:false,errors:string[]}} Validation */
 
 /**
- * The backup of `state`, ready for JSON.stringify. A full backup also holds transactions and batches.
+ * The backup of `state`, ready for JSON.stringify.
  * @param {State} state
  * @param {Date} now
- * @param {{full?: boolean}} [options]
  * @returns {Backup}
  */
-export function buildBackup(state, now, { full = false } = {}) {
-  /** @type {Backup} */
-  const backup = {
+export function buildBackup(state, now) {
+  return {
     app: 'living-costs',
     schemaVersion: DATA_VERSION,
     exportedAt: now.toISOString(),
@@ -47,33 +42,30 @@ export function buildBackup(state, now, { full = false } = {}) {
     overrides: [...state.overrides.values()],
     transferPairs: [...state.transferPairs.values()],
     offeredDefaultIds: state.settings.offeredDefaultIds,
+    batches: state.batches,
+    transactions: state.transactions,
   };
-  if (full) {
-    backup.batches = state.batches;
-    backup.transactions = state.transactions;
-  }
-  return backup;
 }
 
 /**
  * @param {Date} now
- * @param {boolean} [full]
- * @returns {string} living-costs-backup-YYYY-MM-DD.json, or living-costs-full-backup-YYYY-MM-DD.json,
- *   using the local date
+ * @returns {string} living-costs-backup-YYYY-MM-DD.json, using the local date
  */
-export function backupFileName(now, full = false) {
-  return `living-costs-${full ? 'full-' : ''}backup-${localDay(now)}.json`;
+export function backupFileName(now) {
+  return `living-costs-backup-${localDay(now)}.json`;
 }
 
 /**
  * The Changes for store.replaceAll: the backup's content, plus settings that keep this
  * browser's helpDismissed, use the current settings schema version, take offeredDefaultIds from
- * the backup, and have no lastBackupAt (this browser hasn't backed up the restored data).
+ * the backup, and have no lastBackupAt (this browser hasn't backed up the restored data), unless
+ * `keepLastBackup` is set and this browser has one.
  * @param {BackupData} data
  * @param {Settings} current this browser's settings
+ * @param {{keepLastBackup?: boolean}} [options]
  * @returns {Changes}
  */
-export function restoreChanges(data, current) {
+export function restoreChanges(data, current, { keepLastBackup = false } = {}) {
   /** @type {Settings} */
   const settings = {
     id: 'settings',
@@ -81,6 +73,7 @@ export function restoreChanges(data, current) {
     offeredDefaultIds: [...data.offeredDefaultIds],
     helpDismissed: current.helpDismissed === true,
   };
+  if (keepLastBackup && current.lastBackupAt) settings.lastBackupAt = current.lastBackupAt;
   /** @type {NonNullable<Changes['put']>} */
   const put = {
     settings: [settings],
@@ -90,11 +83,9 @@ export function restoreChanges(data, current) {
     categories: data.categories,
     overrides: data.overrides,
     transferPairs: data.transferPairs,
+    batches: data.batches,
+    transactions: data.transactions,
   };
-  if (data.batches && data.transactions) {
-    put.batches = data.batches;
-    put.transactions = data.transactions;
-  }
   return { put };
 }
 
@@ -623,12 +614,8 @@ function validate(json) {
     (o) => o.fingerprint, 'has the same fingerprint as', p);
   const transferPairs = readList(json, 'transferPairs', 'transfer pairs', 'Transfer pair', readPair,
     (x) => x.key, 'is the same pair as', p);
-  // A full backup has both lists. Either one present means the other is needed too.
-  const full = has(json, 'batches') || has(json, 'transactions');
-  const batches = full ? readList(json, 'batches', 'batches', 'Batch', readBatch, byId, 'has the same ID as', p) : [];
-  const transactions = full
-    ? readList(json, 'transactions', 'transactions', 'Transaction', readTransaction, byId, 'has the same ID as', p)
-    : [];
+  const batches = readList(json, 'batches', 'batches', 'Batch', readBatch, byId, 'has the same ID as', p);
+  const transactions = readList(json, 'transactions', 'transactions', 'Transaction', readTransaction, byId, 'has the same ID as', p);
 
   const offered = get(json, 'offeredDefaultIds');
   /** @type {string[]} */
@@ -680,7 +667,7 @@ function validate(json) {
     if (used.some((id) => !categoryIds.has(id))) p.add(`Override ${i + 1} points at a missing category.`);
   });
   // Without both lists, every reference would fail; the missing list is already reported.
-  if (full && Array.isArray(get(json, 'batches')) && Array.isArray(get(json, 'transactions'))) {
+  if (Array.isArray(get(json, 'batches')) && Array.isArray(get(json, 'transactions'))) {
     checkTransactionRefs(batches, transactions, accounts, bucketIds, rules, p);
   }
 
@@ -690,11 +677,7 @@ function validate(json) {
   const data = {
     schemaVersion: version,
     exportedAt: /** @type {string} */ (exportedAt),
-    accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds,
+    accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds, batches, transactions,
   };
-  if (full) {
-    data.batches = batches;
-    data.transactions = transactions;
-  }
   return { ok: true, data };
 }
