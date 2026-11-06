@@ -2,9 +2,15 @@
 // data is refused without being touched. Each test changes the stored rows, then reloads.
 /** @import {Page} from '@playwright/test' */
 import { test, expect } from '@playwright/test';
-import { trackCspViolations, setupFixtureApp, readStore, writeStore, patchSettings } from './helpers.js';
+import fs from 'node:fs';
+import {
+  trackCspViolations, setupFixtureApp, readStore, writeStore, patchSettings, expectNoAxeViolations,
+} from './helpers.js';
 
 const NEWER = 'Your data was saved by a newer version of this app. Reload the page to get it.';
+const STORES = ['settings', 'accounts', 'batches', 'transactions', 'buckets', 'rules', 'categories', 'overrides', 'transferPairs'];
+const WARNING = "A backup saved to Google Drive isn't encrypted. It holds every transaction you've imported: dates, amounts, descriptions and account details.";
+const DELETE_CONFIRM = 'Delete all data in this browser? Save a backup first if you might want it.';
 const FAILED = "Your saved data couldn't be upgraded to this version of the app. Nothing was changed.";
 
 /** @param {Page} page */
@@ -90,18 +96,101 @@ test('a newer IndexedDB version is refused', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button')).toHaveCount(0);
 });
 
-test('an upgrade that fails writes nothing', async ({ page }) => {
-  await setupFixtureApp(page);
-  await patchSettings(page, { schemaVersion: 1 });
-  const [first] = await readStore(page, 'transactions');
-  // Not a valid transaction: the upgraded data fails validation.
-  await writeStore(page, 'transactions', [{ ...first, amountMinor: 'lots' }]);
-  const before = {};
-  for (const name of ['settings', 'transactions', 'rules', 'buckets']) before[name] = await readStore(page, name);
+/** Init script: no file picker, so saving falls back to a download. */
+const noPicker = () => { delete (/** @type {any} */ (window)).showSaveFilePicker; };
 
+/** @param {Page} page */
+const readAll = async (page) => Object.fromEntries(await Promise.all(STORES.map(async (n) => [n, await readStore(page, n)])));
+
+/**
+ * Load the fixture app, make the first batch's rowCount wrong (so the upgrade fails validation),
+ * mark the data version 1 and reload.
+ * @param {Page} page
+ */
+async function setupFailure(page) {
+  await page.addInitScript(noPicker);
+  await trackCspViolations(page);
+  await setupFixtureApp(page);
+  const [batch] = await readStore(page, 'batches');
+  await writeStore(page, 'batches', [{ ...batch, rowCount: batch.rowCount + 1 }]);
+  await patchSettings(page, { schemaVersion: 1 });
+  const before = await readAll(page);
+  await page.reload();
+  await expect(heading(page)).toHaveText('The app could not start');
+  return { before, batch };
+}
+
+/** @param {Page} page */
+const saveCopy = (page) => page.getByRole('button', { name: 'Save a copy of your data', exact: true });
+/** @param {Page} page */
+const deleteButton = (page) => page.getByRole('button', { name: 'Delete all data and start afresh', exact: true });
+
+test('an upgrade that fails shows the failure screen and changes nothing', async ({ page }) => {
+  const { before } = await setupFailure(page);
+  const screen = page.locator('#screen');
+  await expect(screen).toContainText(FAILED);
+  await expect(screen.getByText('Details:', { exact: true })).toBeVisible();
+  await expect(screen.getByRole('listitem').filter({ hasText: 'row' }).first()).toBeVisible();
+  await expect(screen.getByText(WARNING, { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button')).toHaveCount(0);
+  expect(await readAll(page)).toEqual(before);
+  await expectNoAxeViolations(page);
+  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
+});
+
+test('save a copy writes the data at its old version', async ({ page }, testInfo) => {
+  const { before, batch } = await setupFailure(page);
+  const [download] = await Promise.all([page.waitForEvent('download'), saveCopy(page).click()]);
+  const iso = await page.evaluate(() => {
+    const d = new Date();
+    const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  expect(download.suggestedFilename()).toBe(`living-costs-backup-${iso}.json`);
+  const file = testInfo.outputPath('copy.json');
+  await download.saveAs(file);
+  const copy = JSON.parse(fs.readFileSync(file, 'utf8'));
+  expect(copy.schemaVersion).toBe(1);
+  expect(copy.batches[0].rowCount).toBe(batch.rowCount + 1);
+  expect(copy.transactions.length).toBeGreaterThan(0);
+  await expect(page.getByRole('status')).toHaveText('Copy saved.');
+  expect(await readAll(page)).toEqual(before);
+});
+
+test('a settings schemaVersion that is not a number also fails, and the copy says version 1', async ({ page }, testInfo) => {
+  await page.addInitScript(noPicker);
+  await setupFixtureApp(page);
+  await patchSettings(page, { schemaVersion: 'two' });
+  const before = await readAll(page);
   await page.reload();
   await expect(heading(page)).toHaveText('The app could not start');
   await expect(page.locator('#screen')).toContainText(FAILED);
-  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button')).toHaveCount(0);
-  for (const name of Object.keys(before)) expect(await readStore(page, name)).toEqual(before[name]);
+  const [download] = await Promise.all([page.waitForEvent('download'), saveCopy(page).click()]);
+  const file = testInfo.outputPath('copy.json');
+  await download.saveAs(file);
+  expect(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion).toBe(1);
+  expect(await readAll(page)).toEqual(before);
+});
+
+test('delete all data starts afresh', async ({ page }) => {
+  const { before } = await setupFailure(page);
+  const dialogs = [];
+  let accept = false;
+  page.on('dialog', async (dialog) => {
+    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+    await (accept ? dialog.accept() : dialog.dismiss());
+  });
+  await deleteButton(page).click();
+  expect(dialogs).toEqual([`confirm: ${DELETE_CONFIRM}`]);
+  await expect(heading(page)).toHaveText('The app could not start');
+  expect(await readAll(page)).toEqual(before);
+
+  accept = true;
+  await deleteButton(page).click();
+  await expect(heading(page)).toHaveText('Help');
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button').first()).toBeVisible();
+  const [settings] = await readStore(page, 'settings');
+  expect(settings.schemaVersion).toBe(2);
+  expect(await readStore(page, 'transactions')).toHaveLength(0);
+  expect((await readStore(page, 'categories')).length).toBeGreaterThan(0);
 });

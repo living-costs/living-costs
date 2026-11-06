@@ -18,6 +18,7 @@ import * as buckets from './ui/buckets.js';
 import * as transfers from './ui/transfers.js';
 import * as typical from './ui/typical.js';
 import * as backup from './ui/backup.js';
+import { renderUpgradeFailed } from './ui/upgrade-failed.js';
 import { seedDefaults, pendingDefaults, acceptDefaults, dismissDefaults } from './categories.js';
 
 /** @typedef {'help'|'typical'|'categorise'|'buckets'|'transactions'|'transfers'|'accounts'|'categories'|'backup'} ScreenName */
@@ -162,7 +163,7 @@ async function start() {
     return;
   }
   if (opened.kind === 'failed') {
-    upgradeFailed(opened);
+    renderUpgradeFailed(screenEl, opened, () => { clear(screenEl); start().catch(failed); });
     return;
   }
   const { store } = opened;
@@ -201,16 +202,6 @@ function cannotStart(message, detail) {
     h('p', null, message),
   );
   if (detail) screenEl.append(h('p', { class: 'muted' }, `Details: ${detail}`));
-}
-
-/**
- * The stored data is older and could not be upgraded, so nothing was written.
- * A stub: Task 7 replaces it with a screen that can save a copy or delete the data.
- * @param {Extract<Opened, {kind: 'failed'}>} opened
- */
-function upgradeFailed(opened) {
-  cannotStart("Your saved data couldn't be upgraded to this version of the app. Nothing was changed.",
-    opened.errors.join(' '));
 }
 
 const WAITING = 'This app is already open in another tab. Close that tab and this one will load automatically.';
