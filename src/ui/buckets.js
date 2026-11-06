@@ -21,6 +21,7 @@ import { formatMonth } from '../dates.js';
 import { whileSaving, queueSave } from './saving.js';
 import { field, focusKey, help, plural, valueOf, showModalWhenConnected } from './form.js';
 import { renderTransactionList } from './transactions.js';
+import { showing, back } from './subview.js';
 
 /** @typedef {'total'|'name'|'count'} SortKey */
 /** @typedef {'ascending'|'descending'} SortDir */
@@ -427,7 +428,7 @@ function mergeDialog(app, d, chosen, cats) {
 }
 
 /**
- * One bucket's transactions, with search, and Back to buckets.
+ * One bucket's transactions, with search, and Back to buckets. Browser back does the same.
  * @param {HTMLElement} root
  * @param {App} app
  * @param {Bucket} b
@@ -435,12 +436,12 @@ function mergeDialog(app, d, chosen, cats) {
 function drillIn(root, app, b) {
   root.append(h('h3', { tabindex: '-1', 'data-focus-key': 'bucket-heading' }, b.displayName));
   renderTransactionList(root, app, { bucketId: b.id });
+  showing(() => {
+    ui.drillId = null;
+    app.rerender();
+    focusKey(nameKey(b.id));
+  });
   root.append(h('div', { class: 'actions' }, h('button', {
-    type: 'button', class: 'secondary', 'data-focus-key': 'bucket-back',
-    onClick: () => {
-      ui.drillId = null;
-      app.rerender();
-      focusKey(nameKey(b.id));
-    },
+    type: 'button', class: 'secondary', 'data-focus-key': 'bucket-back', onClick: back,
   }, 'Back to buckets')));
 }

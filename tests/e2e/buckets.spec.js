@@ -255,6 +255,58 @@ test('the Buckets nav button returns to the list', async ({ page }) => {
   await expect(search(page)).toBeVisible();
 });
 
+/** Whether the current history entry is the one an open bucket adds. */
+const onSubviewEntry = (page) => page.evaluate(() => history.state?.livingCostsSubview === true);
+
+test('browser back closes the bucket, as Back to buckets does', async ({ page }) => {
+  const drilled = page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 });
+  const url = page.url();
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await expect(drilled).toBeFocused();
+  expect(await onSubviewEntry(page)).toBe(true);
+  await page.goBack();
+  await expect(drilled).toHaveCount(0);
+  await expect(nameButton(page, 'AMAZON.CO.UK')).toBeFocused();
+  expect(page.url()).toBe(url);
+  expect(await onSubviewEntry(page)).toBe(false);
+
+  // Browser forward does not reopen it, and leaves no entry behind for back to waste.
+  await page.goForward();
+  await expect.poll(() => onSubviewEntry(page)).toBe(false);
+  await expect(drilled).toHaveCount(0);
+  await expect(search(page)).toBeVisible();
+
+  // Back to buckets goes through history too, so opening and closing again does not grow it.
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await page.getByRole('button', { name: 'Back to buckets' }).click();
+  await expect(nameButton(page, 'AMAZON.CO.UK')).toBeFocused();
+  const length = await page.evaluate(() => history.length);
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await page.getByRole('button', { name: 'Back to buckets' }).click();
+  await expect(nameButton(page, 'AMAZON.CO.UK')).toBeFocused();
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  expect(await onSubviewEntry(page)).toBe(false);
+});
+
+test('leaving a bucket through the nav removes its history entry', async ({ page }) => {
+  const drilled = page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 });
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await expect(drilled).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Accounts' }).click();
+  await expect(screenHeading(page)).toHaveText('Accounts');
+  await expect.poll(() => onSubviewEntry(page)).toBe(false);
+  // The screen did not change when the entry went.
+  await expect(screenHeading(page)).toHaveText('Accounts');
+});
+
+test('a reload with a bucket open leaves no entry behind', async ({ page }) => {
+  await nameButton(page, 'AMAZON.CO.UK').click();
+  await expect(page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 })).toBeVisible();
+  await page.reload();
+  await expect(screenHeading(page)).toBeVisible();
+  await expect.poll(() => onSubviewEntry(page)).toBe(false);
+});
+
 test('a bucket with several currencies is never added across them', async ({ page }) => {
   // Make one FARM SHOP row euros, so the bucket spans two currencies.
   const farm = (await readStore(page, 'buckets')).find((b) => b.displayName === 'FARM SHOP');
