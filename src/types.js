@@ -11,7 +11,7 @@
  *   currency:string,rawText:string,rawType?:string,bucketId:string,flaggedRuleId?:string}} Transaction */
 /** @typedef {{id:string,keys:string[],displayName:string,categoryId?:string,stoppedAfter?:string,exampleRawTexts:string[]}} Bucket */
 /** @typedef {{id:string,pattern:string,matchType:'keyAmount',amountMinor:number,
- *   expected:{count:number,period:'week'|'month'|'year'},bucketId:string,normaliserVersion:number}} Rule */
+ *   expected:{count:number,period:'week'|'month'|'year'},bucketId:string}} Rule */
 /** @typedef {'spend'|'income'|'contribution'|'transfer'|'ignore'} CategoryKind */
 /** @typedef {'fixed'|'variable'|'annual'|'oneoff'} BudgetType */
 /** @typedef {{id:string,name:string,kind:CategoryKind,budgetType?:BudgetType,defaultId?:string,position:number}} Category */

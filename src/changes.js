@@ -1,4 +1,5 @@
 /** @import {State, Changes, StoreName} from './types.js' */
+import { DATA_VERSION } from './version.js';
 
 /** @type {Record<StoreName, string>} */
 const KEY_FIELD = {
@@ -9,7 +10,7 @@ const KEY_FIELD = {
 /** @returns {State} */
 export function emptyState() {
   return {
-    settings: { id: 'settings', schemaVersion: 1, offeredDefaultIds: [], helpDismissed: false },
+    settings: { id: 'settings', schemaVersion: DATA_VERSION, offeredDefaultIds: [], helpDismissed: false },
     accounts: [], batches: [], transactions: [], buckets: [], rules: [], categories: [],
     overrides: new Map(), transferPairs: new Map(),
   };

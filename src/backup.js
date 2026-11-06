@@ -9,12 +9,11 @@
 
 /** @import {State, Changes, Settings, Account, Mapping, Bucket, Rule, Category, Override, TransferPair, Batch, Transaction} from './types.js' */
 import { emptyState } from './changes.js';
+import { DATA_VERSION } from './version.js';
 import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
 import { localDay } from './dates.js';
-
-export const SCHEMA_VERSION = 2;
 
 /** Validation stops listing problems after this many. */
 const MAX_ERRORS = 20;
@@ -39,7 +38,7 @@ export function buildBackup(state, now, { full = false } = {}) {
   /** @type {Backup} */
   const backup = {
     app: 'living-costs',
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: DATA_VERSION,
     exportedAt: now.toISOString(),
     accounts: state.accounts,
     buckets: state.buckets,
@@ -306,7 +305,6 @@ function readRule(o, label, p) {
   const amountMinor = get(o, 'amountMinor');
   const expectedRaw = get(o, 'expected');
   const bucketId = get(o, 'bucketId');
-  const normaliserVersion = get(o, 'normaliserVersion');
   c.need(isId(id), 'ID');
   c.need(isText(pattern), 'pattern');
   c.need(matchType === 'keyAmount', 'match type');
@@ -316,7 +314,6 @@ function readRule(o, label, p) {
   const expectedOk = isInt(count) && count >= 1 && isPeriod(period);
   c.need(expectedOk, 'expected frequency');
   c.need(isId(bucketId), 'bucket');
-  c.need(isInt(normaliserVersion) && normaliserVersion >= 1, 'normaliser version');
   return {
     id: isId(id) ? id : '',
     pattern: isText(pattern) ? pattern : '',
@@ -324,7 +321,6 @@ function readRule(o, label, p) {
     amountMinor: isInt(amountMinor) ? amountMinor : 0,
     expected: { count: isInt(count) ? count : 1, period: isPeriod(period) ? period : 'month' },
     bucketId: isId(bucketId) ? bucketId : '',
-    normaliserVersion: isInt(normaliserVersion) ? normaliserVersion : 1,
   };
 }
 
@@ -611,8 +607,8 @@ function validate(json) {
   if (!isObj(json) || get(json, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
   const version = get(json, 'schemaVersion');
   if (!isInt(version) || version < 1) return { ok: false, errors: ["This backup's version is missing or not valid."] };
-  if (version > SCHEMA_VERSION) return { ok: false, errors: ['This backup is from a newer version of this app.'] };
-  if (version < SCHEMA_VERSION) return { ok: false, errors: ["This backup is from an older version of this app and can't be restored."] };
+  if (version > DATA_VERSION) return { ok: false, errors: ['This backup is from a newer version of this app.'] };
+  if (version < DATA_VERSION) return { ok: false, errors: ["This backup is from an older version of this app and can't be restored."] };
 
   const p = new Problems();
   const exportedAt = get(json, 'exportedAt');

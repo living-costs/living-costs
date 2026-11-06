@@ -7,9 +7,10 @@ import { pairKey, decidePair } from '../../src/transfers.js';
 import { typicalMonth } from '../../src/typical.js';
 import tuning from '../../src/tuning.js';
 import {
-  SCHEMA_VERSION, buildBackup, validateBackup, restoreChanges, backupFileName,
+  buildBackup, validateBackup, restoreChanges, backupFileName,
 } from '../../src/backup.js';
 import { localDay } from '../../src/dates.js';
+import { DATA_VERSION } from '../../src/version.js';
 import { fixtureState, wholeMonths } from './helpers/fixture-state.js';
 import { NOW, BANK_A, SAVINGS, CARD, BANK_B, pick, run } from './pipeline.js';
 import { prepareFiles } from '../../src/import.js';
@@ -46,7 +47,7 @@ const base = () => ({
   ],
   rules: [{
     id: 'r1', pattern: 'SHOP', matchType: 'keyAmount', amountMinor: -999,
-    expected: { count: 1, period: 'month' }, bucketId: 'b3', normaliserVersion: 1,
+    expected: { count: 1, period: 'month' }, bucketId: 'b3',
   }],
   categories: [
     { id: 'c1', name: 'Groceries', kind: 'spend', budgetType: 'variable', defaultId: 'groceries', position: 0 },
@@ -92,8 +93,8 @@ test('buildBackup holds the hard-to-recreate work and leaves out transactions, b
     'schemaVersion', 'transferPairs',
   ]);
   assert.equal(b.app, 'living-costs');
-  assert.equal(b.schemaVersion, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 2);
+  assert.equal(b.schemaVersion, DATA_VERSION);
+  assert.equal(DATA_VERSION, 2);
   assert.equal(b.exportedAt, NOW.toISOString());
   assert.ok(Array.isArray(b.overrides) && Array.isArray(b.transferPairs));
   assert.equal(b.transferPairs.length, s.transferPairs.size);
@@ -192,13 +193,24 @@ test('restore then re-import: splits, overrides, flags and confirmed pairs resol
   assert.deepEqual(typical(after), typical(before));
 });
 
+test('emptyState uses DATA_VERSION', () => {
+  assert.equal(emptyState().settings.schemaVersion, DATA_VERSION);
+});
+
+test('a rule with a normaliserVersion still validates, and the field is dropped', () => {
+  const b = /** @type {any} */ (base());
+  b.rules[0].normaliserVersion = 1;
+  const data = dataOf(b);
+  assert.equal('normaliserVersion' in data.rules[0], false);
+});
+
 // --- restoreChanges ----------------------------------------------------------------------------
 
 test('restoreChanges writes the backup, keeps helpDismissed, sets the schema version and drops lastBackupAt', () => {
   const data = dataOf(base());
   const current = { ...emptyState().settings, helpDismissed: true, lastBackupAt: '2026-10-01T09:00:00.000Z', offeredDefaultIds: ['x'] };
   const c = restoreChanges(data, current);
-  assert.deepEqual(c.put?.settings, [{ id: 'settings', schemaVersion: 1, offeredDefaultIds: ['groceries', 'salary'], helpDismissed: true }]);
+  assert.deepEqual(c.put?.settings, [{ id: 'settings', schemaVersion: 2, offeredDefaultIds: ['groceries', 'salary'], helpDismissed: true }]);
   assert.deepEqual(c.put?.accounts, data.accounts);
   assert.deepEqual(c.put?.buckets, data.buckets);
   assert.deepEqual(c.put?.rules, data.rules);
@@ -368,7 +380,6 @@ test('enums, types and shapes are checked field by field', () => {
   b.buckets[1].exampleRawTexts = [1];
   b.rules[0].matchType = 'regex';
   b.rules[0].expected = { count: 0, period: 'day' };
-  b.rules[0].normaliserVersion = '1';
   b.categories[0].kind = 'savings';
   b.categories[1].budgetType = 'fixed';
   b.categories[1].position = 1.5;
@@ -387,7 +398,6 @@ test('enums, types and shapes are checked field by field', () => {
     'Bucket 2 has a missing or invalid list of examples.',
     'Rule 1 has a missing or invalid match type.',
     'Rule 1 has a missing or invalid expected frequency.',
-    'Rule 1 has a missing or invalid normaliser version.',
     'Category 1 has a missing or invalid kind.',
     'Category 2 has a missing or invalid position.',
     'Category 2 has a budget type, but its kind has none.',

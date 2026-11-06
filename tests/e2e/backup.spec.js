@@ -192,7 +192,7 @@ test('restore replaces', async ({ browser, baseURL }, testInfo) => {
   const [settings] = await readStore(page, 'settings');
   expect(settings.lastBackupAt).toBeUndefined();
   expect(settings.helpDismissed).toBe(false);
-  expect(settings.schemaVersion).toBe(1);
+  expect(settings.schemaVersion).toBe(2);
 
   // Re-import the statements into the restored accounts.
   const wholeYear = /** @type {[string, string]} */ (['01/11/2025', '31/10/2026']);
@@ -302,7 +302,7 @@ test('bad backup', async ({ page }) => {
   const markup = '<img src=x>SECRET';
   const invalid = JSON.parse(emptyBackup());
   invalid.rules = [{ id: markup, pattern: markup, matchType: 'keyAmount', amountMinor: 1.5,
-    expected: { count: 1, period: 'month' }, bucketId: markup, normaliserVersion: 1 }];
+    expected: { count: 1, period: 'month' }, bucketId: markup }];
   await restoreInput(page).setInputFiles(jsonFile('invalid.json', JSON.stringify(invalid)));
   await expect(errors.getByRole('listitem')).toHaveText([
     'Rule 1 has a missing or invalid amount.',
@@ -423,7 +423,7 @@ test('delete loaded data: accepting leaves exactly a first visit', async ({ page
     expect(categories.map((c) => c.name)).toEqual(defaults.map((d) => d.name));
     expect(categories.map((c) => c.defaultId)).toEqual(defaults.map((d) => d.id));
     expect(after.settings).toEqual([{
-      id: 'settings', schemaVersion: 1, offeredDefaultIds: defaults.map((d) => d.id), helpDismissed: false,
+      id: 'settings', schemaVersion: 2, offeredDefaultIds: defaults.map((d) => d.id), helpDismissed: false,
     }]);
   };
   await expectFirstVisit();
