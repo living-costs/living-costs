@@ -6,9 +6,12 @@
 // contains.
 
 /** @import {State, Changes, Settings, Account, Mapping, Bucket, Rule, Category, Override, TransferPair, Batch, Transaction} from './types.js' */
+/** @import {Normaliser, Step} from './migrate.js' */
 import { emptyState } from './changes.js';
 import { DATA_VERSION } from './version.js';
-import { upgradeRaw } from './migrate.js';
+import { upgradeRaw, STEPS } from './migrate.js';
+import { rematch } from './rematch.js';
+import { normalise } from './normalise.js';
 import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
@@ -580,12 +583,14 @@ function readList(json, field, noun, name, read, keyOf, sameAs, p) {
 
 /**
  * Check a parsed backup file and build clean copies of its content. Never throws.
+ * `options` exist for tests only.
  * @param {unknown} json
+ * @param {{steps?: Step[], normalise?: Normaliser, rematch?: typeof rematch}} [options]
  * @returns {Validation}
  */
-export function validateBackup(json) {
+export function validateBackup(json, options = {}) {
   try {
-    return validate(json);
+    return validate(json, options);
   } catch {
     return { ok: false, errors: ['This backup could not be checked.'] };
   }
@@ -593,9 +598,10 @@ export function validateBackup(json) {
 
 /**
  * @param {unknown} input
+ * @param {{steps?: Step[], normalise?: Normaliser, rematch?: typeof rematch}} options
  * @returns {Validation}
  */
-function validate(input) {
+function validate(input, options) {
   if (!isObj(input) || get(input, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
   const version = get(input, 'schemaVersion');
   if (!isInt(version) || version < 1) return { ok: false, errors: ["This backup's version is missing or not valid."] };
@@ -603,13 +609,27 @@ function validate(input) {
     return { ok: false, errors: ['This backup is from a newer version of this app. Reload the page to get the latest version, then try again.'] };
   }
   let json = input;
+  /** @type {Normaliser | undefined} */
+  let rematchFrom;
   if (version < DATA_VERSION) {
-    const upgraded = upgradeRaw(input, version);
+    const upgraded = upgradeRaw(input, version, options.steps ?? STEPS);
     json = upgraded.doc;
-    // Task 4 re-buckets with this normaliser when the upgrade changed how text is normalised.
-    void upgraded.rematchFrom;
+    rematchFrom = upgraded.rematchFrom;
   }
 
+  const first = check(json);
+  if (!first.ok || !rematchFrom) return first;
+  // The upgrade changed how text is normalised: re-bucket once, then check the result again.
+  const rematched = (options.rematch ?? rematch)(first.data, rematchFrom, options.normalise ?? normalise);
+  return check({ app: 'living-costs', ...rematched });
+}
+
+/**
+ * The structural checks.
+ * @param {Record<string, unknown>} json
+ * @returns {Validation}
+ */
+function check(json) {
   const p = new Problems();
   const exportedAt = get(json, 'exportedAt');
   if (!isTimestamp(exportedAt)) p.add("The backup's export date is missing or not valid.");

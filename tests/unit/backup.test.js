@@ -413,6 +413,34 @@ test('a bucket key in two buckets is refused', () => {
   assert.deepEqual(errorsOf(b), ['Bucket 2 shares a key with bucket 1.']);
 });
 
+test('a step with rematchFrom rematches once, then validates again', () => {
+  const b = /** @type {any} */ ({ ...base(), schemaVersion: 1 });
+  b.rules[0].amountMinor = -800; // the rule's bucket b3 holds SHOP 456 at this amount
+  // The old normaliser kept every SHOP text as 'SHOP'; the new one keeps the text as is.
+  const oldN = (/** @type {string} */ s) => (s.startsWith('SHOP') ? 'SHOP' : s);
+  const newN = (/** @type {string} */ s) => s;
+  const steps = [{ to: 2, run: (/** @type {any} */ d) => d, rematchFrom: oldN }];
+  const r = validateBackup(b, { steps, normalise: newN });
+  assert.deepEqual(r.ok ? [] : r.errors, []);
+  const data = /** @type {any} */ (r).data;
+  assert.equal(data.schemaVersion, 2);
+  // Only visible if the chain and the rematch both ran: SHOP split into the two texts.
+  assert.deepEqual(data.buckets[0].keys, ['SHOP 123', 'SHOP 456']);
+  assert.equal(data.rules[0].pattern, 'SHOP 456');
+  // A step with no rematchFrom leaves the keys alone.
+  const plain = validateBackup(b, { steps: [{ to: 2, run: (/** @type {any} */ d) => d }], normalise: newN });
+  assert.deepEqual(/** @type {any} */ (plain).data.buckets[0].keys, ['SHOP']);
+});
+
+test('a rematch that leaves two buckets sharing a key is refused', () => {
+  const b = /** @type {any} */ ({ ...base(), schemaVersion: 1 });
+  const steps = [{ to: 2, run: (/** @type {any} */ d) => d, rematchFrom: (/** @type {string} */ s) => s }];
+  const faulty = (/** @type {any} */ d) => ({ ...d, buckets: d.buckets.map((/** @type {any} */ x) => ({ ...x, keys: ['SAME'] })) });
+  const r = validateBackup(b, { steps, rematch: faulty });
+  assert.equal(r.ok, false);
+  assert.ok(/** @type {any} */ (r).errors.some((/** @type {string} */ e) => e.includes('shares a key')));
+});
+
 test("a transfer pair whose key doesn't match its fingerprints is refused", () => {
   const b = base();
   b.transferPairs[0].key = 'f3|f4';
