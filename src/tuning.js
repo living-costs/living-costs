@@ -3,7 +3,7 @@
 // It never rewrites stored data or user decisions.
 
 export default {
-  windowMonths: 12,           // typical month: latest N complete months
+  windowMonths: 12,           // typical month: default window, the latest N complete months
   variableRange: [25, 75],    // variable: typical range as percentiles
   unusualMonthPercent: 25,    // open category: a month this % away from its row's median is marked unusual
   transactionMatchDays: 3,    // transfer pairs and overlapping-row matches: ± days

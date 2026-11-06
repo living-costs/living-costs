@@ -71,6 +71,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Amount rules: text plus an exact amount, with an expected frequency. Extra matches are flagged, not assigned
 - Default categories from the owner-editable `src/default-categories.js`. New entries are offered once to existing users, and their choices are never overwritten
 - Monthly budget view
+- Typical month: choose the window's first and last month, and compare one month against it
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions

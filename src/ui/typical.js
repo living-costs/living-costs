@@ -5,9 +5,11 @@
 
 /** @import {App} from '../main.js' */
 /** @import {Row, TypicalMonth} from '../typical.js' */
+/** @import {MonthRange} from '../coverage.js' */
 /** @import {State} from '../types.js' */
 import { h } from '../dom.js';
-import { typicalMonth } from '../typical.js';
+import { typicalMonth, settleChoices } from '../typical.js';
+import { completeMonths } from '../coverage.js';
 import { formatMoney } from '../money.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { help, plural, focusKey, keyed } from './form.js';
@@ -18,6 +20,10 @@ import { showing, back } from './subview.js';
 const ui = {
   /** @type {string|null} the category opened from a table */
   openId: null,
+  /** @type {MonthRange|null} the chosen window, or null for the latest months */
+  range: null,
+  /** @type {string|null} the month compared against the window (YYYY-MM) */
+  compare: null,
 };
 
 /**
@@ -52,7 +58,7 @@ export function render(root, app) {
       if (keyed(openKey(openId))) focusKey(openKey(openId));
       else root.querySelector('h2')?.focus();
     });
-    renderCategoryView(root, app, openId, back);
+    renderCategoryView(root, app, openId, back, ui.range);
     return;
   }
   if (state.transactions.length === 0) {
@@ -61,7 +67,8 @@ export function render(root, app) {
       h('div', { class: 'actions' }, h('button', { type: 'button', onClick: () => app.navigate('accounts') }, 'Go to Accounts')));
     return;
   }
-  const tm = typicalMonth(state, app.tuning);
+  Object.assign(ui, settleChoices(completeMonths(state, app.tuning), ui));
+  const tm = typicalMonth(state, app.tuning, ui);
   if ('mixedCurrencies' in tm) {
     root.append(heading, h('p', null,
       `Your accounts use more than one currency (${tm.currencies.join(', ')}). They aren't added together.`));
@@ -71,8 +78,9 @@ export function render(root, app) {
   const money = (minor) => formatMoney(minor, tm.currency);
 
   root.append(h('hgroup', null, heading, h('p', { id: 'typical-window' }, windowText(tm))));
+  if (tm.complete) root.append(windowControls(tm, app, completeMonths(state, app.tuning)));
   const n = tm.months.length;
-  if (tm.complete && n < app.tuning.windowMonths) {
+  if (tm.isDefault && tm.complete && n < app.tuning.windowMonths) {
     root.append(h('p', null, `Only ${plural(n, 'complete month', 'complete months')} so far. Yearly figures are scaled to 12 months.`));
   }
   for (const account of tm.stale) {
@@ -103,6 +111,41 @@ export function render(root, app) {
     rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen),
     oneOffList(state, tm, money),
   ]) if (part) root.append(part);
+}
+
+/**
+ * "Typical from [month] to [month]", and a button back to the latest months once a window is chosen.
+ * @param {TypicalMonth} tm
+ * @param {App} app
+ * @param {string[]} complete complete months, oldest first
+ * @returns {HTMLElement}
+ */
+function windowControls(tm, app, complete) {
+  const from = tm.months[0];
+  const to = tm.months[tm.months.length - 1];
+  /**
+   * @param {string} key
+   * @param {string[]} months
+   * @param {string} selected
+   * @param {(m: string) => void} onPick
+   */
+  const picker = (key, months, selected, onPick) => {
+    const select = /** @type {HTMLSelectElement} */ (h('select', {
+      id: key, 'data-focus-key': key, onChange: () => onPick(select.value),
+    }, ...[...months].reverse().map((m) => h('option', { value: m, selected: m === selected }, formatMonth(m)))));
+    return select;
+  };
+  /** @param {string} a @param {string} b */
+  const choose = (a, b) => { ui.range = { from: a, to: b }; app.rerender(); };
+  return h('div', { class: 'typical-controls' },
+    h('label', { for: 'typical-from' }, 'Typical from'),
+    picker('typical-from', complete.filter((m) => m <= to), from, (m) => choose(m, to)),
+    h('label', { for: 'typical-to' }, 'to'),
+    picker('typical-to', complete.filter((m) => m >= from), to, (m) => choose(from, m)),
+    tm.isDefault ? null : h('button', {
+      type: 'button', class: 'secondary', 'data-focus-key': 'typical-latest',
+      onClick: () => { ui.range = null; app.rerender(); focusKey('typical-from'); },
+    }, `Latest ${app.tuning.windowMonths} months`));
 }
 
 /**

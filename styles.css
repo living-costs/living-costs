@@ -287,6 +287,8 @@ dl.summary dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums
 dl.summary .sub { font-weight: normal; padding-left: 1rem; }
 .uncategorised { align-items: center; }
 .uncategorised p { margin: 0; }
+.typical-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0 0 0.5rem; }
+.typical-controls label { font-weight: 600; }
 table.typical td.num { font-variant-numeric: tabular-nums; }
 table.typical td.bar-cell { width: 8rem; min-width: 8rem; vertical-align: middle; }
 table.typical th button.name { text-align: left; }
