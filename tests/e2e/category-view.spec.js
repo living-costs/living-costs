@@ -313,8 +313,10 @@ async function focusRingOfFirstButton() {
   });
 }
 
-test('category view passes axe, has large targets and focus rings, and fits 320px', async () => {
-  for (const [tableName, name] of [['Living costs', 'Groceries'], ['Living costs', 'Subscriptions'], ['Income', 'Salary']]) {
+// One test per category, as a11y.spec.js does per screen: each runs two axe scans over up to
+// 200 transaction rows, and three in one test came within 0.2s of the 30s timeout on CI.
+for (const [tableName, name] of [['Living costs', 'Groceries'], ['Living costs', 'Subscriptions'], ['Income', 'Salary']]) {
+  test(`${name} view passes axe, has large targets and focus rings, and fits 320px`, async () => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await open(tableName, name);
     await expectNoAxeViolations(page);
@@ -324,7 +326,7 @@ test('category view passes axe, has large targets and focus rings, and fits 320p
     await expect(viewHeading(name)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     await expectNoAxeViolations(page);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await back().click();
-  }
-  await page.setViewportSize({ width: 1280, height: 720 });
-});
+  });
+}
