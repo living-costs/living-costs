@@ -6,6 +6,7 @@
 import { h, clear } from '../dom.js';
 import { suggestPairs } from '../transfers.js';
 import { categorisedPercent } from '../progress.js';
+import { renderThemePicker } from './theme.js';
 
 /** @typedef {{name: ScreenName, label: string}} NavScreen */
 
@@ -45,9 +46,20 @@ export function renderNav(root, app) {
     h('div', { class: 'nav-tabs' }, ...main.screens.map(button)),
     h('div', { class: 'nav-tools' }, ...small.map((g) => h('div', { class: 'nav-group', role: 'group', 'aria-labelledby': `nav-${g.id}` },
       h('span', { class: 'nav-group-label', id: `nav-${g.id}` }, g.label),
-      h('div', { class: 'nav-row' }, ...g.screens.map(button))))),
+      h('div', { class: 'nav-row' }, ...g.screens.map(button)))),
+      themeGroup()),
   );
   updateNav(root, app);
+}
+
+/**
+ * The rightmost group: the Auto, Light or Dark theme choice, in the same style as the others.
+ * @returns {HTMLElement}
+ */
+function themeGroup() {
+  const group = h('div', { class: 'nav-group', role: 'group', 'aria-labelledby': 'nav-theme' });
+  renderThemePicker(group);
+  return group;
 }
 
 /**

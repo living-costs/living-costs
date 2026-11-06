@@ -312,13 +312,15 @@ const FOOTER =
 
 const DOWNLOAD = 'link.href = url;';
 const MAIN_SCRIPT = '<script type="module" src="src/main.js">';
+const THEME_SCRIPT = '<script src="src/theme-init.js">';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-test('shipped EXCEPTIONS are the footer links, the entry script, the SVG namespace and the backup download link, each exact', () => {
+test('shipped EXCEPTIONS are the footer links, the two same-origin scripts, the SVG namespace and the backup download link, each exact', () => {
   assert.deepEqual(
     EXCEPTIONS.map((e) => [e.file, e.pattern, e.match]),
     [
       ['index.html', 'https://', AGPL], ['index.html', 'https://', SOURCE], ['index.html', '<script', MAIN_SCRIPT],
+      ['index.html', '<script', THEME_SCRIPT],
       ['favicon.svg', 'http://', SVG_NS], ['src/ui/backup.js', 'URL property =', DOWNLOAD],
     ],
   );
