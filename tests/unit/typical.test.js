@@ -632,7 +632,7 @@ test('month figures resolve splits and transfers like the typical ones', () => {
     transactions: [
       { ...txn('A', '2026-10-03', -10000, 'amazon'), fingerprint: 'split1' },
       { ...txn('A', '2026-10-05', -20000, 'diy'), fingerprint: 'xa' },
-      { ...txn('S', '2026-10-06', 20000, 'diy'), fingerprint: 'xb' },
+      { ...txn('S', '2026-10-06', 20000, 'mystery'), fingerprint: 'xb' },
       txn('A', '2026-10-07', -500, 'mystery'),
     ],
     overrides: [{ fingerprint: 'split1', splits: [{ amountMinor: -7000, categoryId: 'groceries' }, { amountMinor: -3000, categoryId: 'household' }] }],

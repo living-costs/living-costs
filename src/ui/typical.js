@@ -233,14 +233,14 @@ function summaryList(tm, money) {
   const c = tm.compare;
   if (c) {
     const month = [c.totals.income, c.totals.living, ...(tm.contribution.length > 0 ? [c.totals.contributions, c.totals.share] : []), c.totals.leftOver];
-    return h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
+    return h('div', { class: 'scroll summary-scroll', tabindex: '0', role: 'region', 'aria-label': 'Summary per month' }, h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
       h('thead', null, h('tr', null, h('td'), h('th', { scope: 'col', class: 'num' }, 'Typical'),
         h('th', { scope: 'col', class: 'num' }, formatMonth(c.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
       h('tbody', null, ...lines.map(([label, minor, cls], i) => h('tr', { class: cls },
         h('th', { scope: 'row' }, label),
         h('td', { class: 'num' }, money(minor)),
         h('td', { class: 'num' }, money(month[i])),
-        h('td', { class: changeClass(month[i] - minor) }, changeText(month[i] - minor, money))))));
+        h('td', { class: changeClass(month[i] - minor) }, changeText(month[i] - minor, money)))))));
   }
   return h('dl', { class: 'summary', 'aria-label': 'Summary per month' },
     ...lines.flatMap(([label, minor, cls]) => [h('dt', { class: cls }, label), h('dd', { class: cls }, money(minor))]));

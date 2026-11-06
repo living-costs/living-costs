@@ -298,10 +298,12 @@ table.typical th button.name { text-align: left; }
 .bar-key { margin: 0 0 0.25rem; }
 .bar-key .key { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 1rem; color: var(--muted); }
 .bar-key .bar { display: inline-block; width: 1.5rem; height: 0.75rem; }
-table.summary-compare { margin: 1rem 0; border-collapse: separate; border-spacing: 1.5rem 0.25rem; }
-table.summary-compare th, table.summary-compare td { padding: 0; border: 0; background: none; text-align: left; font-weight: 600; }
+.summary-scroll { margin: 1rem 0; }
+table.summary-compare { margin: 0; border-collapse: collapse; }
+table.summary-compare th, table.summary-compare td { padding: 0.125rem 0 0.125rem 1.5rem; border: 0; background: none; text-align: left; font-weight: 600; }
 table.summary-compare td.num, table.summary-compare th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.summary-compare td.num { font-weight: normal; }
+table.summary-compare th[scope=row] { padding-left: 0; }
 table.summary-compare tr.sub th { font-weight: normal; padding-left: 1rem; }
 table.typical td.same, table.summary-compare td.same { color: var(--muted); }
 table.typical td.change, table.summary-compare td.change { font-weight: 600; }

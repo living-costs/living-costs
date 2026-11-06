@@ -131,6 +131,11 @@ test('comparison fits 320px and passes axe', async () => {
   await page.setViewportSize({ width: 320, height: 640 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   await expectNoAxeViolations(page);
+  // No cell breaks onto a second line: each is shorter than two lines of its own text.
+  const tall = await page.locator('table.summary-compare').locator('th, td').evaluateAll(
+    (cells) => cells.filter((c) => c.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(c).fontSize) * 1.2)
+      .map((c) => c.textContent));
+  expect(tall).toEqual([]);
   await page.setViewportSize({ width: 1280, height: 800 });
 });
 
