@@ -272,13 +272,26 @@ test('anything that is not a backup object from this app is rejected without thr
   }
 });
 
+const NEWER = 'This backup is from a newer version of this app. Reload the page to get the latest version, then try again.';
+
 test('a newer schema version is refused', () => {
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 3 }), ['This backup is from a newer version of this app.']);
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 99 }), ['This backup is from a newer version of this app.']);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 3 }), [NEWER]);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 99 }), [NEWER]);
 });
 
-test('an older schema version is refused', () => {
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 1 }), ["This backup is from an older version of this app and can't be restored."]);
+test('a version 1 backup is upgraded and restores', () => {
+  const b = /** @type {any} */ ({ ...base(), schemaVersion: 1 });
+  b.rules = [{ ...b.rules[0], normaliserVersion: 1 }];
+  const data = dataOf(b);
+  assert.equal(data.schemaVersion, 2);
+  assert.equal('normaliserVersion' in data.rules[0], false);
+});
+
+test('a broken version 1 backup is refused, never throws, and pollutes nothing', () => {
+  assert.ok(errorsOf({ ...base(), schemaVersion: 1, rules: 'x' }).length > 0);
+  const rule = JSON.parse('{"__proto__":{"polluted":1},"id":"r1","pattern":"X","matchType":"keyAmount","bucketId":"b3","normaliserVersion":1}');
+  assert.ok(errorsOf({ ...base(), schemaVersion: 1, rules: [rule], transactions: null }).length > 0);
+  assert.equal(/** @type {any} */ ({}).polluted, undefined);
 });
 
 test('a missing or malformed schema version is refused', () => {

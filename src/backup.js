@@ -8,6 +8,7 @@
 /** @import {State, Changes, Settings, Account, Mapping, Bucket, Rule, Category, Override, TransferPair, Batch, Transaction} from './types.js' */
 import { emptyState } from './changes.js';
 import { DATA_VERSION } from './version.js';
+import { upgradeRaw } from './migrate.js';
 import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
@@ -591,15 +592,23 @@ export function validateBackup(json) {
 }
 
 /**
- * @param {unknown} json
+ * @param {unknown} input
  * @returns {Validation}
  */
-function validate(json) {
-  if (!isObj(json) || get(json, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
-  const version = get(json, 'schemaVersion');
+function validate(input) {
+  if (!isObj(input) || get(input, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
+  const version = get(input, 'schemaVersion');
   if (!isInt(version) || version < 1) return { ok: false, errors: ["This backup's version is missing or not valid."] };
-  if (version > DATA_VERSION) return { ok: false, errors: ['This backup is from a newer version of this app.'] };
-  if (version < DATA_VERSION) return { ok: false, errors: ["This backup is from an older version of this app and can't be restored."] };
+  if (version > DATA_VERSION) {
+    return { ok: false, errors: ['This backup is from a newer version of this app. Reload the page to get the latest version, then try again.'] };
+  }
+  let json = input;
+  if (version < DATA_VERSION) {
+    const upgraded = upgradeRaw(input, version);
+    json = upgraded.doc;
+    // Task 4 re-buckets with this normaliser when the upgrade changed how text is normalised.
+    void upgraded.rematchFrom;
+  }
 
   const p = new Problems();
   const exportedAt = get(json, 'exportedAt');
@@ -675,7 +684,7 @@ function validate(json) {
   if (errors.length) return { ok: false, errors };
   /** @type {BackupData} */
   const data = {
-    schemaVersion: version,
+    schemaVersion: DATA_VERSION,
     exportedAt: /** @type {string} */ (exportedAt),
     accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds, batches, transactions,
   };

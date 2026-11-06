@@ -209,6 +209,35 @@ test('restore replaces', async ({ browser, baseURL }, testInfo) => {
   await second.close();
 });
 
+test('restoring a version 1 backup upgrades it', async ({ browser, baseURL }, testInfo) => {
+  const first = await browser.newContext({ baseURL });
+  const before = await first.newPage();
+  await before.addInitScript(noPicker);
+  await setupFixtureApp(before);
+  await openScreen(before, 'Backup');
+  const [download] = await Promise.all([before.waitForEvent('download'), saveButton(before).click()]);
+  const file = testInfo.outputPath('version-1.json');
+  await download.saveAs(file);
+  await first.close();
+
+  const old = JSON.parse(fs.readFileSync(file, 'utf8'));
+  old.schemaVersion = 1;
+  old.rules = old.rules.map((/** @type {object} */ r) => ({ ...r, normaliserVersion: 1 }));
+  fs.writeFileSync(file, JSON.stringify(old));
+
+  const second = await browser.newContext({ baseURL });
+  const page = await second.newPage();
+  await openBackup(page);
+  page.on('dialog', (dialog) => dialog.accept());
+  await restoreInput(page).setInputFiles(file);
+  await expect(page.getByRole('status').filter({ hasText: 'Backup restored.' })).toBeVisible();
+  const [settings] = await readStore(page, 'settings');
+  expect(settings.schemaVersion).toBe(2);
+  await openScreen(page, 'Typical month');
+  await expect(subscriptionsPerMonth(page)).toHaveText('£89.97');
+  await second.close();
+});
+
 test('bad backup', async ({ page }) => {
   await openBackup(page);
   const snapshot = async () => ({
