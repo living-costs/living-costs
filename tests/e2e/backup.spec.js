@@ -2,11 +2,13 @@
 /** @import {Page} from '@playwright/test' */
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, importFiles, FIXTURE_ACCOUNTS, readStore,
   pickFiles,
 } from './helpers.js';
 import defaults from '../../src/default-categories.js';
+import { DATA_VERSION } from '../../src/version.js';
 
 const CONFIRM = 'Replace all data in this browser with this backup?';
 const WARNING = "A backup saved to Google Drive isn't encrypted. It holds every transaction you've imported: dates, amounts, descriptions and account details.";
@@ -236,6 +238,19 @@ test('restoring a version 1 backup upgrades it', async ({ browser, baseURL }, te
   await openScreen(page, 'Typical month');
   await expect(subscriptionsPerMonth(page)).toHaveText('£89.97');
   await second.close();
+});
+
+test('the frozen v2 fixture restores through the Backup screen', async ({ page }) => {
+  const file = new URL('../fixtures/backups/v2.json', import.meta.url);
+  const fixture = JSON.parse(fs.readFileSync(file, 'utf8'));
+  await openBackup(page);
+  page.on('dialog', (dialog) => dialog.accept());
+  await restoreInput(page).setInputFiles(fileURLToPath(file));
+  await expect(page.getByRole('status').filter({ hasText: 'Backup restored.' })).toBeVisible();
+  expect(await readStore(page, 'transactions')).toHaveLength(fixture.transactions.length);
+  const [settings] = await readStore(page, 'settings');
+  expect(settings.schemaVersion).toBe(DATA_VERSION);
+  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
 });
 
 test('bad backup', async ({ page }) => {
