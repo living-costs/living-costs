@@ -288,9 +288,12 @@ test('a version 1 backup is upgraded and restores', () => {
 });
 
 test('a broken version 1 backup is refused, never throws, and pollutes nothing', () => {
-  assert.ok(errorsOf({ ...base(), schemaVersion: 1, rules: 'x' }).length > 0);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 1, rules: 'x' }), ['The backup has no list of rules.', 'Transaction 1 points at a missing rule.']);
   const rule = JSON.parse('{"__proto__":{"polluted":1},"id":"r1","pattern":"X","matchType":"keyAmount","bucketId":"b3","normaliserVersion":1}');
-  assert.ok(errorsOf({ ...base(), schemaVersion: 1, rules: [rule], transactions: null }).length > 0);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 1, rules: [rule], transactions: null }), [
+    'Rule 1 has a missing or invalid amount.', 'Rule 1 has a missing or invalid expected frequency.',
+    'The backup has no list of transactions.',
+  ]);
   assert.equal(/** @type {any} */ ({}).polluted, undefined);
 });
 
