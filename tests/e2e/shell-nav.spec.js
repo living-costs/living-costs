@@ -128,7 +128,12 @@ test('defaults are seeded once', async ({ page }) => {
 
 test('store writes IndexedDB first and keeps memory in step', async ({ page }) => {
   const result = await page.evaluate(async () => {
-    const { openStore } = await import('/src/store.js');
+    const { openStore: open } = await import('/src/store.js');
+    const openStore = async () => {
+      const opened = await open();
+      if (opened.kind !== 'ready') throw new Error(`Store not ready: ${opened.kind}`);
+      return opened.store;
+    };
     const store = await openStore();
     let notified = 0;
     store.subscribe(() => { notified++; });

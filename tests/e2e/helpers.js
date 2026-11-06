@@ -50,6 +50,42 @@ export const readStore = (page, name) => page.evaluate((storeName) => new Promis
   };
 }), name);
 
+/**
+ * Put rows into one IndexedDB store, in one transaction on a connection of its own that is closed
+ * afterwards. With `clear`, the store is emptied first. Reload the page for the app to see them.
+ * @param {Page} page
+ * @param {string} name
+ * @param {object[]} rows
+ * @param {{clear?: boolean}} [options]
+ */
+export const writeStore = (page, name, rows, { clear = false } = {}) => page.evaluate(
+  ({ storeName, list, empty }) => new Promise((resolve, reject) => {
+    const req = indexedDB.open('living-costs');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      if (empty) store.clear();
+      for (const row of list) store.put(row);
+      tx.oncomplete = () => { db.close(); resolve(undefined); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  }),
+  { storeName: name, list: rows, empty: clear },
+);
+
+/**
+ * Merge `patch` into the stored settings row. Reload the page for the app to see it.
+ * @param {Page} page
+ * @param {Record<string, unknown>} patch
+ */
+export async function patchSettings(page, patch) {
+  const [settings] = await readStore(page, 'settings');
+  await writeStore(page, 'settings', [{ ...settings, ...patch }]);
+}
+
 // --- Import flow -----------------------------------------------------------------------------
 // These drive the Accounts screen's import flow using its pinned labels. Fixture names are
 // relative to tests/fixtures/; absolute paths (for temp files) are used as given.

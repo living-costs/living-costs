@@ -1,6 +1,6 @@
 // App entry: take the one-tab lock, open the store, seed defaults on first run, build the nav and route.
 
-/** @import {Store} from './store.js' */
+/** @import {Store, Opened} from './store.js' */
 import { openStore } from './store.js';
 import { h, clear } from './dom.js';
 import tuning from './tuning.js';
@@ -156,7 +156,16 @@ function drawScreen(app) {
 }
 
 async function start() {
-  const store = await openStore();
+  const opened = await openStore();
+  if (opened.kind === 'newer') {
+    cannotStart('Your data was saved by a newer version of this app. Reload the page to get it.');
+    return;
+  }
+  if (opened.kind === 'failed') {
+    upgradeFailed(opened);
+    return;
+  }
+  const { store } = opened;
   await seed(store);
   const app = createApp(store);
   subview.install();
@@ -175,12 +184,33 @@ async function start() {
  * @param {unknown} err
  */
 function failed(err) {
-  clear(screenEl);
   const message = err instanceof Error ? err.message : String(err);
+  cannotStart(`Saved data could not be opened: ${message}`);
+}
+
+/**
+ * Show "The app could not start" and `message` in place of the screen, with the technical detail,
+ * if any, as secondary text.
+ * @param {string} message
+ * @param {string} [detail]
+ */
+function cannotStart(message, detail) {
+  clear(screenEl);
   screenEl.append(
     h('h2', { tabindex: '-1' }, 'The app could not start'),
-    h('p', null, `Saved data could not be opened: ${message}`),
+    h('p', null, message),
   );
+  if (detail) screenEl.append(h('p', { class: 'muted' }, `Details: ${detail}`));
+}
+
+/**
+ * The stored data is older and could not be upgraded, so nothing was written.
+ * A stub: Task 7 replaces it with a screen that can save a copy or delete the data.
+ * @param {Extract<Opened, {kind: 'failed'}>} opened
+ */
+function upgradeFailed(opened) {
+  cannotStart("Your saved data couldn't be upgraded to this version of the app. Nothing was changed.",
+    opened.errors.join(' '));
 }
 
 const WAITING = 'This app is already open in another tab. Close that tab and this one will load automatically.';
