@@ -4,8 +4,8 @@
 
 export default {
   windowMonths: 12,           // typical month: latest N complete months
-  fixedActiveMonths: 2,       // fixed: a bucket with nothing in the last N complete months has ended
   variableRange: [25, 75],    // variable: typical range as percentiles
+  unusualMonthPercent: 25,    // open category: a month this % away from its row's median is marked unusual
   transactionMatchDays: 3,    // transfer pairs and overlapping-row matches: ± days
   coverageGapDays: 3,         // gap between batches in one account still counted as covered
   unusualMultiple: 5,         // unusual amount: more than N × the bucket median…

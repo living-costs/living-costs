@@ -21,7 +21,7 @@ import { monthOf } from './dates.js';
  *   contribution:Row[],oneOffs:OneOff[],uncategorised:{spending:number,income:number},totals:Totals}} TypicalMonth
  */
 /** @typedef {{mixedCurrencies:true,currencies:string[]}} MixedCurrencies */
-/** @typedef {{windowMonths:number,coverageGapDays:number,fixedActiveMonths:number,variableRange:number[]}} TypicalTuning */
+/** @typedef {{windowMonths:number,coverageGapDays:number,variableRange:number[],unusualMonthPercent:number}} TypicalTuning */
 
 /** @typedef {{count:number,latestDate:string,latest:number,opposite:number}} BucketCharges */
 /** @typedef {{months:Map<string,number>,total:number,buckets:Map<string,BucketCharges>}} AccountSums */
@@ -67,7 +67,6 @@ export function typicalMonth(state, tuning) {
 
   const window = analysisWindow(state, tuning);
   const ctx = buildContext(state);
-  const activeMonths = new Set(window.months.slice(Math.max(0, window.months.length - tuning.fixedActiveMonths)));
   /** @param {string} accountId */
   const monthsOf = (accountId) => window.accountMonths.get(accountId) ?? new Set();
 
@@ -132,11 +131,11 @@ export function typicalMonth(state, tuning) {
     if (budgetType === 'fixed') {
       for (const [accountId, s] of byAccount) {
         const n = monthsOf(accountId).size;
-        for (const b of s.buckets.values()) {
-          // An ended bucket (no charge in the active months) contributes 0, refunds included.
-          if (b.count > 0 && activeMonths.has(monthOf(b.latestDate))) {
-            row.perMonth += divRound(b.latest * b.count, n);
-            row.perMonth += divRound(b.opposite, n);
+        for (const [bucketId, b] of s.buckets) {
+          // A Stopped bucket adds nothing, refunds included. A bucket's figure is never below 0.
+          const stopped = ctx.buckets.get(bucketId)?.stoppedAfter !== undefined;
+          if (b.count > 0 && !stopped) {
+            row.perMonth += Math.max(0, divRound(b.latest * b.count, n) + divRound(b.opposite, n));
           }
         }
       }

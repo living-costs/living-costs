@@ -80,7 +80,7 @@ test('explains each kind and budget type, with thresholds from tuning', async ({
   const types = page.getByRole('region', { name: /^Budget types/ });
   await expect(types.getByRole('heading')).toHaveAccessibleName('Budget types Spend, Income and Contribution only');
   await expect(types.getByRole('term')).toHaveText(['Fixed', 'Variable', 'Annual', 'One-off']);
-  await expect(types.getByRole('definition').nth(0)).toContainText('in the last 2 complete months');
+  await expect(types.getByRole('definition').nth(0)).toContainText('mark a charge Stopped');
   await expect(types.getByRole('definition').nth(1)).toContainText('between percentiles 25 and 75');
   // Both panels sit inside the screen's help block, under its one bar.
   await expect(page.locator('.help-group .guide')).toHaveCount(2);

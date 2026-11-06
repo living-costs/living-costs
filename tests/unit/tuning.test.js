@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import tuning from '../../src/tuning.js';
 
 const KEYS = [
-  'windowMonths', 'fixedActiveMonths', 'variableRange', 'transactionMatchDays',
+  'windowMonths', 'unusualMonthPercent', 'variableRange', 'transactionMatchDays',
   'coverageGapDays', 'unusualMultiple', 'unusualMinMajor', 'relatedMinWordLength',
   'relatedStopWords', 'relatedMaxShown', 'repeatingMinCount', 'firstTenKeys', 'transactionsShown',
 ];
@@ -15,7 +15,7 @@ test('tuning has exactly the expected keys', () => {
 });
 
 test('count-like values are integers of at least 1', () => {
-  for (const key of ['windowMonths', 'fixedActiveMonths', 'transactionMatchDays',
+  for (const key of ['windowMonths', 'unusualMonthPercent', 'transactionMatchDays',
     'relatedMinWordLength', 'relatedMaxShown', 'repeatingMinCount', 'transactionsShown']) {
     assert.ok(isInt(tuning[key]) && tuning[key] >= 1, `${key} must be an integer >= 1`);
   }

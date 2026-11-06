@@ -86,7 +86,7 @@ function guidePanel(id, title, qualifier, rows) {
  * @returns {HTMLElement}
  */
 function guide(app) {
-  const { fixedActiveMonths, variableRange: [lo, hi] } = app.tuning;
+  const { variableRange: [lo, hi] } = app.tuning;
   return h('div', { class: 'help-group' },
     help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'),
     h('div', { class: 'guides' }, guidePanel('kinds-heading', 'Kinds', null, [
@@ -97,7 +97,7 @@ function guide(app) {
       [KIND_LABELS.ignore, 'Anything else you do not want counted. Left out of your typical month, the same as Transfer.'],
     ]),
     guidePanel('budget-types-heading', 'Budget types', 'Spend, Income and Contribution only', [
-      [BUDGET_LABELS.fixed, `Regular charges such as rent or subscriptions. Uses the latest charge, as often as it is charged. A charge with nothing in the last ${plural(fixedActiveMonths, 'complete month', 'complete months')} has ended.`],
+      [BUDGET_LABELS.fixed, 'Regular charges such as rent or subscriptions. Uses each charge\'s latest amount, as often as it was charged. Open the category on Typical month to mark a charge Stopped.'],
       [BUDGET_LABELS.variable, `Costs that change month to month, such as groceries. Uses the middle month, with a typical range between percentiles ${lo} and ${hi}.`],
       [BUDGET_LABELS.annual, 'Irregular or yearly costs, such as insurance. Uses the yearly total divided by 12.'],
       [BUDGET_LABELS.oneoff, 'Costs you do not expect again. Listed on their own, outside every total.'],
