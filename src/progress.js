@@ -7,7 +7,9 @@
 
 /** @import {State, Transaction, Bucket} from './types.js' */
 /** @import {ResolveContext} from './resolve.js' */
+/** @import {MonthCell} from './typical.js' */
 import { analysisWindow } from './coverage.js';
+import { monthCells } from './typical.js';
 import { buildContext, resolve } from './resolve.js';
 import { monthOf } from './dates.js';
 import { divRound, soleCurrency } from './money.js';
@@ -160,4 +162,48 @@ export function monthlyFigure(count, accountMonths) {
     if (n > 0) perMonth += divRound(total, n);
   }
   return { perMonth, months: counts.size === 1 ? [...counts][0] : null };
+}
+
+/**
+ * Whether a transaction has been moved off its bucket by an override or a split. An override to
+ * a category that no longer exists resolves to none, so it does not count as moved.
+ * @param {Transaction} t
+ * @param {ResolveContext} ctx
+ * @returns {boolean}
+ */
+const moved = (t, ctx) => {
+  const { source } = resolve(t, ctx);
+  return source === 'override' || source === 'split';
+};
+
+/**
+ * The categorise card's figures for one bucket. `kept`: the counted transactions not moved to
+ * another category, with their absolute total, or undefined when every one is moved. `accounts`:
+ * one series per account with counted transactions in the bucket (moved ones included, so the
+ * account's cells stay while a move can still be undone), in account order. Each cell is a
+ * window month: the absolute total of the kept transactions, or null when the account doesn't
+ * fully cover it. Unusual flags are worked out as on the category view, over covered months only.
+ * @param {State} state
+ * @param {ProgressTuning & {unusualMonthPercent:number}} tuning
+ * @param {BucketCount} count from bucketCounts
+ * @returns {{months:string[], accountMonths:Map<string,Set<string>>, kept:BucketCount|undefined,
+ *   accounts:{accountId:string, cells:MonthCell[]}[]}}
+ */
+export function bucketMonths(state, tuning, count) {
+  const { months, accountMonths } = analysisWindow(state, tuning);
+  const ctx = buildContext(state);
+  const txns = count.txns.filter((t) => !moved(t, ctx));
+  const kept = txns.length > 0 ? { absTotal: txns.reduce((a, t) => a + Math.abs(t.amountMinor), 0), txns } : undefined;
+  const inBucket = new Set(count.txns.map((t) => t.accountId));
+  const accounts = state.accounts.filter((a) => inBucket.has(a.id)).map((a) => {
+    /** @type {Map<string, number>} */
+    const sums = new Map();
+    for (const t of txns) {
+      if (t.accountId !== a.id) continue;
+      const m = monthOf(t.date);
+      sums.set(m, (sums.get(m) ?? 0) + Math.abs(t.amountMinor));
+    }
+    return { accountId: a.id, cells: monthCells(months, accountMonths.get(a.id) ?? new Set(), sums, tuning.unusualMonthPercent) };
+  });
+  return { months, accountMonths, kept, accounts };
 }

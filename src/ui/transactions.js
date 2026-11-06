@@ -26,7 +26,7 @@ const views = new Map();
 /**
  * Limits a list to some transactions. key: the view key (stored in `views`), ids: the
  * transactions allowed, bucketIds: the Bucket filter's options, partMinor: each split
- * transaction's signed sum in categoryName.
+ * transaction's signed sum in categoryName (a split row with no entry shows no such note).
  * @typedef {{key: string, ids: Set<string>, bucketIds: string[], categoryName: string, partMinor: Map<string, number>}} Only
  */
 
@@ -132,7 +132,7 @@ function drawResults(app, results, countEl, v, fixed, prefix, only) {
     h('td', null, h('span', { class: 'raw' }, t.rawText)),
     h('td', { class: 'num' }, formatMoney(t.amountMinor, t.currency)),
     h('td', null, countsAsCell(app, t, ctx, cats, prefix),
-      only && resolve(t, ctx).source === 'split'
+      only?.partMinor.has(t.id) && resolve(t, ctx).source === 'split'
         ? h('span', { class: 'muted' }, `${formatMoney(only.partMinor.get(t.id) ?? 0, t.currency)} of this counts as ${only.categoryName}`)
         : null));
   results.replaceChildren(h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-label': 'Matching transactions' },

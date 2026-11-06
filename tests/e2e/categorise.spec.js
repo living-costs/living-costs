@@ -240,6 +240,51 @@ test('unusual: move to another category', async ({ page }) => {
   expect(categories.find((c) => c.id === override.categoryId)?.name).toBe('Big one-offs');
 });
 
+test('each month: press a month, move a row out, see the figures change and the row stay, then put it back', async ({ page }) => {
+  await openCategorise(page);
+  await skipToCard(page, 'TESCO STORES');
+  const months = section(page, 'Each month');
+  const cells = months.getByRole('group', { name: 'Each month' });
+  await expect(cells.getByRole('button')).toHaveCount(12);
+  const june = cells.getByRole('button', { name: /^Jun 2026/ });
+  // 650.00 + 73.92 + 66.61 + 81.23 + 88.54
+  await expect(june).toHaveText('Jun 2026£960.30, unusual');
+  await expect(june).toHaveClass(/unusual/);
+  const before = await summary(page).textContent();
+  const rows = months.getByRole('region', { name: 'Matching transactions' }).locator('tbody tr');
+  await expect(rows).toHaveCount(0);
+
+  await june.click();
+  await expect(june).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows).toHaveCount(5);
+  for (const r of await rows.all()) await expect(r.locator('td').first()).toHaveText(/^\d\d\/06\/2026$/);
+
+  const big = rows.filter({ hasText: '-£650.00' });
+  const select = big.getByLabel('Counts as for CARD PURCHASE TESCO STORES 2041 on 13/06/2026');
+  await select.selectOption({ label: 'Gifts' });
+  await expect(june).toHaveText('Jun 2026£310.30');
+  await expect(june).not.toHaveClass(/unusual/);
+  await expect(rows).toHaveCount(5);
+  await expect(big.locator('.source')).toHaveText('override');
+  expect(txnCount(await summary(page).textContent())).toBe(txnCount(before ?? '') - 1);
+  await expect(summary(page)).not.toHaveText(before ?? '');
+  await expect(cardHeading(page)).toHaveText('TESCO STORES');
+
+  await select.selectOption({ label: "Use bucket's category (none)" });
+  await expect(june).toHaveText('Jun 2026£960.30, unusual');
+  await expect(summary(page)).toHaveText(before ?? '');
+  expect(await readStore(page, 'overrides')).toHaveLength(0);
+
+  await june.click();
+  await expect(june).toHaveAttribute('aria-pressed', 'false');
+  await expect(rows).toHaveCount(0);
+  // The next card starts with no month pressed.
+  await june.click();
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await expect(cardHeading(page)).not.toHaveText('TESCO STORES');
+  await expect(card(page).locator('.month-cells button[aria-pressed="true"]')).toHaveCount(0);
+});
+
 test('merge from related', async ({ page }) => {
   await importFiles(page, {
     files: ['bank-a-current-2026-10-reexport.csv'], account: { existing: 'Bank A current' }, review: 'both',
@@ -261,6 +306,8 @@ test('merge from related', async ({ page }) => {
 
 test('axe passes on the card', async ({ page }) => {
   await openCategorise(page);
+  await expectNoAxeViolations(page);
+  await section(page, 'Each month').getByRole('button', { name: /^Jun 2026/ }).click();
   await expectNoAxeViolations(page);
   await page.getByRole('button', { name: 'New category…' }).click();
   await expectNoAxeViolations(page);

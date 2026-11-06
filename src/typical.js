@@ -99,6 +99,27 @@ export function unusualFlags(totals, percent) {
 }
 
 /**
+ * One cell per window month: the month's total from `sums` (0 when absent), or null when the
+ * account doesn't cover it. Unusual flags are worked out over the covered months only.
+ * @param {string[]} months the window months, oldest first
+ * @param {Set<string>} covered the months the account covers
+ * @param {Map<string, number>} sums month → total
+ * @param {number} percent unusualMonthPercent
+ * @returns {MonthCell[]}
+ */
+export function monthCells(months, covered, sums, percent) {
+  const totals = months.filter((m) => covered.has(m)).map((m) => sums.get(m) ?? 0);
+  const flags = unusualFlags(totals, percent);
+  let i = 0;
+  return months.map((month) => {
+    if (!covered.has(month)) return { month, total: null, unusual: false };
+    const cell = { month, total: totals[i], unusual: flags[i] };
+    i += 1;
+    return cell;
+  });
+}
+
+/**
  * @param {Category} category
  * @returns {category is Category & {kind:'spend'|'income'|'contribution'}}
  */
@@ -291,18 +312,7 @@ export function categoryDetail(state, tuning, categoryId) {
   for (const account of state.accounts) {
     const s = c.byAccount.get(account.id);
     if (!s) continue;
-    const covered = monthsOf(account.id);
-    // Flags are worked out over the covered months only.
-    const totals = window.months.filter((m) => covered.has(m)).map((m) => s.months.get(m) ?? 0);
-    const flags = unusualFlags(totals, tuning.unusualMonthPercent);
-    let i = 0;
-    /** @type {MonthCell[]} */
-    const cells = window.months.map((month) => {
-      if (!covered.has(month)) return { month, total: null, unusual: false };
-      const cell = { month, total: totals[i], unusual: flags[i] };
-      i += 1;
-      return cell;
-    });
+    const cells = monthCells(window.months, monthsOf(account.id), s.months, tuning.unusualMonthPercent);
     accounts.push({ accountId: account.id, share: shares.get(account.id) ?? 0, cells });
   }
 

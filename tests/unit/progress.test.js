@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../src/changes.js';
-import { countedTransactions, progress, categorisedPercent, cardQueue, monthlyFigure } from '../../src/progress.js';
+import { countedTransactions, progress, categorisedPercent, cardQueue, monthlyFigure, bucketMonths, bucketCounts } from '../../src/progress.js';
 import tuning from '../../src/tuning.js';
 
 let n = 0;
@@ -156,4 +156,85 @@ test('categorisedPercent is by value, rounded down, and null when it would misle
   s.transactions.find((t) => t.bucketId === 'cafe').currency = 'EUR';
   assert.equal(categorisedPercent(s, tuning), null);
   assert.equal(categorisedPercent(emptyState(), tuning), null);
+});
+
+/**
+ * Bucket shop: Current covers Aug to Oct 2026; Card covers Oct 2026 only (its batch starts on
+ * 1 Oct). Window months are Aug, Sep and Oct. Shop has -1000 in Aug and Sep, -1000 and -9000 in
+ * Oct, all in Current, and -500 in Oct on Card.
+ */
+function shopState() {
+  const s = emptyState();
+  s.accounts = [
+    { id: 'a1', name: 'Current', currency: 'GBP', kind: 'bank', repaymentBucketIds: [] },
+    { id: 'c1', name: 'Card', currency: 'GBP', kind: 'card', repaymentBucketIds: [] },
+    { id: 'a2', name: 'Savings', currency: 'GBP', kind: 'bank', repaymentBucketIds: [] },
+  ];
+  const batch = (accountId, coversFrom) => ({
+    id: `b-${accountId}`, importId: 'i1', accountId, fileName: `${accountId}.csv`, fileHash: accountId,
+    importedAt: '2026-11-01T00:00:00Z', rowCount: 1, coversFrom, coversTo: '2026-10-31',
+  });
+  s.batches = [batch('a1', '2026-08-01'), batch('c1', '2026-10-01'), batch('a2', '2026-08-01')];
+  s.categories = [{ id: 'groceries', name: 'Groceries', kind: 'spend', budgetType: 'variable', position: 0 }];
+  s.buckets = [bucket('shop'), bucket('other')];
+  s.transactions = [
+    txn('shop', -1000, '2026-08-05'),
+    txn('shop', -1000, '2026-09-05'),
+    txn('shop', -1000, '2026-10-05'),
+    txn('shop', -9000, '2026-10-20'),
+    { ...txn('shop', -500, '2026-10-07'), accountId: 'c1' },
+    { ...txn('other', -100, '2026-10-07'), accountId: 'a2' },
+  ];
+  return s;
+}
+
+const shopCount = (s) => bucketCounts(s, tuning).get('shop');
+
+test('bucketMonths: one series per account in the bucket, absolute totals, uncovered months null', () => {
+  const s = shopState();
+  const { months, kept, accounts } = bucketMonths(s, tuning, shopCount(s));
+  assert.deepEqual(months, ['2026-08', '2026-09', '2026-10']);
+  assert.equal(kept?.absTotal, 12500);
+  assert.equal(kept?.txns.length, 5);
+  // Savings has nothing in the bucket, so it has no series.
+  assert.deepEqual(accounts.map((a) => a.accountId), ['a1', 'c1']);
+  assert.deepEqual(accounts[0].cells.map((c) => c.total), [1000, 1000, 10000]);
+  assert.deepEqual(accounts[1].cells.map((c) => c.total), [null, null, 500]);
+});
+
+test('bucketMonths: a month far from the median is unusual, as on the category view', () => {
+  const s = shopState();
+  const { accounts } = bucketMonths(s, tuning, shopCount(s));
+  assert.deepEqual(accounts[0].cells.map((c) => c.unusual), [false, false, true]);
+  // An uncovered month is never unusual; one covered month is its own median.
+  assert.deepEqual(accounts[1].cells.map((c) => c.unusual), [false, false, false]);
+});
+
+test('bucketMonths: a transaction moved by override or split no longer counts, but its account keeps a series', () => {
+  const s = shopState();
+  const big = s.transactions.find((t) => t.amountMinor === -9000);
+  s.overrides.set(big.fingerprint, { fingerprint: big.fingerprint, categoryId: 'groceries' });
+  const card = s.transactions.find((t) => t.accountId === 'c1');
+  s.overrides.set(card.fingerprint, { fingerprint: card.fingerprint, splits: [{ amountMinor: -500, categoryId: 'groceries' }] });
+  const { kept, accounts } = bucketMonths(s, tuning, shopCount(s));
+  assert.equal(kept?.absTotal, 3000);
+  assert.equal(kept?.txns.length, 3);
+  assert.deepEqual(accounts[0].cells.map((c) => c.total), [1000, 1000, 1000]);
+  assert.deepEqual(accounts[0].cells.map((c) => c.unusual), [false, false, false]);
+  assert.deepEqual(accounts[1].cells.map((c) => c.total), [null, null, 0]);
+  // The queue still orders by the whole bucket.
+  assert.equal(shopCount(s)?.absTotal, 12500);
+});
+
+test('bucketMonths: an override to a category that no longer exists does not move it; all moved leaves nothing kept', () => {
+  const s = shopState();
+  const first = s.transactions[0];
+  s.overrides.set(first.fingerprint, { fingerprint: first.fingerprint, categoryId: 'gone' });
+  assert.equal(bucketMonths(s, tuning, shopCount(s)).kept?.txns.length, 5);
+  for (const t of s.transactions.filter((x) => x.bucketId === 'shop')) {
+    s.overrides.set(t.fingerprint, { fingerprint: t.fingerprint, categoryId: 'groceries' });
+  }
+  const { kept, accounts } = bucketMonths(s, tuning, shopCount(s));
+  assert.equal(kept, undefined);
+  assert.equal(accounts.length, 2);
 });
