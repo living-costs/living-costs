@@ -15,6 +15,25 @@ export const KIND_WORDS = { spend: 'Spending', income: 'Income', contribution: '
 /** @type {Record<BudgetType, string>} */
 export const BUDGET_LABELS = { fixed: 'Fixed', variable: 'Variable', annual: 'Annual', oneoff: 'One-off' };
 
+const HINT = {
+  fixed: "each charge's latest amount, as often as charged, ÷ 12",
+  variable: 'the median month',
+  annual: "the year's total ÷ 12",
+  oneoff: 'shown separately, not in your typical month',
+};
+
+/**
+ * What putting something in this category does to the budget, for a tooltip and description.
+ * @param {Category} category
+ * @returns {string}
+ */
+export function categoryHint(category) {
+  if (category.kind === 'transfer') return 'Transfer: not counted';
+  if (category.kind === 'ignore') return 'Ignore: not counted';
+  const type = category.budgetType ?? 'variable';
+  return `${KIND_WORDS[category.kind]} · ${BUDGET_LABELS[type]}: ${HINT[type]}`;
+}
+
 /**
  * The element within `root` whose data-focus-key is `key`, if there is one.
  * @param {string} key

@@ -18,7 +18,7 @@ import { formatMoney, soleCurrency } from '../money.js';
 import { cmp } from '../order.js';
 import { formatDate } from '../dates.js';
 import { whileSaving } from './saving.js';
-import { focusKey, plural, valueOf, field, emptyDraft, categoryForm } from './form.js';
+import { focusKey, plural, valueOf, field, emptyDraft, categoryForm, categoryHint } from './form.js';
 
 /**
  * Apply the Changes that `build` returns (built when the save starts), one save at a time. `after`
@@ -243,9 +243,11 @@ function categoryGroup(app, cats, assign) {
         const key = app.tuning.firstTenKeys && i < 10 ? String((i + 1) % 10) : null;
         return h('button', {
           type: 'button', class: 'secondary', 'data-saves': true, 'data-focus-key': `cat-${c.id}`,
-          'aria-keyshortcuts': key, onClick: () => assign(c.id),
+          'aria-keyshortcuts': key, title: categoryHint(c), 'aria-describedby': `cat-hint-${c.id}`,
+          onClick: () => assign(c.id),
         }, key ? h('span', { class: 'key' }, key) : null, key ? ' ' : null, c.name);
       }),
+      ...cats.map((c) => h('span', { class: 'visually-hidden', id: `cat-hint-${c.id}` }, categoryHint(c))),
       h('button', {
         type: 'button', class: 'secondary', 'data-focus-key': 'card-new', 'aria-expanded': ui.newOpen ? 'true' : 'false',
         onClick: () => {

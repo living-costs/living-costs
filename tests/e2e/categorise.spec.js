@@ -41,6 +41,18 @@ test.afterEach(async ({ page }) => {
   expect(await page.evaluate(() => window.__csp)).toEqual([]);
 });
 
+test('category buttons describe their kind and type', async ({ page }) => {
+  await openCategorise(page);
+  const buttons = card(page).getByRole('group', { name: 'Category' });
+  const salary = buttons.getByRole('button', { name: /Salary$/ });
+  const fixed = "Income · Fixed: each charge's latest amount, as often as charged, ÷ 12";
+  await expect(salary).toHaveAttribute('title', fixed);
+  await expect(salary).toHaveAccessibleDescription(fixed);
+  await expect(buttons.getByRole('button', { name: /Groceries$/ })).toHaveAttribute('title', 'Spending · Variable: the median month');
+  await expect(buttons.getByRole('button', { name: /Ignore$/ })).toHaveAttribute('title', 'Ignore: not counted');
+  await expect(buttons.getByRole('button', { name: 'New category…' })).not.toHaveAttribute('title', /.+/);
+});
+
 test('largest first', async ({ page }) => {
   await openCategorise(page);
   await expect(cardHeading(page)).toHaveText(SALARY);
