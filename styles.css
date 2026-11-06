@@ -290,6 +290,8 @@ dl.summary .sub { font-weight: normal; padding-left: 1rem; }
 .typical-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0 0 0.5rem; }
 .typical-controls label { font-weight: 600; }
 table.typical td.num { font-variant-numeric: tabular-nums; }
+table.typical td, table.typical th { vertical-align: middle; }
+table.typical input.select { display: block; width: 1.125rem; height: 1.125rem; min-height: 0; margin: 0; }
 table.typical td.bar-cell { width: 8rem; min-width: 8rem; vertical-align: middle; }
 table.typical th button.name { text-align: left; }
 .bars { display: grid; gap: 2px; }

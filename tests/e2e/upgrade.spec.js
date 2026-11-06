@@ -18,7 +18,7 @@ const heading = (page) => page.locator('#screen h2');
 
 /** The Per month cell of Subscriptions in the typical month's Living costs table. @param {Page} page */
 const subscriptionsPerMonth = (page) => page.getByRole('table', { name: 'Living costs', exact: true }).getByRole('row')
-  .filter({ has: page.getByRole('rowheader', { name: 'Subscriptions', exact: true }) }).getByRole('cell').nth(1);
+  .filter({ has: page.getByRole('rowheader', { name: 'Subscriptions', exact: true }) }).getByRole('cell').nth(2);
 
 test('version 1 data upgrades silently on load', async ({ page }) => {
   await trackCspViolations(page);

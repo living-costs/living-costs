@@ -87,16 +87,16 @@ test('comparing Oct 2026 against Nov 2025 to Jun 2026', async () => {
   await page.getByLabel('Compare with').selectOption('2026-10');
   await expect(page.getByLabel('Compare with')).toBeFocused();
   await expect(table('Living costs').getByRole('columnheader'))
-    .toHaveText(['Category', 'Type', 'Typical', 'Oct 2026', 'Change', 'Share of largest']);
+    .toHaveText(['Tick', 'Category', 'Type', 'Typical', 'Oct 2026', 'Change', 'Share of largest']);
   await expect(rowCells('Living costs', 'Housing (rent or mortgage)')).toHaveText([
-    'Fixed', gbp(90000), gbp(90000), 'same', '']);
-  await expect(rowCells('Living costs', 'Groceries').nth(2))
+    '', 'Fixed', gbp(90000), gbp(90000), 'same', '']);
+  await expect(rowCells('Living costs', 'Groceries').nth(3))
     .toHaveText(gbp(-expected.monthlyTotals.Groceries['2026-10']));
   const gifts = rowCells('Living costs', 'Gifts');
-  await expect(gifts.nth(2)).toHaveText(/** @type {string} */ (await gifts.nth(1).textContent()));
-  await expect(gifts.nth(3)).toHaveText('same');
+  await expect(gifts.nth(3)).toHaveText(/** @type {string} */ (await gifts.nth(2).textContent()));
+  await expect(gifts.nth(4)).toHaveText('same');
   await expect(rowCells('Contributions', 'Contributions from others'))
-    .toHaveText(['Fixed', gbp(0), gbp(55000), `${gbp(55000)} more`, '']);
+    .toHaveText(['', 'Fixed', gbp(0), gbp(55000), `${gbp(55000)} more`, '']);
   await expect(table('Contributions').getByRole('rowheader', { name: 'Contributions from others' }).getByRole('button')).toHaveCount(0);
   await expect(page.getByText("Annual categories use the typical figure in the month too, so a yearly bill doesn't skew it.")).toBeVisible();
 });
@@ -104,7 +104,7 @@ test('comparing Oct 2026 against Nov 2025 to Jun 2026', async () => {
 test('the month and Change columns reconcile with the summary', async () => {
   const summary = page.getByRole('table', { name: 'Summary per month' });
   await expect(summary.getByRole('columnheader')).toHaveText(['Typical','Oct 2026', 'Change']);
-  /** Sum of one column of a table's body rows, in minor units. td index: 0 Type, 1 Typical, 2 month, 3 Change. */
+  /** Sum of one column of a table's body rows, in minor units. td index: 0 tick, 1 Type, 2 Typical, 3 month, 4 Change. */
   const columnSum = async (/** @type {string} */ name, /** @type {number} */ col) => {
     const texts = await table(name).locator('tbody tr').evaluateAll(
       (rows, c) => rows.map((r) => r.querySelectorAll('td')[c].textContent ?? ''), col);
@@ -113,8 +113,8 @@ test('the month and Change columns reconcile with the summary', async () => {
   const summaryCells = (/** @type {string} */ line) => summary.getByRole('row')
     .filter({ has: page.getByRole('rowheader', { name: line, exact: true }) }).getByRole('cell');
   for (const [name, line] of [['Living costs', 'Living costs'], ['Income', 'Income'], ['Contributions', 'less contributions from others']]) {
-    expect(await columnSum(name, 2)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(1).textContent())));
-    expect(await columnSum(name, 3)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(2).textContent())));
+    expect(await columnSum(name, 3)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(1).textContent())));
+    expect(await columnSum(name, 4)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(2).textContent())));
   }
 });
 
@@ -124,7 +124,7 @@ test('a month an account does not cover shows a banner', async () => {
   await expect(page.locator('.banner', { hasText: 'Jun 2026 has no complete statement for' })).toHaveText(
     `Jun 2026 has no complete statement for ${FIXTURE_ACCOUNTS.bankB.new.name}. Its spending that month isn't included.`);
   await expect(rowCells('Contributions', 'Contributions from others'))
-    .toHaveText(['Fixed', gbp(55000), gbp(0), `${gbp(55000)} less`, '']);
+    .toHaveText(['', 'Fixed', gbp(55000), gbp(0), `${gbp(55000)} less`, '']);
 });
 
 test('comparison fits 320px and passes axe', async () => {
@@ -155,7 +155,7 @@ test('No month puts the tables back', async () => {
   await expect(page.locator('dl.summary')).toHaveCount(0);
   await page.getByLabel('Compare with').selectOption('');
   await expect(table('Living costs').getByRole('columnheader'))
-    .toHaveText(['Category', 'Type', 'Per month', 'Per year', 'Share of largest']);
+    .toHaveText(['Tick', 'Category', 'Type', 'Per month', 'Per year', 'Share of largest']);
   await expect(page.locator('dl.summary')).toHaveCount(1);
   await expect(page.getByText('Annual categories use the typical figure')).toHaveCount(0);
 });

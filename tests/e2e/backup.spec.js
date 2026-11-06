@@ -37,7 +37,7 @@ const today = (page) => page.evaluate(() => {
 
 /** The Per month cell of Subscriptions in the typical month's Living costs table. @param {Page} page */
 const subscriptionsPerMonth = (page) => page.getByRole('table', { name: 'Living costs', exact: true }).getByRole('row')
-  .filter({ has: page.getByRole('rowheader', { name: 'Subscriptions', exact: true }) }).getByRole('cell').nth(1);
+  .filter({ has: page.getByRole('rowheader', { name: 'Subscriptions', exact: true }) }).getByRole('cell').nth(2);
 
 /** Fresh app, on the Backup screen. @param {Page} page */
 async function openBackup(page) {
