@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, applyToState, combine } from '../../src/changes.js';
-import { assignBuckets, mergeBuckets, setBucketCategory } from '../../src/buckets.js';
+import { assignBuckets, mergeBuckets, setBucketCategory, setBucketStopped, stoppedDateFor, resumedBuckets } from '../../src/buckets.js';
 
 let n = 0;
 const txn = (date, amountMinor, rawText, extra = {}) => ({
@@ -73,4 +73,59 @@ test('applyToState: upsert in place, del after put; combine concatenates', () =>
   assert.equal(s.settings.helpDismissed, true);
   applyToState(s, { del: { overrides: ['f'] } });
   assert.equal(s.overrides.size, 0);
+});
+
+// --- Stopped -------------------------------------------------------------------------------------
+
+const line = (bucketId, count, latestDate) => ({
+  bucketId, accountId: 'A', latest: count ? 1000 : 0, count, latestDate, perMonth: 0, stopped: false,
+});
+
+function stoppedState(kind = 'spend') {
+  const s = emptyState();
+  s.categories.push({ id: 'c1', name: 'Cat', kind, position: 0 });
+  s.buckets.push({ id: 'g', keys: ['GYM'], displayName: 'Gym', categoryId: 'c1', stoppedAfter: '2026-07-05', exampleRawTexts: ['GYM'] });
+  return s;
+}
+
+test('setBucketStopped sets and clears', () => {
+  const s = stoppedState();
+  s.buckets[0] = { id: 'g', keys: ['GYM'], displayName: 'Gym', exampleRawTexts: [] };
+  applyToState(s, setBucketStopped(s, 'g', '2026-07-05'));
+  assert.equal(s.buckets[0].stoppedAfter, '2026-07-05');
+  applyToState(s, setBucketStopped(s, 'g', undefined));
+  assert.equal('stoppedAfter' in s.buckets[0], false);
+});
+
+test('stoppedDateFor uses the latest charge across accounts', () => {
+  assert.equal(stoppedDateFor([line('g', 2, '2026-06-05'), line('g', 1, '2026-07-01'), line('g', 0, ''), line('x', 1, '2026-09-01')], 'g'), '2026-07-01');
+  assert.equal(stoppedDateFor([line('g', 0, '')], 'g'), undefined);
+});
+
+test('merge keeps stoppedAfter only when every merged bucket was stopped', () => {
+  const s = stoppedState();
+  s.buckets.push({ id: 'h', keys: ['GYM2'], displayName: 'Gym2', stoppedAfter: '2026-08-01', exampleRawTexts: [] });
+  s.buckets.push({ id: 'i', keys: ['OTHER'], displayName: 'Other', exampleRawTexts: [] });
+  assert.equal(mergeBuckets(s, 'g', ['h'], { displayName: 'G' }).put.buckets[0].stoppedAfter, '2026-08-01');
+  assert.equal('stoppedAfter' in mergeBuckets(s, 'g', ['h', 'i'], { displayName: 'G' }).put.buckets[0], false);
+});
+
+test('a newer charge on import clears stoppedAfter and is reported', () => {
+  const s = stoppedState();
+  const c = assignBuckets(s, [txn('2026-08-05', -3000, 'GYM')]);
+  assert.equal('stoppedAfter' in c.put.buckets[0], false);
+  assert.deepEqual(resumedBuckets(s, c).map((b) => b.id), ['g']);
+});
+
+test('an older or same-day charge, or a newer refund, leaves stoppedAfter alone', () => {
+  const s = stoppedState();
+  const c = assignBuckets(s, [txn('2026-07-05', -3000, 'GYM'), txn('2026-08-10', 500, 'GYM')]);
+  assert.equal(c.put.buckets?.find((b) => b.id === 'g')?.stoppedAfter ?? '2026-07-05', '2026-07-05');
+  assert.deepEqual(resumedBuckets(s, c), []);
+});
+
+test('an income bucket counts a credit as a charge', () => {
+  const s = stoppedState('income');
+  const c = assignBuckets(s, [txn('2026-08-05', 250000, 'GYM')]);
+  assert.deepEqual(resumedBuckets(s, c).map((b) => b.id), ['g']);
 });

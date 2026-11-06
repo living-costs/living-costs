@@ -1,4 +1,5 @@
 /** @import {State, Changes, Transaction, Bucket, Account} from './types.js' */
+/** @import {BucketLine} from './typical.js' */
 import { normalise } from './normalise.js';
 import { routeByRule, byDate, addExample } from './rules.js';
 import { periodKey } from './dates.js';
@@ -60,6 +61,14 @@ export function assignBuckets(state, incoming) {
     }
     const tb = work.get(target);
     if (tb && addExample(tb, t.rawText)) changedBuckets.add(target);
+    if (tb?.stoppedAfter && t.date > tb.stoppedAfter) {
+      const kind = state.categories.find((c) => c.id === tb.categoryId)?.kind;
+      const credit = kind === 'income' || kind === 'contribution';
+      if (credit ? t.amountMinor > 0 : t.amountMinor < 0) {
+        delete tb.stoppedAfter;
+        changedBuckets.add(target);
+      }
+    }
     /** @type {Transaction} */
     const txn = { ...t, bucketId: target };
     if (flaggedRuleId) txn.flaggedRuleId = flaggedRuleId;
@@ -93,6 +102,10 @@ export function mergeBuckets(state, survivorId, mergedIds, { displayName, catego
   /** @type {Bucket} */
   const next = { id: survivor.id, keys, displayName, exampleRawTexts: examples.slice(0, 5) };
   if (categoryId !== undefined) next.categoryId = categoryId;
+  const group = [survivor, ...mergedIds.filter((id) => id !== survivorId).map((id) => state.buckets.find((x) => x.id === id))];
+  if (group.every((b) => b?.stoppedAfter)) {
+    next.stoppedAfter = group.reduce((m, b) => (/** @type {string} */ (b?.stoppedAfter) > m ? /** @type {string} */ (b?.stoppedAfter) : m), '');
+  }
   const transactions = state.transactions.filter((t) => merged.has(t.bucketId)).map((t) => ({ ...t, bucketId: survivorId }));
   const rules = state.rules.filter((r) => merged.has(r.bucketId)).map((r) => ({ ...r, bucketId: survivorId }));
   /** @type {Account[]} */
@@ -121,4 +134,39 @@ export function setBucketCategory(state, bucketId, categoryId) {
   if (!b) throw new Error(`Unknown bucket ${bucketId}`);
   const { categoryId: _old, ...rest } = b;
   return { put: { buckets: [categoryId === undefined ? rest : { ...rest, categoryId }] } };
+}
+
+/**
+ * @param {State} state
+ * @param {string} bucketId
+ * @param {string|undefined} stoppedAfter undefined removes the mark
+ * @returns {Changes}
+ */
+export function setBucketStopped(state, bucketId, stoppedAfter) {
+  const b = state.buckets.find((x) => x.id === bucketId);
+  if (!b) throw new Error(`Unknown bucket ${bucketId}`);
+  const { stoppedAfter: _old, ...rest } = b;
+  return { put: { buckets: [stoppedAfter === undefined ? rest : { ...rest, stoppedAfter }] } };
+}
+
+/**
+ * The date of a bucket's latest charge across its lines.
+ * @param {BucketLine[]} lines
+ * @param {string} bucketId
+ * @returns {string|undefined}
+ */
+export function stoppedDateFor(lines, bucketId) {
+  let latest;
+  for (const l of lines) if (l.bucketId === bucketId && l.count > 0 && (latest === undefined || l.latestDate > latest)) latest = l.latestDate;
+  return latest;
+}
+
+/**
+ * Buckets that were marked Stopped and no longer are after these changes.
+ * @param {State} state
+ * @param {Changes} changes
+ * @returns {Bucket[]}
+ */
+export function resumedBuckets(state, changes) {
+  return /** @type {Bucket[]} */ (changes.put?.buckets ?? []).filter((b) => !b.stoppedAfter && state.buckets.some((x) => x.id === b.id && x.stoppedAfter));
 }

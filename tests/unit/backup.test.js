@@ -40,7 +40,7 @@ const base = () => ({
     { id: 'a3', name: 'Other card', currency: 'GBP', kind: 'placeholder', repaymentBucketIds: ['b2'] },
   ],
   buckets: [
-    { id: 'b1', keys: ['SHOP'], displayName: 'Shop', categoryId: 'c1', exampleRawTexts: ['SHOP 123'] },
+    { id: 'b1', keys: ['SHOP'], displayName: 'Shop', categoryId: 'c1', stoppedAfter: '2026-07-05', exampleRawTexts: ['SHOP 123'] },
     { id: 'b2', keys: ['CARD CO', 'CARD COMPANY'], displayName: 'CARD CO', exampleRawTexts: [] },
     { id: 'b3', keys: [], displayName: 'Streaming', categoryId: 'c1', exampleRawTexts: [] },
   ],
@@ -308,6 +308,12 @@ test('every reference must resolve', () => {
     'Override 1 points at a missing category.',
     'Override 2 points at a missing category.',
   ]);
+});
+
+test('a bucket stoppedAfter that is not an ISO date is rejected', () => {
+  const b = /** @type {any} */ (base());
+  b.buckets[0].stoppedAfter = '5 July';
+  assert.equal(errorsOf(b).length, 1);
 });
 
 test('duplicate IDs, keys and fingerprints are refused', () => {
