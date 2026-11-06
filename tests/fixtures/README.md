@@ -62,3 +62,7 @@ Amounts are signed minor units, as the app stores them. Day numbers are days of 
 | B5 | `J DOE` | +60000 | 28th | transfer |
 
 The re-export holds every Bank A row from October 2026, unchanged except that the A4 row on 2026-10-03 reads `CARD PURCHASE TESCO STORE 2041`. It adds one new row, `SQ *CORNER CAFE` at −350 on 2026-11-02.
+
+## Backups
+
+`backups/vN.json` is a backup of the fixture state, written by the app's `buildBackup` while `DATA_VERSION` was N. It is frozen: tests upgrade and restore every one, which proves old backups still load. Never edit or regenerate an existing file; `backups/make.js` refuses to overwrite one. When you bump `DATA_VERSION`, run `node tests/fixtures/backups/make.js` once on the commit that bumps it, and commit the new file. Run it before changing the code that the bump covers, since it records what the old version produced.
