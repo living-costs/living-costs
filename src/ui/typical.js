@@ -78,7 +78,10 @@ export function render(root, app) {
   const money = (minor) => formatMoney(minor, tm.currency);
 
   root.append(h('hgroup', null, heading, h('p', { id: 'typical-window' }, windowText(tm))));
-  if (tm.complete) root.append(windowControls(tm, app, completeMonths(state, app.tuning)));
+  if (tm.complete) {
+    const complete = completeMonths(state, app.tuning);
+    root.append(windowControls(tm, app, complete), compareControls(app, complete));
+  }
   const n = tm.months.length;
   if (tm.isDefault && tm.complete && n < app.tuning.windowMonths) {
     root.append(h('p', null, `Only ${plural(n, 'complete month', 'complete months')} so far. Yearly figures are scaled to 12 months.`));
@@ -87,6 +90,12 @@ export function render(root, app) {
     const last = lastCovered(state, account.id);
     root.append(h('p', { class: 'banner' },
       `${account.name} has no statements after ${formatDate(last)}. Its spending there isn't included.`));
+  }
+
+  const cmp = tm.compare;
+  if (cmp) for (const account of cmp.missing) {
+    root.append(h('p', { class: 'banner' },
+      `${formatMonth(cmp.month)} has no complete statement for ${account.name}. Its spending that month isn't included.`));
   }
 
   root.append(summaryList(tm, money));
@@ -105,13 +114,45 @@ export function render(root, app) {
     app.rerender();
     focusKey('category-heading');
   };
-  for (const part of [
-    rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen),
-    rowsTable('typical-income', 'Income', tm.income, money, onOpen),
-    rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen),
-    oneOffList(state, tm, money),
-  ]) if (part) root.append(part);
+  const tables = [
+    rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen, cmp?.month),
+    rowsTable('typical-income', 'Income', tm.income, money, onOpen, cmp?.month),
+    rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen, cmp?.month),
+  ];
+  for (const part of tables) if (part) root.append(part);
+  if (cmp) root.append(help('Annual categories use the typical figure in the month too, so a yearly bill doesn\'t skew it.'));
+  const oneOffs = oneOffList(state, tm, money);
+  if (oneOffs) root.append(oneOffs);
 }
+
+/**
+ * "Compare with [month]": No month, then the complete months, newest first.
+ * @param {App} app
+ * @param {string[]} complete complete months, oldest first
+ * @returns {HTMLElement}
+ */
+function compareControls(app, complete) {
+  const select = /** @type {HTMLSelectElement} */ (h('select', {
+    id: 'typical-compare', 'data-focus-key': 'typical-compare',
+    onChange: () => { ui.compare = select.value || null; app.rerender(); },
+  }, h('option', { value: '', selected: ui.compare === null }, 'No month'),
+  ...[...complete].reverse().map((m) => h('option', { value: m, selected: m === ui.compare }, formatMonth(m)))));
+  return h('div', { class: 'typical-controls' }, h('label', { for: 'typical-compare' }, 'Compare with'), select);
+}
+
+/**
+ * "same", "£x less" or "£x more" for a difference of month minus typical.
+ * @param {number} diff
+ * @param {(minor: number) => string} money
+ * @returns {string}
+ */
+export function changeText(diff, money) {
+  if (diff === 0) return 'same';
+  return diff < 0 ? `${money(-diff)} less` : `${money(diff)} more`;
+}
+
+/** @param {number} diff */
+const changeClass = (diff) => (diff === 0 ? 'num same' : 'num change');
 
 /**
  * "Typical from [month] to [month]", and a button back to the latest months once a window is chosen.
@@ -189,6 +230,18 @@ function summaryList(tm, money) {
     lines.push(['less contributions from others', t.contributions, 'sub'], ['your share', t.share, 'sub']);
   }
   lines.push(['Left over', t.leftOver]);
+  const c = tm.compare;
+  if (c) {
+    const month = [c.totals.income, c.totals.living, ...(tm.contribution.length > 0 ? [c.totals.contributions, c.totals.share] : []), c.totals.leftOver];
+    return h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
+      h('thead', null, h('tr', null, h('td'), h('th', { scope: 'col', class: 'num' }, 'Typical'),
+        h('th', { scope: 'col', class: 'num' }, formatMonth(c.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
+      h('tbody', null, ...lines.map(([label, minor, cls], i) => h('tr', { class: cls },
+        h('th', { scope: 'row' }, label),
+        h('td', { class: 'num' }, money(minor)),
+        h('td', { class: 'num' }, money(month[i])),
+        h('td', { class: changeClass(month[i] - minor) }, changeText(month[i] - minor, money))))));
+  }
   return h('dl', { class: 'summary', 'aria-label': 'Summary per month' },
     ...lines.flatMap(([label, minor, cls]) => [h('dt', { class: cls }, label), h('dd', { class: cls }, money(minor))]));
 }
@@ -213,28 +266,40 @@ function typeText(r, money) {
  * @param {Row[]} rows largest first
  * @param {(minor: number) => string} money
  * @param {(categoryId: string) => void} onOpen
+ * @param {string} [month] the compared month (YYYY-MM): adds its column, Change and a second bar
  * @returns {HTMLElement|null}
  */
-function rowsTable(id, title, rows, money, onOpen) {
+function rowsTable(id, title, rows, money, onOpen, month) {
   if (rows.length === 0) return null;
-  const largest = Math.max(0, ...rows.map((r) => r.perMonth));
+  const largest = Math.max(0, ...rows.flatMap((r) => (month ? [r.perMonth, r.month ?? 0] : [r.perMonth])));
+  const label = month ? formatMonth(month) : '';
   return h('section', { 'aria-labelledby': id },
     h('h3', { id }, title),
+    month ? h('p', { class: 'bar-key', 'aria-hidden': 'true' },
+      h('span', { class: 'key' }, h('span', { class: 'bar' }), 'Typical'),
+      h('span', { class: 'key' }, h('span', { class: 'bar month' }), label)) : null,
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': id },
       h('table', { class: 'typical', 'aria-labelledby': id },
         h('thead', null, h('tr', null,
           h('th', { scope: 'col' }, 'Category'), h('th', { scope: 'col' }, 'Type'),
-          h('th', { scope: 'col', class: 'num' }, 'Per month'), h('th', { scope: 'col', class: 'num' }, 'Per year'),
+          ...(month
+            ? [h('th', { scope: 'col', class: 'num' }, 'Typical'), h('th', { scope: 'col', class: 'num' }, label),
+              h('th', { scope: 'col', class: 'num' }, 'Change')]
+            : [h('th', { scope: 'col', class: 'num' }, 'Per month'), h('th', { scope: 'col', class: 'num' }, 'Per year')]),
           h('th', { scope: 'col' }, h('span', { class: 'visually-hidden' }, 'Share of largest')))),
         h('tbody', null, ...rows.map((r) => h('tr', null,
-          h('th', { scope: 'row' }, h('button', {
+          h('th', { scope: 'row' }, r.monthOnly ? r.name : h('button', {
             type: 'button', class: 'secondary name', 'data-focus-key': openKey(r.categoryId),
             onClick: () => onOpen(r.categoryId),
           }, r.name)),
           h('td', null, typeText(r, money)),
-          h('td', { class: 'num' }, money(r.perMonth)),
-          h('td', { class: 'num' }, money(r.perYear)),
-          h('td', { class: 'bar-cell' }, bar(r.perMonth, largest))))))));
+          ...(month
+            ? [h('td', { class: 'num' }, money(r.perMonth)), h('td', { class: 'num' }, money(r.month ?? 0)),
+              h('td', { class: changeClass((r.month ?? 0) - r.perMonth) }, changeText((r.month ?? 0) - r.perMonth, money))]
+            : [h('td', { class: 'num' }, money(r.perMonth)), h('td', { class: 'num' }, money(r.perYear))]),
+          h('td', { class: 'bar-cell' }, month
+            ? h('div', { class: 'bars', 'aria-hidden': 'true' }, bar(r.perMonth, largest), bar(r.month ?? 0, largest, 'month'))
+            : bar(r.perMonth, largest))))))));
 }
 
 /**
@@ -242,10 +307,11 @@ function rowsTable(id, title, rows, money, onOpen) {
  * the CSP's style-src allows.
  * @param {number} value
  * @param {number} largest
+ * @param {string} [extra] another class, "month" for the outlined compared-month bar
  * @returns {HTMLElement}
  */
-function bar(value, largest) {
-  const el = h('span', { class: 'bar', 'aria-hidden': 'true' });
+function bar(value, largest, extra) {
+  const el = h('span', { class: extra ? `bar ${extra}` : 'bar', 'aria-hidden': 'true' });
   el.style.width = `${largest > 0 ? Math.round((Math.max(0, value) * 100) / largest) : 0}%`;
   return el;
 }
