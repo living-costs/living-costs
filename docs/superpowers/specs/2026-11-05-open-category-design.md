@@ -1,4 +1,4 @@
-# Open a category from Typical month, and a simpler Fixed
+# Open a category from Typical month, a simpler Fixed, and type hints on Categorise
 
 ## Why
 
@@ -20,6 +20,7 @@ Success means that, starting from a Salary figure that looks wrong, the user can
 - Show the category's total for each month the figure used, with unusual months marked.
 - For a Fixed category, show what each bucket adds, and allow marking a bucket Stopped.
 - List every transaction that counts as the category in those months, and allow changing what each one counts as, as on the Transactions screen.
+- On the Categorise card, hovering a category button shows its kind and budget type and what they mean.
 - Fixed no longer drops buckets automatically. Council tax over 10 months, a renamed employer, and yearly charges in Fixed categories all come out right.
 
 ## Non-goals
@@ -34,7 +35,7 @@ Success means that, starting from a Salary figure that looks wrong, the user can
 ## Anti-goals
 
 - The opened view must not disagree with the figure it explains. Its monthly totals, bucket rows and list must come from the same transactions, months and resolution (overrides, splits, transfers) as `typicalMonth`. A view that shows a different number from the row the user clicked is worse than no view.
-- No new automatic guess may overwrite or second-guess a user's Stopped mark.
+- No automatic guess may set or change a user's Stopped mark. The only automatic change is clearing it when a newer charge arrives, and the user is told.
 
 ## Part 1: Fixed without the "ended" rule
 
@@ -46,13 +47,15 @@ Success means that, starting from a Salary figure that looks wrong, the user can
 - A bucket with no charges in the window (only refunds) adds nothing. It is never negative, as now.
 - A bucket's contribution never goes below 0, so a large refund can't make it negative.
 
-**Stopped.** A bucket gets an optional `stoppedAfter` field (an ISO date). Marking a bucket Stopped sets it to the date of that bucket's latest charge. In a Fixed calculation, a bucket whose latest charge is on or before `stoppedAfter` adds nothing, refunds included. If a newer charge appears (a resumed subscription), the mark no longer applies and the bucket counts again. The view then shows it as not stopped, and ticking Stopped again sets the new date. The mark itself is never deleted or changed automatically.
+**Stopped.** A bucket gets an optional `stoppedAfter` field (an ISO date). Marking a bucket Stopped sets it to the date of that bucket's latest charge. In a Fixed calculation, a Stopped bucket adds nothing, refunds included.
+
+**A newer charge clears the mark (owner's decision).** When an import brings a charge dated after `stoppedAfter` into a Stopped bucket (a resumed subscription), the import removes `stoppedAfter` from that bucket, so the mark never sits there being ignored. The import summary says so in one line, for example "NETFLIX was marked Stopped and has charged again, so it counts again." `assignBuckets` already returns changed buckets on import, which makes it the likely place. *Claude's call:* undoing that import doesn't restore the mark. The user can tick Stopped again. Nothing else changes `stoppedAfter` automatically.
 
 `stoppedAfter` only affects Fixed. In any other budget type it is ignored, and kept.
 
 **Where Stopped is saved and carried:**
 - `src/types.js`: add `stoppedAfter?: string` to `Bucket`.
-- Backup: `readBucket` in `src/backup.js` builds a new object field by field, so an unhandled field is silently dropped on restore. Add `stoppedAfter` there, validated as an ISO date when present. Restore must still accept backups without it. **Do not bump `SCHEMA_VERSION`.** Restore rejects every other version, so a bump would make every existing backup unrestorable. The field is optional and additive.
+- Backup: `readBucket` in `src/backup.js` builds a new object field by field, so an unhandled field is silently dropped on restore. Add `stoppedAfter` there, validated as an ISO date when present. The app has no users yet, so compatibility with older backups doesn't constrain this. Schema versioning and backup compatibility are a separate later task (see Follow-up tasks).
 - Merge: `mergeBuckets` in `src/buckets.js` also builds `next` field by field. *Claude's call:* the merged bucket is Stopped only if every bucket merged into it was, with `stoppedAfter` set to the latest of their dates. Otherwise the field is left off.
 - Check every other place that rebuilds a bucket object (for example `assignBuckets` on import and any normaliser migration) and confirm it keeps the field.
 
@@ -86,7 +89,7 @@ Each month cell is a toggle button (`aria-pressed`). Pressing it narrows the tra
 
 | Column | Content |
 |---|---|
-| Bucket | The bucket's display name, as a toggle button that narrows the transaction list to that bucket, like the month cells |
+| Bucket | The bucket's display name, as a toggle button that narrows the transaction list to that bucket, like the month cells. It does not open the bucket on Buckets (owner's choice, option A of the second mockup) |
 | Latest charge | That bucket's latest charge in the window |
 | Charges | How many charges in the window |
 | Last charged | Date of the latest charge |
@@ -103,9 +106,24 @@ Changing what a transaction counts as, or ticking Stopped, saves as elsewhere. T
 
 **Back.** A "Back to Typical month" button at the end of the view, as on Buckets. It returns to Typical month with focus on the category button the user came from. If that category no longer appears in the tables, focus goes to the Typical month heading.
 
-*Claude's call:* if the open category leaves the tables while the view is open (for example its last transaction is moved out from this view), the view stays open with its heading, the line "Nothing counts as <name> in these months now.", no month cells, bucket table or list, and the Back button. Focus moves to that line. It doesn't jump back to Typical month by itself.
+*Claude's call:* the user's own edit in this view can empty the category. Changing Counts as on its last transaction drops it from Typical month while the view is still open. When that happens, the view stays open with its heading, the line "Nothing counts as <name> in these months now.", no month cells, bucket table or list, and the Back button. Focus moves to that line. It doesn't jump back to Typical month by itself.
 
 The open category and its month and bucket filters are screen state that is not saved, like `ui.drillId` on Buckets. Leaving the screen through the nav and coming back behaves as Buckets does.
+
+## Part 3: Kind and type on the Categorise card
+
+On the Categorise screen, each category button on the card (`src/ui/categorise.js`) gets a hover tooltip with its kind and budget type and what that means. This is so the user sees the consequence of a choice, such as a garage repair put in Fixed Car adding its amount ÷ 12 every month. The owner approved the mockup and wording:
+
+| Category | Tooltip |
+|---|---|
+| Fixed | "Spending · Fixed: each charge's latest amount, as often as charged, ÷ 12" (Income or Contribution in place of Spending as the kind requires) |
+| Variable | "Spending · Variable: the median month" |
+| Annual | "Spending · Annual: the year's total ÷ 12" |
+| One-off | "Spending · One-off: shown separately, not in your typical month" |
+| Transfer | "Transfer: not counted" |
+| Ignore | "Ignore: not counted" |
+
+Use the browser's own tooltip (`title`). Give each button the same text as its accessible description, for example via `aria-describedby` pointing at a visually hidden element, so screen readers get it too. The text is built from the category's current kind and type, using the existing kind and budget labels where they fit. Keep the wording in one place, so the Categories screen help and these tooltips don't drift apart. The New category… button gets no tooltip.
 
 ## Constraints
 
@@ -118,7 +136,7 @@ The open category and its month and bucket filters are screen state that is not 
 
 Found by reading the current code. The builder should confirm each one.
 
-1. **Backups:** see Part 1. Don't bump the schema version, and make sure `readBucket` keeps `stoppedAfter`. Add a unit test that a backup without the field restores, and one with it round-trips.
+1. **Backups:** see Part 1. Make sure `readBucket` keeps `stoppedAfter`, and add a unit test that it round-trips.
 2. **Merging drops fields:** `mergeBuckets` builds the merged bucket by hand. Add `stoppedAfter` there, with the rule above, and a unit test.
 3. **Existing unit tests that encode the old rule** in `tests/unit/typical.test.js` must be rewritten, not deleted: "a bucket with no charge in the last fixedActiveMonths contributes 0", "a refund counts only from a bucket that is still active" and "an ended bucket with a refund gives 0". The new expectations: the gym counts (£30 × 9 ÷ 12), the old broadband bucket counts, and a bucket with only refunds still gives 0. Add tests for council tax over 10 months with the window ending in March, a renamed employer across two buckets, a yearly charge, Stopped, and a charge after `stoppedAfter`.
 4. **Tuning test:** `tests/unit/tuning.test.js` lists `fixedActiveMonths`. Remove it and add `unusualMonthPercent`.
@@ -135,7 +153,14 @@ Found by reading the current code. The builder should confirm each one.
 ## Testing
 
 - Unit (`node:test`): the Part 1 cases above. Also the per-account monthly series, per-bucket figures and unusual-month marks for variable, fixed and annual categories, including a category spanning two accounts with different coverage, a refund in a spend category, a split transaction with one part in the category, and a transaction moved in by an override. Check that the view's data matches the Row: for variable, the sum of per-account medians equals `perMonth`. For fixed, the bucket rows add up to `perMonth`.
+- Unit: a newer charge on import clears `stoppedAfter` and reports it. An older or same-day charge doesn't.
+- E2E: the Categorise card's category buttons carry the tooltip and accessible description for each kind and type.
 - E2E (Playwright): open a category from Typical month and check the explanation line and month cells. Filter by a month and by a bucket. Move a transaction out and see everything update. Tick Stopped on a Fixed bucket and see the figure drop, both in the view and back on Typical month. Go back and check focus. Add the view to the axe checks.
+
+## Follow-up tasks (separate, not part of this work)
+
+- **Backup versioning and compatibility.** Decide how schema version bumps work and whether older backups can be restored or migrated. Today restore rejects every version but the current one. Until users exist, formats may change freely.
+- **Dark mode.** Make the app readable in macOS dark mode.
 
 ## Left to the builder
 
