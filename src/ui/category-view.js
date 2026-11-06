@@ -135,7 +135,10 @@ export function renderCategoryView(screen, app, categoryId, onBack) {
 
   root.append(h('section', { 'aria-labelledby': 'category-each-month' },
     h('h4', { id: 'category-each-month' }, 'Each month'),
-    ...detail.accounts.flatMap((a) => monthCells(app, a, several, accountNames, money, detail.row.budgetType === 'annual'))));
+    // One grid for every account, so a month's cells line up down the page. Every account has a
+    // cell for each month in the window; the CSS reads the column count from data-months.
+    h('div', { class: 'month-grid', 'data-months': String(detail.accounts[0]?.cells.length ?? 0) },
+      ...detail.accounts.flatMap((a) => monthCells(app, a, several, accountNames, money, detail.row.budgetType === 'annual')))));
 
   if (detail.row.budgetType === 'fixed') root.append(bucketSection(app, root, detail, money, several, accountNames, bucketNames, listKey));
 

@@ -217,7 +217,7 @@ legend { font-weight: 600; padding: 0 0.25rem; overflow-wrap: anywhere; }
 /* A field alone on a line may shrink to the line, so a 20rem input fits a 320px screen. */
 .row > .field { min-width: 0; }
 .error { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
-.dropzone { border: 2px dashed var(--border); border-radius: 4px; padding: 1rem; margin: 0.5rem 0; text-align: center; }
+.dropzone { border: 2px dashed var(--border); border-radius: 4px; padding: 2.75rem 1rem; margin: 0.5rem 0; text-align: center; }
 .dropzone.over { background: var(--intro-bg); }
 
 /* Tables */
@@ -291,7 +291,21 @@ table.typical th button.name { text-align: left; }
 button.secondary[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); }
 .category-view h4 { margin: 1rem 0 0.25rem; font-size: 1rem; }
 .account-share { margin: 0.5rem 0 0.25rem; font-weight: 600; }
-.month-cells { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.25rem 0 0.5rem; }
+/* Each month: one grid for all accounts, so a month's cells line up and each column is as wide
+   as its widest cell. Too wide for the window, it scrolls sideways like the accounts table. */
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(attr(data-months type(<integer>), 12), max-content);
+  column-gap: 0.25rem;
+  overflow-x: auto;
+  max-width: 100%;
+  /* Keeps the visually hidden ", unusual" text inside the scroll box, not widening the page. */
+  position: relative;
+  /* Room for the 3px focus ring, which the scroll box would otherwise clip. */
+  padding: 4px;
+}
+.month-grid > * { grid-column: 1 / -1; }
+.month-cells { display: grid; grid-template-columns: subgrid; margin: 0.25rem 0 0.5rem; }
 .month-cells > * {
   min-width: 5.5rem;
   padding: 0.125rem 0.5rem;

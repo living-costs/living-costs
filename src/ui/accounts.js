@@ -1,5 +1,5 @@
-// Accounts screen: the import flow, each account with its imported files and Undo, and the
-// accounts-by-month table. While an import is in progress only the flow is shown, so nothing
+// Accounts screen: the import flow, the accounts-by-month table, and each account with its
+// imported files and Undo. While an import is in progress only the flow is shown, so nothing
 // changes underneath it.
 
 /** @import {App} from '../main.js' */
@@ -26,7 +26,7 @@ export function render(root, app) {
   renderImport(section, app);
   root.append(h('h2', { tabindex: '-1' }, 'Accounts'), section);
   if (importActive()) return;
-  root.append(accountList(app), byMonth(app));
+  root.append(byMonth(app), accountList(app));
 }
 
 /**
