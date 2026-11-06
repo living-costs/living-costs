@@ -99,7 +99,7 @@ Mapping        { id, headerSignature, dateColumn, dateFormat, descriptionColumn,
 Batch          { id, importId, accountId, fileName, fileHash, importedAt, rowCount, coversFrom, coversTo }
 Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currency,
                  rawText, rawType?, bucketId }
-Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[] }
+Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[], stoppedAfter? }
 Rule           { id, pattern, matchType, amountMinor?, expected?: { count, period: week | month | year },
                  bucketId, normaliserVersion }
 Category       { id, name, kind: spend | income | contribution | transfer | ignore, budgetType?, defaultId? }
