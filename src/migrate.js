@@ -1,5 +1,19 @@
 // Upgrading data from older versions. Backup content is untrusted: steps run on unvalidated JSON,
 // so they must never throw on odd shapes.
+//
+// Bump checklist, for any change to the shape of stored data or backups, or to normaliser or
+// fingerprint output:
+//   1. Bump DATA_VERSION in src/version.js.
+//   2. Add a step to STEPS below, `to` the new version.
+//   3. For a normaliser change, first copy the old normaliser to src/normalise-vN.js (N its
+//      NORMALISER_VERSION), raise NORMALISER_VERSION, and set the step's rematchFrom to the copy's
+//      normalise.
+//   4. If stores or indexes change, bump DB_VERSION in src/db.js too.
+//   5. Update PINNED in tests/unit/versions.test.js (its failure message gives the new hash).
+//   6. Last, once the change is complete, run node tests/fixtures/backups/make.js once to freeze
+//      the new version's backup and expected facts. Never touch older files.
+//   7. End the PR description with: "After merging, tag the merge commit:
+//      `git tag data-vN <merge-sha> && git push origin data-vN`".
 
 /** @import {StoreName} from './types.js' */
 /** @typedef {(rawText: string, rawType?: string) => string} Normaliser */
