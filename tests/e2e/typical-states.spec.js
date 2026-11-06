@@ -3,7 +3,9 @@
 /** @import {Page, TestInfo} from '@playwright/test' */
 import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations, importFiles, openScreen } from './helpers.js';
+import {
+  expectNoAxeViolations, trackCspViolations, importFiles, openScreen, readStore, setBucketCategory,
+} from './helpers.js';
 
 const SAVINGS_HEADER = 'Transaction Date,Transaction Type,Transaction Description,Amount,Balance';
 const BANK_B_HEADER = 'Date,Details,Transaction Type,In,Out,Balance';
@@ -103,4 +105,58 @@ test('mixed currencies are not added together', async ({ page }, testInfo) => {
   await expect(page.getByRole('table')).toHaveCount(0);
   await expect(page.locator('#typical-uncategorised')).toHaveCount(0);
   await expectNoAxeViolations(page);
+});
+
+test('a Stopped mark is cleared by a newer charge on import, and the Stopped box shows it', async ({ page }, testInfo) => {
+  const first = writeCsv(testInfo, 'made-up-jan-mar.csv', [SAVINGS_HEADER, ...savingsRows(['01/2026', '02/2026', '03/2026'])]);
+  const april = writeCsv(testInfo, 'made-up-apr.csv', [SAVINGS_HEADER, '10/04/2026,null,MADE UP SHOP,-23.00,997.00']);
+  await importFiles(page, {
+    files: [first], account: { new: { name: 'Main', kind: 'bank' }, mapping: 'savings' }, covers: ['01/01/2026', '31/03/2026'],
+  });
+  await openScreen(page, 'Buckets');
+  await setBucketCategory(page, 'MADE UP SHOP', 'Subscriptions');
+
+  await openScreen(page, 'Typical month');
+  await page.getByRole('button', { name: 'Subscriptions', exact: true }).click();
+  const stopped = page.getByRole('checkbox', { name: 'Stopped: MADE UP SHOP', exact: true });
+  await stopped.check();
+  await expect.poll(async () => (await readStore(page, 'buckets')).find((b) => b.displayName === 'MADE UP SHOP')?.stoppedAfter)
+    .toBe('2026-03-10');
+  await expect(page.locator('#category-explanation')).toContainText('Spending · Fixed · £0.00 a month');
+
+  await importFiles(page, { files: [april], account: { existing: 'Main' }, covers: ['01/04/2026', '30/04/2026'] });
+  await expect(page.getByText('MADE UP SHOP was marked Stopped and has charged again, so it counts again.', { exact: true }))
+    .toBeVisible();
+  await openScreen(page, 'Typical month');
+  await page.getByRole('button', { name: 'Subscriptions', exact: true }).click();
+  await expect(stopped).not.toBeChecked();
+  await expect(page.locator('#category-explanation')).not.toContainText('£0.00 a month');
+});
+
+test('an edit that empties the opened category leaves the view open with a message', async ({ page }, testInfo) => {
+  const file = writeCsv(testInfo, 'made-up-one-row.csv', [SAVINGS_HEADER, '10/01/2026,null,MADE UP SHOP,-12.00,500.00']);
+  await importFiles(page, {
+    files: [file], account: { new: { name: 'Main', kind: 'bank' }, mapping: 'savings' }, covers: ['01/01/2026', '31/01/2026'],
+  });
+  await openScreen(page, 'Buckets');
+  await setBucketCategory(page, 'MADE UP SHOP', 'Groceries');
+
+  await openScreen(page, 'Typical month');
+  await page.getByRole('button', { name: 'Groceries', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 3, name: 'Groceries', exact: true })).toBeFocused();
+  const countsAs = page.getByLabel('Counts as for MADE UP SHOP on 10/01/2026');
+  await countsAs.focus();
+  await countsAs.selectOption({ label: 'Ignore' });
+
+  const empty = page.getByText('Nothing counts as Groceries in these months now.', { exact: true });
+  await expect(empty).toBeFocused();
+  await expect(page.getByRole('heading', { level: 3, name: 'Groceries', exact: true })).toBeVisible();
+  await expect(page.locator('#screen .month-cells')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Matching transactions' })).toHaveCount(0);
+  await expectNoAxeViolations(page);
+
+  await page.getByRole('button', { name: 'Back to Typical month', exact: true }).click();
+  await expect(screenHeading(page)).toBeFocused();
+  await expect(screenHeading(page)).toHaveText('Typical month');
+  await expect(page.getByRole('button', { name: 'Groceries', exact: true })).toHaveCount(0);
 });

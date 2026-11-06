@@ -9,6 +9,9 @@ import { whileSaving } from './saving.js';
 
 /** @type {Record<CategoryKind, string>} */
 export const KIND_LABELS = { spend: 'Spend', income: 'Income', contribution: 'Contribution', transfer: 'Transfer', ignore: 'Ignore' };
+/** The kind as a word in running text, such as "Spending · Fixed". */
+/** @type {Record<CategoryKind, string>} */
+export const KIND_WORDS = { spend: 'Spending', income: 'Income', contribution: 'Contribution', transfer: 'Transfer', ignore: 'Ignore' };
 /** @type {Record<BudgetType, string>} */
 export const BUDGET_LABELS = { fixed: 'Fixed', variable: 'Variable', annual: 'Annual', oneoff: 'One-off' };
 
