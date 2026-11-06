@@ -11,7 +11,7 @@ import { whileSaving } from './saving.js';
 import { cmp } from '../order.js';
 /** @import {Child} from '../dom.js' */
 import { resumedBuckets } from '../buckets.js';
-import { prepareFiles,suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
+import { prepareFiles, suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
 import { applyMapping, mappingProblems } from '../mapping.js';
 import { formatMoney, currencyExponent } from '../money.js';
 import { parseDate, formatDate, formatLocalDate, formatMonth, monthStart, monthEnd } from '../dates.js';
