@@ -78,18 +78,55 @@ test('later-starting bank B does not make earlier months incomplete', () => {
   assert.deepEqual(staleAccounts(s, w), []);
 });
 
-test('earlier-ending account makes later months incomplete only if it has coverage after', () => {
+test("one account's gap leaves the month in the window for the others, and out of its own months", () => {
   const s = build([acct('A'), acct('B')], [
     batch('A', '2026-01-01', '2026-12-31'), batch('B', '2026-01-01', '2026-03-15'),
     batch('B', '2026-05-01', '2026-06-30'),
   ]);
   const cm = completeMonths(s, tuning);
-  // B covers Jan, Feb fully; Mar partial with coverage after -> incomplete; Apr missing with coverage both sides.
-  assert.ok(cm.includes('2026-01') && cm.includes('2026-02'));
-  assert.ok(!cm.includes('2026-03') && !cm.includes('2026-04'));
-  assert.ok(cm.includes('2026-05') && cm.includes('2026-06'));
-  // B has no coverage after June, so July onwards stays complete.
-  assert.ok(cm.includes('2026-07') && cm.includes('2026-12'));
+  assert.deepEqual(cm, ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06',
+    '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
+  const w = analysisWindow(s, tuning);
+  // B: Mar partial (Apr not covered, so not bordered), Apr missing.
+  assert.deepEqual([...(w.accountMonths.get('B') ?? [])], ['2026-01', '2026-02', '2026-05', '2026-06']);
+  assert.equal(w.accountMonths.get('A')?.size, 12);
+});
+
+test('a month is complete only when at least one account covers it fully', () => {
+  const s = build([acct('A'), acct('B')], [
+    batch('A', '2026-01-01', '2026-01-31'), batch('A', '2026-03-01', '2026-03-31'),
+    batch('B', '2026-01-01', '2026-02-10'),
+  ]);
+  // February: A missing, B partial and not bordered (no March).
+  assert.deepEqual(completeMonths(s, tuning), ['2026-01', '2026-03']);
+});
+
+test('a partial month between two covered months counts as covered for that account', () => {
+  // A quiet spell inside March, longer than coverageGapDays.
+  const gap = tuning.coverageGapDays + 2;
+  const s = build([acct('S'), acct('C')], [
+    batch('S', '2026-01-01', '2026-03-05'), batch('S', `2026-03-${String(6 + gap).padStart(2, '0')}`, '2026-05-31'),
+    batch('C', '2026-01-01', '2026-05-31'),
+  ]);
+  const row = accountsByMonth(s, tuning).rows[0];
+  assert.equal(row.cells.find((c) => c.month === '2026-03')?.status, 'covered');
+  assert.ok(completeMonths(s, tuning).includes('2026-03'));
+  assert.ok(analysisWindow(s, tuning).accountMonths.get('S')?.has('2026-03'));
+});
+
+test('a missing statement across a month boundary leaves both months partial', () => {
+  // Statement 15 Mar to 14 Apr missing: March and April are each bordered by a partial month.
+  const s = build([acct('S')], [batch('S', '2026-01-01', '2026-03-14'), batch('S', '2026-04-15', '2026-06-30')]);
+  const cells = accountsByMonth(s, tuning).rows[0].cells;
+  assert.equal(cells.find((c) => c.month === '2026-03')?.status, 'partial');
+  assert.equal(cells.find((c) => c.month === '2026-04')?.status, 'partial');
+  assert.ok(!completeMonths(s, tuning).includes('2026-03'));
+});
+
+test('first and last months are never bordered', () => {
+  const s = build([acct('S')], [batch('S', '2026-01-10', '2026-03-20')]);
+  const cells = accountsByMonth(s, tuning).rows[0].cells;
+  assert.deepEqual(cells.map((c) => c.status), ['partial', 'covered', 'partial']);
 });
 
 test('month after all data is not complete (D2)', () => {

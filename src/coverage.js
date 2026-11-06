@@ -1,5 +1,7 @@
 // Coverage: which days each account's batches declare, which months are complete, and the
 // per-account analysis window (decision D1: a transaction counts only in months its account covers fully).
+// A partial month between two fully covered months counts as covered: a quiet spell where two
+// statements meet, not a missing statement.
 /** @import {State, Account, Batch} from './types.js' */
 import { addDays, monthOf, monthStart, monthEnd, monthRange } from './dates.js';
 import { cmp } from './order.js';
@@ -41,6 +43,21 @@ export function monthStatus(intervals, month) {
   if (intervals.some((iv) => iv.from <= s && iv.to >= e)) return 'covered';
   if (intervals.some((iv) => iv.from <= e && iv.to >= s)) return 'partial';
   return 'missing';
+}
+
+/**
+ * monthStatus, except that a partial month whose previous and next months are both covered
+ * counts as covered.
+ * @param {Interval[]} intervals
+ * @param {string} month YYYY-MM
+ * @returns {Status}
+ */
+export function accountMonthStatus(intervals, month) {
+  const status = monthStatus(intervals, month);
+  if (status !== 'partial') return status;
+  const prev = monthOf(addDays(monthStart(month), -1));
+  const next = monthOf(addDays(monthEnd(month), 1));
+  return monthStatus(intervals, prev) === 'covered' && monthStatus(intervals, next) === 'covered' ? 'covered' : status;
 }
 
 /**
@@ -101,12 +118,14 @@ export function accountsByMonth(state, tuning) {
     account,
     cells: months.map((month) => account.kind === 'placeholder'
       ? { month, status: /** @type {const} */ ('not-itemised'), count: 0 }
-      : { month, status: monthStatus(ivs.get(account.id) ?? [], month), count: counts.get(`${account.id}|${month}`) ?? 0 }),
+      : { month, status: accountMonthStatus(ivs.get(account.id) ?? [], month), count: counts.get(`${account.id}|${month}`) ?? 0 }),
   }));
   return { months, rows };
 }
 
 /**
+ * Months that at least one account covers fully. A gap in one account doesn't remove the month
+ * for the others: each account counts only its own covered months (analysisWindow.accountMonths).
  * @param {State} state
  * @param {{coverageGapDays:number}} tuning
  * @returns {string[]} ascending
@@ -114,17 +133,8 @@ export function accountsByMonth(state, tuning) {
 export function completeMonths(state, tuning) {
   const ivs = intervalsByAccount(state, tuning);
   const covered = coveredAccounts(state, ivs);
-  return tableMonths(covered).filter((month) => {
-    const s = monthStart(month);
-    const e = monthEnd(month);
-    let anyFull = false;
-    for (const { ivs: list } of covered) {
-      const full = monthStatus(list, month) === 'covered';
-      if (full) anyFull = true;
-      else if (list[0].from < s && list[list.length - 1].to > e) return false;
-    }
-    return anyFull;
-  });
+  return tableMonths(covered).filter((month) =>
+    covered.some(({ ivs: list }) => accountMonthStatus(list, month) === 'covered'));
 }
 
 /**
@@ -146,7 +156,7 @@ export function analysisWindow(state, tuning) {
   return {
     months, complete: true,
     accountMonths: new Map(state.accounts.map((a) => [a.id, new Set(
-      a.kind === 'placeholder' ? [] : months.filter((m) => monthStatus(ivs.get(a.id) ?? [], m) === 'covered'),
+      a.kind === 'placeholder' ? [] : months.filter((m) => accountMonthStatus(ivs.get(a.id) ?? [], m) === 'covered'),
     )])),
   };
 }
