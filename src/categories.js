@@ -51,7 +51,8 @@ function fromDefault(d, position) {
 
 /**
  * First run only (no categories and nothing offered yet): add every default and record them all
- * as offered. Otherwise no changes.
+ * as offered. Otherwise no changes. The first run always writes the settings row, even with no
+ * defaults, because storedVersion reads data without one as version 1.
  * @param {Default[]} defaults
  * @param {State} state
  * @returns {Changes}

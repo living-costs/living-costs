@@ -51,8 +51,9 @@ export function upgradeRaw(doc, from, steps = STEPS) {
 }
 
 /**
- * The version of the stored data: null for a fresh install, 1 when there is data but no settings row,
- * NaN when the settings row's version is not usable.
+ * The version of the stored data: null for a fresh install, 1 when there is data but no settings row
+ * (data from before versioning: the first run's seed always writes the row since), NaN when the
+ * settings row's version is not usable.
  * @param {Record<StoreName, unknown[]>} rows
  * @returns {number | null}
  */
