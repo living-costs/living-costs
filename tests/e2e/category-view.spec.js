@@ -266,7 +266,7 @@ test('Stopped lowers the figure here and on Typical month, and unticking restore
   await expectNoAxeViolations(page);
 
   await back().click();
-  await expect(row('Living costs', 'Subscriptions').getByRole('cell').nth(1)).toHaveText(lowered);
+  await expect(row('Living costs', 'Subscriptions').getByRole('cell').nth(2)).toHaveText(lowered);
 
   await open('Living costs', 'Subscriptions');
   await stopped.uncheck();
@@ -275,7 +275,7 @@ test('Stopped lowers the figure here and on Typical month, and unticking restore
   await expect(explanationLine()).toContainText('Spending · Fixed · £89.97 a month');
   await expect(bucketRow('SPOTIFY')).not.toHaveClass(/stopped/);
   await back().click();
-  await expect(row('Living costs', 'Subscriptions').getByRole('cell').nth(1)).toHaveText('£89.97');
+  await expect(row('Living costs', 'Subscriptions').getByRole('cell').nth(2)).toHaveText('£89.97');
 });
 
 test('Back returns focus to the category button', async () => {

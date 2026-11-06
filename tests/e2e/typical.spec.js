@@ -21,11 +21,11 @@ const table = (name) => page.getByRole('table', { name, exact: true });
 const row = (tableName, category) => table(tableName).getByRole('row')
   .filter({ has: page.getByRole('rowheader', { name: category, exact: true }) });
 
-/** Type, Per month and Per year cells of one row (the category is the row header). */
+/** Type, Per month and Per year cells of one row (the category is the row header, after the tick box). */
 async function cells(tableName, category) {
   const r = row(tableName, category);
   await expect(r).toHaveCount(1);
-  const [type, perMonth, perYear] = await r.getByRole('cell').allTextContents();
+  const [, type, perMonth, perYear] = await r.getByRole('cell').allTextContents();
   return { type, perMonth, perYear };
 }
 

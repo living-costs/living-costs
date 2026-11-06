@@ -324,7 +324,8 @@ A month is complete when at least one non-placeholder account covers the whole o
   - **Per month** and **Per year**
   - a decorative proportional bar
 
-  Income categories go in their own table, using the same types. Contribution categories go in a third small table, also using the same types.
+  Income categories go in their own table, using the same types. Contribution categories go in a third small table, also using the same types. The three tables' columns line up: each column takes the width of its widest cell across all three.
+- **Ticked total:** each row starts with a tick box. While any are ticked, the summary ends with "Ticked (n categories)", the plain sum of the ticked rows' per-month figures, whichever table they are in (and their month figure and change when comparing a month). A ticked category that isn't in the tables for the current window isn't counted. Ticks aren't saved: like the window, they survive opening a category, changing the window and the nav, and clear when the page reloads. (Owner's request, 2026-11-06.)
 - **One-offs:** a separate list below the main table. Each row shows the transaction, its category, its month and its amount. One-offs are excluded from Living costs.
 - **Uncategorised line:** "Uncategorised: £X spending and £Y income over the window are not included", linking to the categorise card. It covers income too, so "Left over" never looks complete while income is missing.
 - **Excluded:** transfers, Ignore-kind categories, and incomplete months.

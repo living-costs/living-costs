@@ -24,6 +24,8 @@ const ui = {
   range: null,
   /** @type {string|null} the month compared against the window (YYYY-MM) */
   compare: null,
+  /** @type {Set<string>} the categories ticked, whose total the summary adds as its last line */
+  ticked: new Set(),
 };
 
 /**
@@ -37,6 +39,8 @@ export function reset() {
 
 /** @param {string} id */
 const openKey = (id) => `typical-open-${id}`;
+/** @param {string} id */
+const tickKey = (id) => `typical-tick-${id}`;
 
 /**
  * @param {HTMLElement} root
@@ -98,7 +102,7 @@ export function render(root, app) {
       `${formatMonth(cmp.month)} has no complete statement for ${account.name}. Its spending that month isn't included.`));
   }
 
-  root.append(summaryList(tm, money));
+  root.append(summaryList(tm, money, ui.ticked));
 
   const { spending, income } = tm.uncategorised;
   if (spending !== 0 || income !== 0) {
@@ -114,15 +118,36 @@ export function render(root, app) {
     app.rerender();
     focusKey('category-heading');
   };
+  /** @param {string} id @param {boolean} on */
+  const onTick = (id, on) => {
+    if (on) ui.ticked.add(id); else ui.ticked.delete(id);
+    app.rerender();
+  };
   const tables = [
-    rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen, cmp?.month),
-    rowsTable('typical-income', 'Income', tm.income, money, onOpen, cmp?.month),
-    rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen, cmp?.month),
+    rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen, onTick, cmp?.month),
+    rowsTable('typical-income', 'Income', tm.income, money, onOpen, onTick, cmp?.month),
+    rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen, onTick, cmp?.month),
   ];
   for (const part of tables) if (part) root.append(part);
+  alignColumns([...root.querySelectorAll('table.typical')]);
   if (cmp) root.append(help('Annual categories use the typical figure in the month too, so a yearly bill doesn\'t skew it.'));
   const oneOffs = oneOffList(state, tm, money);
   if (oneOffs) root.append(oneOffs);
+}
+
+/**
+ * Give each column the width of its widest cell across the tables, so Living costs, Income and
+ * Contributions line up. Cells don't wrap, so the screen (in the document while it renders) can
+ * measure them here. Widths are set through the CSSOM, which the CSP's style-src allows.
+ * @param {Element[]} tables all with the same columns
+ * @returns {void}
+ */
+function alignColumns(tables) {
+  const heads = tables.map((t) => [.../** @type {HTMLTableElement} */ (t).tHead?.rows[0].cells ?? []]);
+  /** @type {number[]} */
+  const widest = [];
+  for (const cells of heads) cells.forEach((c, i) => { widest[i] = Math.max(widest[i] ?? 0, c.getBoundingClientRect().width); });
+  for (const cells of heads) cells.forEach((c, i) => { c.style.width = `${Math.ceil(widest[i])}px`; });
 }
 
 /**
@@ -217,12 +242,14 @@ function lastCovered(state, accountId) {
 
 /**
  * Income, Living costs and Left over. With contributions, Living costs is followed by
- * "less contributions from others" and "your share".
+ * "less contributions from others" and "your share". With categories ticked, "Ticked (n categories)"
+ * comes last: the plain sum of the ticked rows shown in the tables, whichever table they are in.
  * @param {TypicalMonth} tm
  * @param {(minor: number) => string} money
+ * @param {Set<string>} ticked
  * @returns {HTMLElement}
  */
-function summaryList(tm, money) {
+function summaryList(tm, money, ticked) {
   const t = tm.totals;
   /** @type {[string, number, string?][]} */
   const lines = [['Income', t.income], ['Living costs', t.living]];
@@ -230,9 +257,13 @@ function summaryList(tm, money) {
     lines.push(['less contributions from others', t.contributions, 'sub'], ['your share', t.share, 'sub']);
   }
   lines.push(['Left over', t.leftOver]);
+  const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution].filter((r) => ticked.has(r.categoryId));
+  const tickedLabel = `Ticked (${plural(tickedRows.length, 'category', 'categories')})`;
+  if (tickedRows.length > 0) lines.push([tickedLabel, tickedRows.reduce((sum, r) => sum + r.perMonth, 0)]);
   const c = tm.compare;
   if (c) {
-    const month = [c.totals.income, c.totals.living, ...(tm.contribution.length > 0 ? [c.totals.contributions, c.totals.share] : []), c.totals.leftOver];
+    const month = [c.totals.income, c.totals.living, ...(tm.contribution.length > 0 ? [c.totals.contributions, c.totals.share] : []), c.totals.leftOver,
+      ...(tickedRows.length > 0 ? [tickedRows.reduce((sum, r) => sum + (r.month ?? 0), 0)] : [])];
     return h('div', { class: 'scroll summary-scroll', tabindex: '0', role: 'region', 'aria-label': 'Summary per month' }, h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
       h('thead', null, h('tr', null, h('td'), h('th', { scope: 'col', class: 'num' }, 'Typical'),
         h('th', { scope: 'col', class: 'num' }, formatMonth(c.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
@@ -260,16 +291,17 @@ function typeText(r, money) {
 
 /**
  * One table of rows with a decorative bar sized against the largest row. Nothing when empty.
- * Each category name is a button that opens it.
+ * Each row starts with a tick box, and each category name is a button that opens it.
  * @param {string} id the heading's id
  * @param {string} title
  * @param {Row[]} rows largest first
  * @param {(minor: number) => string} money
  * @param {(categoryId: string) => void} onOpen
+ * @param {(categoryId: string, on: boolean) => void} onTick
  * @param {string} [month] the compared month (YYYY-MM): adds its column, Change and a second bar
  * @returns {HTMLElement|null}
  */
-function rowsTable(id, title, rows, money, onOpen, month) {
+function rowsTable(id, title, rows, money, onOpen, onTick, month) {
   if (rows.length === 0) return null;
   const largest = Math.max(0, ...rows.flatMap((r) => (month ? [r.perMonth, r.month ?? 0] : [r.perMonth])));
   const label = month ? formatMonth(month) : '';
@@ -281,6 +313,7 @@ function rowsTable(id, title, rows, money, onOpen, month) {
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': id },
       h('table', { class: 'typical', 'aria-labelledby': id },
         h('thead', null, h('tr', null,
+          h('th', { scope: 'col' }, h('span', { class: 'visually-hidden' }, 'Tick')),
           h('th', { scope: 'col' }, 'Category'), h('th', { scope: 'col' }, 'Type'),
           ...(month
             ? [h('th', { scope: 'col', class: 'num' }, 'Typical'), h('th', { scope: 'col', class: 'num' }, label),
@@ -288,6 +321,11 @@ function rowsTable(id, title, rows, money, onOpen, month) {
             : [h('th', { scope: 'col', class: 'num' }, 'Per month'), h('th', { scope: 'col', class: 'num' }, 'Per year')]),
           h('th', { scope: 'col' }, h('span', { class: 'visually-hidden' }, 'Share of largest')))),
         h('tbody', null, ...rows.map((r) => h('tr', null,
+          h('td', { class: 'tick' }, h('input', {
+            type: 'checkbox', class: 'select', checked: ui.ticked.has(r.categoryId), 'aria-label': `Tick ${r.name}`,
+            'data-focus-key': tickKey(r.categoryId),
+            onChange: (/** @type {Event} */ e) => onTick(r.categoryId, /** @type {HTMLInputElement} */ (e.target).checked),
+          })),
           h('th', { scope: 'row' }, r.monthOnly ? r.name : h('button', {
             type: 'button', class: 'secondary name', 'data-focus-key': openKey(r.categoryId),
             onClick: () => onOpen(r.categoryId),
