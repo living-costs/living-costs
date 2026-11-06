@@ -37,6 +37,11 @@ test('createAmountRule moves two rows, flags the 20 Oct extra, leaves -999', () 
   assert.equal(by(rows[3].id).flaggedRuleId, undefined);
 });
 
+test('createAmountRule stores no normaliserVersion', () => {
+  const { s } = setup();
+  assert.equal('normaliserVersion' in s.rules[0], false);
+});
+
 test('createAmountRule changes contain only moved/flagged rows', () => {
   const { c } = setup();
   assert.equal(c.put.transactions.length, 3);
@@ -97,7 +102,7 @@ test('resolveFlag source keeps the row, clears flag, records decision', () => {
 });
 
 test('routeByRule', () => {
-  const rule = { id: 'r', pattern: 'PAYPAL PAYMENT', matchType: 'keyAmount', amountMinor: -299, expected: month, bucketId: 'b', normaliserVersion: 1 };
+  const rule = { id: 'r', pattern: 'PAYPAL PAYMENT', matchType: 'keyAmount', amountMinor: -299, expected: month, bucketId: 'b' };
   const counts = new Map();
   assert.equal(routeByRule(rule, txn('2026-11-01', -349), counts), 'none');
   assert.equal(routeByRule(rule, txn('2026-11-01', -299), counts), 'rule');

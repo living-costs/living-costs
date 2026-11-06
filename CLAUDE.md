@@ -13,6 +13,7 @@ The approved design is `docs/superpowers/specs/2026-11-04-living-costs-design.md
 - Dev-only tooling is allowed and never ships: Playwright with `@axe-core/playwright`, `node:test`, and `tsc --checkJs --noEmit`. The owner runs `npm install`. Claude never does. Installs use `npm ci --ignore-scripts` from a committed lockfile.
 - Any suggested library or application must be actively maintained, or clearly flagged if not.
 - Real statements live in `fixtures/` (gitignored). Claude may read them locally with the owner's consent, to learn formats. Nothing from them (rows, names, merchants, amounts, account numbers or filenames) goes into code, tests, docs or commits. Committed test fixtures in `tests/fixtures/` are synthetic. Never request or commit backups.
+- A PR that changes `DATA_VERSION` reminds the owner, at the end of its description, to tag the merge commit `data-vN` on `main`.
 
 ## Privacy and security rules
 
@@ -22,7 +23,7 @@ Transaction data must never leave the browser.
 - No runtime dependencies. Use a small, tested in-house CSV parser.
 - No external resources or links: no CDNs, analytics, remote fonts, or remote icons. The only exception is the page footer's two links, to the AGPL-3.0 licence on gnu.org and to the source code on GitHub, both opening in a new tab with `rel="noopener noreferrer"`. Any other link needs the owner's approval.
 - Treat all CSV and backup content as untrusted. Render with `textContent`. Never use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, or `eval`.
-- Validate backup files and their schema version on restore.
+- Upgrade older backups to the current data version, then validate them on restore. Refuse backups from a newer version.
 - App-level rules are the main protection. The CSP is a backstop.
 
 ### CSP
@@ -72,6 +73,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Monthly budget view
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
+- Upgrade stored data and older backups silently. If an upgrade fails, offer to save a copy or delete and start afresh
 - A simple list of uncategorised items for later updates
 
 ### Out of scope for now
@@ -101,11 +103,11 @@ Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currenc
                  rawText, rawType?, bucketId }
 Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[], stoppedAfter? }
 Rule           { id, pattern, matchType, amountMinor?, expected?: { count, period: week | month | year },
-                 bucketId, normaliserVersion }
+                 bucketId }
 Category       { id, name, kind: spend | income | contribution | transfer | ignore, budgetType?, defaultId? }
 Override       { fingerprint, categoryId? , splits?: [{ amountMinor, categoryId }], unusualDismissed? }
 TransferPair   { fingerprintA, fingerprintB, status: confirmed | rejected }
-Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
+Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }   // schemaVersion is the one data version, shared with backups
 ```
 
 Field names may change. `src/types.js` is the current model.
@@ -118,6 +120,7 @@ All windows and thresholds live in the owner-editable `src/tuning.js`. Code neve
 - Treat processor prefixes such as `SQ *` and `PAYPAL *` as noise and keep the merchant name.
 - Prefer too many buckets over wrongly merged ones. The user can merge them manually.
 - Version the normaliser, and keep raw examples so rules can be migrated.
+- A normaliser change rematches stored data on load and older backups on restore, keeping every bucket's transactions.
 
 ### Correctness
 
@@ -147,12 +150,11 @@ Exclude incomplete months from calculations.
 ### Backup
 
 - Every backup holds the work that is hard to recreate: account setup and CSV mappings, buckets, amount rules, categories and offered defaults, transfer decisions, and fingerprint-keyed overrides, including splits and flag decisions.
-- An "Include transactions" checkbox, unticked by default, also saves every transaction and import batch, in a separate `living-costs-full-backup-*.json` file. Restoring that needs no re-import, and undo by batch and the identical-file block still work.
-- Without the tick, transactions and batches are rebuilt by re-importing the original CSVs.
-- Use plain JSON with a schema version.
+- Every backup also holds every transaction and import batch. Restoring needs no re-import, and undo by batch and the identical-file block still work.
+- Use plain JSON with the data version.
 - Save with `showSaveFilePicker()`, falling back to a normal download. Chrome may block a Google Drive folder under `~/Library/CloudStorage`, so test this on macOS.
 - Show the date of the last backup in the UI.
-- Tell users that a backup saved to Google Drive is unencrypted and may include dates, amounts, transaction descriptions, and account details. With transactions included, say it holds every imported transaction.
+- Tell users that a backup saved to Google Drive is unencrypted and holds every imported transaction, with dates, amounts, descriptions and account details.
 
 ## Build order
 

@@ -1,5 +1,5 @@
 /** @import {State, Changes, Rule, Transaction, Bucket, Override} from './types.js' */
-import { normalise, NORMALISER_VERSION } from './normalise.js';
+import { normalise } from './normalise.js';
 import { periodKey } from './dates.js';
 import { cmp } from './order.js';
 
@@ -58,7 +58,7 @@ export function createAmountRule(state, { sourceBucketId, amountMinor, expected,
   /** @type {Rule} */
   const rule = {
     id: crypto.randomUUID(), pattern, matchType: 'keyAmount', amountMinor, expected,
-    bucketId: crypto.randomUUID(), normaliserVersion: NORMALISER_VERSION,
+    bucketId: crypto.randomUUID(),
   };
   /** @type {Bucket} */
   const bucket = { id: rule.bucketId, keys: [], displayName, exampleRawTexts: [] };

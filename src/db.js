@@ -45,36 +45,45 @@ export function openDb() {
 }
 
 /**
- * Read every store into a fresh State.
+ * Read every store's raw rows, in one readonly transaction.
  * @param {IDBDatabase} db
- * @returns {Promise<State>}
+ * @returns {Promise<Record<StoreName, any[]>>}
  */
-export function loadAll(db) {
+export function loadRows(db) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAMES, 'readonly');
     /** @type {Partial<Record<StoreName, IDBRequest<any[]>>>} */
     const reqs = {};
     for (const name of STORE_NAMES) reqs[name] = tx.objectStore(name).getAll();
     tx.oncomplete = () => {
-      /** @param {StoreName} name */
-      const rows = (name) => /** @type {any[]} */ (/** @type {IDBRequest<any[]>} */ (reqs[name]).result);
-      const state = emptyState();
-      /** @type {Settings | undefined} */
-      const settings = rows('settings').find((s) => s.id === 'settings');
-      if (settings) state.settings = settings;
-      state.accounts = rows('accounts');
-      state.batches = rows('batches');
-      state.transactions = rows('transactions');
-      state.buckets = rows('buckets');
-      state.rules = rows('rules');
-      state.categories = rows('categories');
-      state.overrides = new Map(rows('overrides').map((o) => [o.fingerprint, o]));
-      state.transferPairs = new Map(rows('transferPairs').map((p) => [p.key, p]));
-      resolve(state);
+      const rows = /** @type {Record<StoreName, any[]>} */ ({});
+      for (const name of STORE_NAMES) rows[name] = /** @type {IDBRequest<any[]>} */ (reqs[name]).result;
+      resolve(rows);
     };
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error ?? new Error('Reading saved data was cancelled.'));
   });
+}
+
+/**
+ * Raw rows, as loadRows reads them, as a fresh State. Only for data at the current version.
+ * @param {Record<StoreName, any[]>} rows
+ * @returns {State}
+ */
+export function rowsToState(rows) {
+  const state = emptyState();
+  /** @type {Settings | undefined} */
+  const settings = rows.settings.find((s) => s.id === 'settings');
+  if (settings) state.settings = settings;
+  state.accounts = rows.accounts;
+  state.batches = rows.batches;
+  state.transactions = rows.transactions;
+  state.buckets = rows.buckets;
+  state.rules = rows.rules;
+  state.categories = rows.categories;
+  state.overrides = new Map(rows.overrides.map((o) => [o.fingerprint, o]));
+  state.transferPairs = new Map(rows.transferPairs.map((p) => [p.key, p]));
+  return state;
 }
 
 /**

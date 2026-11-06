@@ -1,45 +1,43 @@
 // Plain JSON backup and validated restore.
 // Every backup holds the work that is hard to recreate: accounts and their column mappings,
-// buckets, amount rules, categories, offered defaults, overrides and transfer decisions. A
-// decisions-only backup stops there, and transactions and batches come back by re-importing the
-// original CSVs, where fingerprints reattach every decision. A full backup also holds every
-// transaction and batch, restored exactly as saved. A backup file is untrusted: validateBackup
+// buckets, amount rules, categories, offered defaults, overrides and transfer decisions, and
+// every transaction and import batch, restored exactly as saved. A backup file is untrusted: validateBackup
 // builds every object afresh from known keys only, and its messages never repeat what the file
 // contains.
 
 /** @import {State, Changes, Settings, Account, Mapping, Bucket, Rule, Category, Override, TransferPair, Batch, Transaction} from './types.js' */
+/** @import {Normaliser, Step} from './migrate.js' */
 import { emptyState } from './changes.js';
+import { DATA_VERSION } from './version.js';
+import { upgradeRaw, STEPS } from './migrate.js';
+import { rematch } from './rematch.js';
+import { normalise } from './normalise.js';
 import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
 import { localDay } from './dates.js';
 
-export const SCHEMA_VERSION = 2;
-
 /** Validation stops listing problems after this many. */
 const MAX_ERRORS = 20;
 
 /**
- * `transactions` and `batches` are both present in a full backup and both absent otherwise.
  * @typedef {{schemaVersion:number,exportedAt:string,accounts:Account[],buckets:Bucket[],rules:Rule[],
  *   categories:Category[],overrides:Override[],transferPairs:TransferPair[],offeredDefaultIds:string[],
- *   batches?:Batch[],transactions?:Transaction[]}} BackupData
+ *   batches:Batch[],transactions:Transaction[]}} BackupData
  */
 /** @typedef {{app:'living-costs'} & BackupData} Backup */
 /** @typedef {{ok:true,data:BackupData}|{ok:false,errors:string[]}} Validation */
 
 /**
- * The backup of `state`, ready for JSON.stringify. A full backup also holds transactions and batches.
+ * The backup of `state`, ready for JSON.stringify.
  * @param {State} state
  * @param {Date} now
- * @param {{full?: boolean}} [options]
  * @returns {Backup}
  */
-export function buildBackup(state, now, { full = false } = {}) {
-  /** @type {Backup} */
-  const backup = {
+export function buildBackup(state, now) {
+  return {
     app: 'living-costs',
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: DATA_VERSION,
     exportedAt: now.toISOString(),
     accounts: state.accounts,
     buckets: state.buckets,
@@ -48,33 +46,30 @@ export function buildBackup(state, now, { full = false } = {}) {
     overrides: [...state.overrides.values()],
     transferPairs: [...state.transferPairs.values()],
     offeredDefaultIds: state.settings.offeredDefaultIds,
+    batches: state.batches,
+    transactions: state.transactions,
   };
-  if (full) {
-    backup.batches = state.batches;
-    backup.transactions = state.transactions;
-  }
-  return backup;
 }
 
 /**
  * @param {Date} now
- * @param {boolean} [full]
- * @returns {string} living-costs-backup-YYYY-MM-DD.json, or living-costs-full-backup-YYYY-MM-DD.json,
- *   using the local date
+ * @returns {string} living-costs-backup-YYYY-MM-DD.json, using the local date
  */
-export function backupFileName(now, full = false) {
-  return `living-costs-${full ? 'full-' : ''}backup-${localDay(now)}.json`;
+export function backupFileName(now) {
+  return `living-costs-backup-${localDay(now)}.json`;
 }
 
 /**
  * The Changes for store.replaceAll: the backup's content, plus settings that keep this
  * browser's helpDismissed, use the current settings schema version, take offeredDefaultIds from
- * the backup, and have no lastBackupAt (this browser hasn't backed up the restored data).
+ * the backup, and have no lastBackupAt (this browser hasn't backed up the restored data), unless
+ * `keepLastBackup` is set and this browser has one.
  * @param {BackupData} data
  * @param {Settings} current this browser's settings
+ * @param {{keepLastBackup?: boolean}} [options]
  * @returns {Changes}
  */
-export function restoreChanges(data, current) {
+export function restoreChanges(data, current, { keepLastBackup = false } = {}) {
   /** @type {Settings} */
   const settings = {
     id: 'settings',
@@ -82,6 +77,7 @@ export function restoreChanges(data, current) {
     offeredDefaultIds: [...data.offeredDefaultIds],
     helpDismissed: current.helpDismissed === true,
   };
+  if (keepLastBackup && current.lastBackupAt) settings.lastBackupAt = current.lastBackupAt;
   /** @type {NonNullable<Changes['put']>} */
   const put = {
     settings: [settings],
@@ -91,11 +87,9 @@ export function restoreChanges(data, current) {
     categories: data.categories,
     overrides: data.overrides,
     transferPairs: data.transferPairs,
+    batches: data.batches,
+    transactions: data.transactions,
   };
-  if (data.batches && data.transactions) {
-    put.batches = data.batches;
-    put.transactions = data.transactions;
-  }
   return { put };
 }
 
@@ -306,7 +300,6 @@ function readRule(o, label, p) {
   const amountMinor = get(o, 'amountMinor');
   const expectedRaw = get(o, 'expected');
   const bucketId = get(o, 'bucketId');
-  const normaliserVersion = get(o, 'normaliserVersion');
   c.need(isId(id), 'ID');
   c.need(isText(pattern), 'pattern');
   c.need(matchType === 'keyAmount', 'match type');
@@ -316,7 +309,6 @@ function readRule(o, label, p) {
   const expectedOk = isInt(count) && count >= 1 && isPeriod(period);
   c.need(expectedOk, 'expected frequency');
   c.need(isId(bucketId), 'bucket');
-  c.need(isInt(normaliserVersion) && normaliserVersion >= 1, 'normaliser version');
   return {
     id: isId(id) ? id : '',
     pattern: isText(pattern) ? pattern : '',
@@ -324,7 +316,6 @@ function readRule(o, label, p) {
     amountMinor: isInt(amountMinor) ? amountMinor : 0,
     expected: { count: isInt(count) ? count : 1, period: isPeriod(period) ? period : 'month' },
     bucketId: isId(bucketId) ? bucketId : '',
-    normaliserVersion: isInt(normaliserVersion) ? normaliserVersion : 1,
   };
 }
 
@@ -592,28 +583,53 @@ function readList(json, field, noun, name, read, keyOf, sameAs, p) {
 
 /**
  * Check a parsed backup file and build clean copies of its content. Never throws.
+ * `options` exist for tests only.
  * @param {unknown} json
+ * @param {{steps?: Step[], normalise?: Normaliser, rematch?: typeof rematch}} [options]
  * @returns {Validation}
  */
-export function validateBackup(json) {
+export function validateBackup(json, options = {}) {
   try {
-    return validate(json);
+    return validate(json, options);
   } catch {
     return { ok: false, errors: ['This backup could not be checked.'] };
   }
 }
 
 /**
- * @param {unknown} json
+ * @param {unknown} input
+ * @param {{steps?: Step[], normalise?: Normaliser, rematch?: typeof rematch}} options
  * @returns {Validation}
  */
-function validate(json) {
-  if (!isObj(json) || get(json, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
-  const version = get(json, 'schemaVersion');
+function validate(input, options) {
+  if (!isObj(input) || get(input, 'app') !== 'living-costs') return { ok: false, errors: ["This file isn't a backup from this app."] };
+  const version = get(input, 'schemaVersion');
   if (!isInt(version) || version < 1) return { ok: false, errors: ["This backup's version is missing or not valid."] };
-  if (version > SCHEMA_VERSION) return { ok: false, errors: ['This backup is from a newer version of this app.'] };
-  if (version < SCHEMA_VERSION) return { ok: false, errors: ["This backup is from an older version of this app and can't be restored."] };
+  if (version > DATA_VERSION) {
+    return { ok: false, errors: ['This backup is from a newer version of this app. Reload the page to get the latest version, then try again.'] };
+  }
+  let json = input;
+  /** @type {Normaliser | undefined} */
+  let rematchFrom;
+  if (version < DATA_VERSION) {
+    const upgraded = upgradeRaw(input, version, options.steps ?? STEPS);
+    json = upgraded.doc;
+    rematchFrom = upgraded.rematchFrom;
+  }
 
+  const first = check(json);
+  if (!first.ok || !rematchFrom) return first;
+  // The upgrade changed how text is normalised: re-bucket once, then check the result again.
+  const rematched = (options.rematch ?? rematch)(first.data, rematchFrom, options.normalise ?? normalise);
+  return check({ app: 'living-costs', ...rematched });
+}
+
+/**
+ * The structural checks.
+ * @param {Record<string, unknown>} json
+ * @returns {Validation}
+ */
+function check(json) {
   const p = new Problems();
   const exportedAt = get(json, 'exportedAt');
   if (!isTimestamp(exportedAt)) p.add("The backup's export date is missing or not valid.");
@@ -627,12 +643,8 @@ function validate(json) {
     (o) => o.fingerprint, 'has the same fingerprint as', p);
   const transferPairs = readList(json, 'transferPairs', 'transfer pairs', 'Transfer pair', readPair,
     (x) => x.key, 'is the same pair as', p);
-  // A full backup has both lists. Either one present means the other is needed too.
-  const full = has(json, 'batches') || has(json, 'transactions');
-  const batches = full ? readList(json, 'batches', 'batches', 'Batch', readBatch, byId, 'has the same ID as', p) : [];
-  const transactions = full
-    ? readList(json, 'transactions', 'transactions', 'Transaction', readTransaction, byId, 'has the same ID as', p)
-    : [];
+  const batches = readList(json, 'batches', 'batches', 'Batch', readBatch, byId, 'has the same ID as', p);
+  const transactions = readList(json, 'transactions', 'transactions', 'Transaction', readTransaction, byId, 'has the same ID as', p);
 
   const offered = get(json, 'offeredDefaultIds');
   /** @type {string[]} */
@@ -684,7 +696,7 @@ function validate(json) {
     if (used.some((id) => !categoryIds.has(id))) p.add(`Override ${i + 1} points at a missing category.`);
   });
   // Without both lists, every reference would fail; the missing list is already reported.
-  if (full && Array.isArray(get(json, 'batches')) && Array.isArray(get(json, 'transactions'))) {
+  if (Array.isArray(get(json, 'batches')) && Array.isArray(get(json, 'transactions'))) {
     checkTransactionRefs(batches, transactions, accounts, bucketIds, rules, p);
   }
 
@@ -692,13 +704,9 @@ function validate(json) {
   if (errors.length) return { ok: false, errors };
   /** @type {BackupData} */
   const data = {
-    schemaVersion: version,
+    schemaVersion: DATA_VERSION,
     exportedAt: /** @type {string} */ (exportedAt),
-    accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds,
+    accounts, buckets, rules, categories, overrides, transferPairs, offeredDefaultIds, batches, transactions,
   };
-  if (full) {
-    data.batches = batches;
-    data.transactions = transactions;
-  }
   return { ok: true, data };
 }

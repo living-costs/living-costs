@@ -26,7 +26,7 @@ test('merged key routes to the survivor on re-import; merge repoints everything'
   applyToState(s, assignBuckets(s, [txn('2026-09-02', -500, 'AMAZON.CO.UK'), txn('2026-09-03', -700, 'AMZNMKTPLACE')]));
   const [a, b] = s.buckets;
   s.accounts.push({ id: 'a1', name: 'x', currency: 'GBP', kind: 'card', repaymentBucketIds: [a.id, b.id] });
-  s.rules.push({ id: 'r1', pattern: 'X', matchType: 'keyAmount', amountMinor: 1, expected: { count: 1, period: 'month' }, bucketId: b.id, normaliserVersion: 1 });
+  s.rules.push({ id: 'r1', pattern: 'X', matchType: 'keyAmount', amountMinor: 1, expected: { count: 1, period: 'month' }, bucketId: b.id });
   const before = structuredClone(s.buckets);
   const c = mergeBuckets(s, a.id, [b.id], { displayName: 'Amazon', categoryId: 'c1' });
   assert.deepEqual(s.buckets, before, 'no mutation');

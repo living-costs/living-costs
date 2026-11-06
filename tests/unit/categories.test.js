@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, applyToState } from '../../src/changes.js';
 import defaults from '../../src/default-categories.js';
+import { DATA_VERSION } from '../../src/version.js';
 import {
   seedDefaults, firstRunChanges, pendingDefaults, acceptDefaults, dismissDefaults,
   createCategory, updateCategory, deleteCategory, orderedCategories, sortedCategories, categoryUseCount,
@@ -38,6 +39,14 @@ test('seeding does nothing when categories exist or anything was offered', () =>
   const ownOnly = emptyState();
   ownOnly.categories = [{ id: 'x', name: 'Mine', kind: 'spend', budgetType: 'fixed', position: 0 }];
   assert.deepEqual(seedDefaults(defaults, ownOnly), {});
+});
+
+test('a first run with no defaults still writes the settings row at DATA_VERSION', () => {
+  // storedVersion reads data with no settings row as version 1, so the row must exist from the start.
+  for (const changes of [seedDefaults([], emptyState()), firstRunChanges([])]) {
+    assert.deepEqual(changes.put?.settings, [{ ...emptyState().settings, schemaVersion: DATA_VERSION }]);
+    assert.deepEqual(changes.put?.categories, []);
+  }
 });
 
 test('first-run changes are the seeding a first visit gets, from an empty state', () => {

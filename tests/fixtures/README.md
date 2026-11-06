@@ -62,3 +62,9 @@ Amounts are signed minor units, as the app stores them. Day numbers are days of 
 | B5 | `J DOE` | +60000 | 28th | transfer |
 
 The re-export holds every Bank A row from October 2026, unchanged except that the A4 row on 2026-10-03 reads `CARD PURCHASE TESCO STORE 2041`. It adds one new row, `SQ *CORNER CAFE` at −350 on 2026-11-02.
+
+## Backups
+
+`backups/vN.json` is a backup written by the app's `buildBackup` while `DATA_VERSION` was N. It holds the fixture state plus one of each decision that state lacks: a category move, a split, an unusual amount marked normal, a flag decision on an amount rule, a bucket marked Stopped, and a rejected transfer pair. `backups/vN.expected.json` holds the facts it restores to, worked out from the backup's own data through the app's resolve path: the transaction count, each transaction's bucket and categories, the pair keys, the override counts and the Stopped buckets. They don't depend on `src/default-categories.js` or `src/tuning.js`, so editing those can't break the test.
+
+Both files are frozen: tests upgrade and restore every `vN.json` and check it against its `vN.expected.json`, which proves old backups still load. Never edit or regenerate an existing file; `backups/make.js` refuses to overwrite one. When you bump `DATA_VERSION`, run `node tests/fixtures/backups/make.js` once, after the change is complete, to freeze the new version's output, and commit both files. Follow the bump checklist at the top of `src/migrate.js`.

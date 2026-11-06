@@ -128,7 +128,12 @@ test('defaults are seeded once', async ({ page }) => {
 
 test('store writes IndexedDB first and keeps memory in step', async ({ page }) => {
   const result = await page.evaluate(async () => {
-    const { openStore } = await import('/src/store.js');
+    const { openStore: open } = await import('/src/store.js');
+    const openStore = async () => {
+      const opened = await open();
+      if (opened.kind !== 'ready') throw new Error(`Store not ready: ${opened.kind}`);
+      return opened.store;
+    };
     const store = await openStore();
     let notified = 0;
     store.subscribe(() => { notified++; });
@@ -186,7 +191,7 @@ test('store writes IndexedDB first and keeps memory in step', async ({ page }) =
   expect(result.replaced.disk).toEqual(['only']);
   expect(result.replaced.overridesIsMap).toBe(true);
   expect(result.replaced.override).toBe('only');
-  const empty = { id: 'settings', schemaVersion: 1, offeredDefaultIds: [], helpDismissed: false };
+  const empty = { id: 'settings', schemaVersion: 2, offeredDefaultIds: [], helpDismissed: false };
   expect(result.replaced.settings).toEqual(empty);
   expect(result.replaced.memorySettings).toEqual(empty);
 });
