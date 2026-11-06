@@ -71,7 +71,7 @@ export function renderTransactionList(root, app, filters) {
   const fixed = filters.bucketId;
   const only = filters.only;
   const v = listView(only ? only.key : fixed ? `bucket:${fixed}` : 'all');
-  if (v.bucketId && !state.buckets.some((b) => b.id === v.bucketId)) v.bucketId = '';
+  if (v.bucketId && (!state.buckets.some((b) => b.id === v.bucketId) || (only && !only.bucketIds.includes(v.bucketId)))) v.bucketId = '';
   const p = only ? `txns-${only.key}` : fixed ? `txns-${fixed}` : 'txns';
 
   const countEl = h('p', { 'aria-live': 'polite' });
