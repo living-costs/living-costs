@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import tuning from '../../src/tuning.js';
 import { emptyState, applyToState } from '../../src/changes.js';
 import {
-  coverageIntervals, monthStatus, accountsByMonth, completeMonths, analysisWindow, staleAccounts,
+  coverageIntervals, monthStatus, accountsByMonth, completeMonths, analysisWindow, staleAccounts, coveringAccounts,
 } from '../../src/coverage.js';
+import { monthRange } from '../../src/dates.js';
 
 
 let seq = 0;
@@ -191,4 +192,31 @@ test('window is the latest windowMonths complete months; empty window gives no s
   const w = analysisWindow(s, { ...tuning, windowMonths: 3 });
   assert.deepEqual(w.months, ['2026-08', '2026-09', '2026-10']);
   assert.deepEqual(staleAccounts(s, { months: [], complete: false, accountMonths: new Map() }), []);
+});
+
+test('a range keeps only its complete months, per account', () => {
+  const s = build([acct('A'), acct('B')], [batch('A', '2025-11-01', '2026-10-31'), batch('B', '2026-08-01', '2026-10-31')]);
+  const w = analysisWindow(s, tuning, { from: '2026-02', to: '2026-08' });
+  assert.deepEqual(w.months, monthRange('2026-02', '2026-08'));
+  assert.equal(w.isDefault, false);
+  assert.deepEqual([...(w.accountMonths.get('B') ?? [])], ['2026-08']);
+});
+test('a single-month range works', () => {
+  const s = build([acct('A')], [batch('A', '2025-11-01', '2026-10-31')]);
+  assert.deepEqual(analysisWindow(s, tuning, { from: '2026-03', to: '2026-03' }).months, ['2026-03']);
+});
+test('a range with no complete months, or no range, gives the default window', () => {
+  const s = build([acct('A')], [batch('A', '2025-11-01', '2026-10-31')]);
+  for (const range of [null, { from: '2024-01', to: '2024-06' }]) {
+    const w = analysisWindow(s, tuning, range);
+    assert.deepEqual(w.months, monthRange('2025-11', '2026-10'));
+    assert.equal(w.isDefault, true);
+  }
+  assert.equal(analysisWindow(s, tuning, { from: '2025-11', to: '2026-10' }).isDefault, true);
+});
+test('coveringAccounts lists accounts that cover the month, never placeholders', () => {
+  const s = build([acct('A'), acct('B'), acct('P', 'placeholder')],
+    [batch('A', '2025-11-01', '2026-10-31'), batch('B', '2026-08-01', '2026-10-31')]);
+  assert.deepEqual([...coveringAccounts(s, tuning, '2026-06')], ['A']);
+  assert.deepEqual([...coveringAccounts(s, tuning, '2026-09')].sort(), ['A', 'B']);
 });

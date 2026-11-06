@@ -8,7 +8,8 @@ import { cmp } from './order.js';
 
 /** @typedef {{from:string,to:string}} Interval */
 /** @typedef {'covered'|'partial'|'missing'} Status */
-/** @typedef {{months:string[],complete:boolean,accountMonths:Map<string,Set<string>>}} Window */
+/** @typedef {{from:string,to:string}} MonthRange YYYY-MM, both ends inclusive */
+/** @typedef {{months:string[],complete:boolean,isDefault:boolean,accountMonths:Map<string,Set<string>>}} Window */
 
 /**
  * Merge batch periods into ascending intervals. Gaps of up to `gapDays` count as covered.
@@ -138,27 +139,47 @@ export function completeMonths(state, tuning) {
 }
 
 /**
+ * The months analysed: the complete months inside `range`, or the last `windowMonths` complete
+ * months when there is no range or none of its months are complete.
  * @param {State} state
  * @param {{windowMonths:number, coverageGapDays:number}} tuning
+ * @param {MonthRange|null} [range]
  * @returns {Window}
  */
-export function analysisWindow(state, tuning) {
+export function analysisWindow(state, tuning, range = null) {
   const complete = completeMonths(state, tuning);
   if (complete.length === 0) {
     const months = [...new Set(state.transactions.map((t) => monthOf(t.date)))].sort();
     return {
-      months, complete: false,
+      months, complete: false, isDefault: true,
       accountMonths: new Map(state.accounts.map((a) => [a.id, new Set(months)])),
     };
   }
-  const months = complete.slice(-tuning.windowMonths);
+  const defaults = complete.slice(-tuning.windowMonths);
+  const inRange = range ? complete.filter((m) => m >= range.from && m <= range.to) : [];
+  const months = inRange.length > 0 ? inRange : defaults;
+  const isDefault = months.length === defaults.length && months.every((m, i) => m === defaults[i]);
   const ivs = intervalsByAccount(state, tuning);
   return {
-    months, complete: true,
+    months, complete: true, isDefault,
     accountMonths: new Map(state.accounts.map((a) => [a.id, new Set(
       a.kind === 'placeholder' ? [] : months.filter((m) => accountMonthStatus(ivs.get(a.id) ?? [], m) === 'covered'),
     )])),
   };
+}
+
+/**
+ * Ids of the non-placeholder accounts that cover `month` fully.
+ * @param {State} state
+ * @param {{coverageGapDays:number}} tuning
+ * @param {string} month YYYY-MM
+ * @returns {Set<string>}
+ */
+export function coveringAccounts(state, tuning, month) {
+  const ivs = intervalsByAccount(state, tuning);
+  return new Set(state.accounts
+    .filter((a) => a.kind !== 'placeholder' && accountMonthStatus(ivs.get(a.id) ?? [], month) === 'covered')
+    .map((a) => a.id));
 }
 
 /**
