@@ -287,6 +287,31 @@ test('leaving through the nav closes the category', async () => {
   await expect(page.getByRole('table', { name: 'Income', exact: true })).toBeVisible();
 });
 
+test('browser back closes the category, as Back does', async () => {
+  const url = page.url();
+  await open('Living costs', 'Groceries');
+  const march = page.getByRole('group', { name: /^Bank A current: / }).getByRole('button', { name: /^Mar 2026/ });
+  await march.click();
+  await expect(march).toHaveAttribute('aria-pressed', 'true');
+  await page.goBack();
+  await expect(viewHeading('Groceries')).toHaveCount(0);
+  await expect(row('Living costs', 'Groceries').getByRole('button', { name: 'Groceries', exact: true })).toBeFocused();
+  expect(page.url()).toBe(url);
+  expect(await page.evaluate(() => history.state?.livingCostsSubview === true)).toBe(false);
+  // Closed by browser back, the view still forgets the pressed month.
+  await open('Living costs', 'Groceries');
+  await expect(page.locator('#screen .month-cells button[aria-pressed="true"]')).toHaveCount(0);
+  await back().click();
+});
+
+test('leaving a category through the nav removes its history entry', async () => {
+  await open('Income', 'Salary');
+  await openScreen(page, 'Buckets');
+  await expect.poll(() => page.evaluate(() => history.state?.livingCostsSubview === true)).toBe(false);
+  await expect(page.locator('#screen h2')).toHaveText('Buckets');
+  await openScreen(page, 'Typical month');
+});
+
 /**
  * Visible controls shorter than 32px, described for the failure message (as in a11y.spec.js).
  * @param {Page} p

@@ -8,6 +8,7 @@ import defaults from './default-categories.js';
 import { renderNav, updateNav } from './ui/nav.js';
 import { whileSaving } from './ui/saving.js';
 import { keyed } from './ui/form.js';
+import * as subview from './ui/subview.js';
 import * as help from './ui/help.js';
 import * as accounts from './ui/accounts.js';
 import * as categories from './ui/categories.js';
@@ -147,8 +148,10 @@ function createApp(store) {
  * @param {App} app
  */
 function drawScreen(app) {
-  clear(screenEl);
-  SCREENS[app.session.screen](screenEl, app);
+  subview.draw(() => {
+    clear(screenEl);
+    SCREENS[app.session.screen](screenEl, app);
+  });
   updateNav(navEl, app);
 }
 
@@ -156,6 +159,7 @@ async function start() {
   const store = await openStore();
   await seed(store);
   const app = createApp(store);
+  subview.install();
   renderNav(navEl, app);
   drawScreen(app);
   showDefaultsNotice(app);

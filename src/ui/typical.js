@@ -12,6 +12,7 @@ import { formatMoney } from '../money.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { help, plural, focusKey, keyed } from './form.js';
 import { renderCategoryView, reset as resetCategoryView } from './category-view.js';
+import { showing, back } from './subview.js';
 
 /** Screen state that is not saved. It survives redraws; reset() clears it. */
 const ui = {
@@ -42,13 +43,16 @@ export function render(root, app) {
   const openId = ui.openId;
   if (openId) {
     root.append(heading);
-    renderCategoryView(root, app, openId, () => {
+    // Browser back closes the view too, so closing resets it here, not only in its Back button.
+    showing(() => {
       ui.openId = null;
+      resetCategoryView();
       app.rerender();
       // The category may have left the tables, then its heading is the place to land.
       if (keyed(openKey(openId))) focusKey(openKey(openId));
       else root.querySelector('h2')?.focus();
     });
+    renderCategoryView(root, app, openId, back);
     return;
   }
   if (state.transactions.length === 0) {
