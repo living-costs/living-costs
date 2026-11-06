@@ -77,10 +77,6 @@ test('applyToState: upsert in place, del after put; combine concatenates', () =>
 
 // --- Stopped -------------------------------------------------------------------------------------
 
-const line = (bucketId, count, latestDate) => ({
-  bucketId, accountId: 'A', latest: count ? 1000 : 0, count, latestDate, perMonth: 0, stopped: false,
-});
-
 function stoppedState(kind = 'spend') {
   const s = emptyState();
   s.categories.push({ id: 'c1', name: 'Cat', kind, position: 0 });
@@ -97,9 +93,47 @@ test('setBucketStopped sets and clears', () => {
   assert.equal('stoppedAfter' in s.buckets[0], false);
 });
 
-test('stoppedDateFor uses the latest charge across accounts', () => {
-  assert.equal(stoppedDateFor([line('g', 2, '2026-06-05'), line('g', 1, '2026-07-01'), line('g', 0, ''), line('x', 1, '2026-09-01')], 'g'), '2026-07-01');
-  assert.equal(stoppedDateFor([line('g', 0, '')], 'g'), undefined);
+test('stoppedDateFor uses the latest charge across accounts, not a later refund or another bucket', () => {
+  const s = stoppedState();
+  s.transactions.push(
+    txn('2026-06-05', -3000, 'GYM', { bucketId: 'g' }),
+    txn('2026-07-01', -3000, 'GYM', { bucketId: 'g', accountId: 'a2' }),
+    txn('2026-07-20', 500, 'GYM', { bucketId: 'g' }),
+    txn('2026-09-01', -100, 'OTHER', { bucketId: 'x' }),
+  );
+  assert.equal(stoppedDateFor(s, 'g'), '2026-07-01');
+  assert.equal(stoppedDateFor(s, 'none'), undefined);
+});
+
+test('stoppedDateFor counts a credit as the charge for an income bucket', () => {
+  const s = stoppedState('income');
+  s.transactions.push(txn('2026-06-05', 250000, 'GYM', { bucketId: 'g' }), txn('2026-06-20', -100, 'GYM', { bucketId: 'g' }));
+  assert.equal(stoppedDateFor(s, 'g'), '2026-06-05');
+});
+
+test('stoppedDateFor picks a charge in an incomplete month', () => {
+  // Statements end mid-September, so September is incomplete and outside the category's months.
+  const s = stoppedState();
+  s.transactions.push(txn('2026-07-05', -3000, 'GYM', { bucketId: 'g' }), txn('2026-08-05', -3000, 'GYM', { bucketId: 'g' }),
+    txn('2026-09-05', -3000, 'GYM', { bucketId: 'g' }));
+  assert.equal(stoppedDateFor(s, 'g'), '2026-09-05');
+});
+
+test('marking Stopped then re-importing the same charges keeps the mark', () => {
+  const s = emptyState();
+  s.categories.push({ id: 'c1', name: 'Cat', kind: 'spend', position: 0 });
+  const rows = [txn('2026-07-05', -3000, 'GYM'), txn('2026-08-05', -3000, 'GYM'), txn('2026-09-05', -3000, 'GYM')];
+  applyToState(s, assignBuckets(s, rows));
+  const id = s.buckets[0].id;
+  applyToState(s, setBucketCategory(s, id, 'c1'));
+  applyToState(s, setBucketStopped(s, id, stoppedDateFor(s, id)));
+  assert.equal(s.buckets[0].stoppedAfter, '2026-09-05');
+  // Undo the batch, or a settings-only restore, then import the same CSV again.
+  s.transactions = [];
+  const c = assignBuckets(s, rows.map((t) => ({ ...t })));
+  assert.deepEqual(resumedBuckets(s, c), []);
+  applyToState(s, c);
+  assert.equal(s.buckets[0].stoppedAfter, '2026-09-05');
 });
 
 test('merge keeps stoppedAfter only when every merged bucket was stopped', () => {

@@ -1,5 +1,4 @@
 /** @import {State, Changes, Transaction, Bucket, Account} from './types.js' */
-/** @import {BucketLine} from './typical.js' */
 import { normalise } from './normalise.js';
 import { routeByRule, byDate, addExample } from './rules.js';
 import { periodKey } from './dates.js';
@@ -61,13 +60,9 @@ export function assignBuckets(state, incoming) {
     }
     const tb = work.get(target);
     if (tb && addExample(tb, t.rawText)) changedBuckets.add(target);
-    if (tb?.stoppedAfter && t.date > tb.stoppedAfter) {
-      const kind = state.categories.find((c) => c.id === tb.categoryId)?.kind;
-      const credit = kind === 'income' || kind === 'contribution';
-      if (credit ? t.amountMinor > 0 : t.amountMinor < 0) {
-        delete tb.stoppedAfter;
-        changedBuckets.add(target);
-      }
+    if (tb?.stoppedAfter && t.date > tb.stoppedAfter && isCharge(state, tb, t.amountMinor)) {
+      delete tb.stoppedAfter;
+      changedBuckets.add(target);
     }
     /** @type {Transaction} */
     const txn = { ...t, bucketId: target };
@@ -150,14 +145,32 @@ export function setBucketStopped(state, bucketId, stoppedAfter) {
 }
 
 /**
- * The date of a bucket's latest charge across its lines.
- * @param {BucketLine[]} lines
+ * Whether an amount is a charge for this bucket: money in for an income or contribution bucket,
+ * money out for any other. A refund is not a charge.
+ * @param {State} state
+ * @param {Bucket} bucket
+ * @param {number} amountMinor
+ * @returns {boolean}
+ */
+export function isCharge(state, bucket, amountMinor) {
+  const kind = state.categories.find((c) => c.id === bucket.categoryId)?.kind;
+  return kind === 'income' || kind === 'contribution' ? amountMinor > 0 : amountMinor < 0;
+}
+
+/**
+ * The date of a bucket's latest charge among all its transactions, in any month or account.
+ * @param {State} state
  * @param {string} bucketId
  * @returns {string|undefined}
  */
-export function stoppedDateFor(lines, bucketId) {
+export function stoppedDateFor(state, bucketId) {
+  const bucket = state.buckets.find((b) => b.id === bucketId);
+  if (!bucket) return undefined;
+  /** @type {string|undefined} */
   let latest;
-  for (const l of lines) if (l.bucketId === bucketId && l.count > 0 && (latest === undefined || l.latestDate > latest)) latest = l.latestDate;
+  for (const t of state.transactions) {
+    if (t.bucketId === bucketId && isCharge(state, bucket, t.amountMinor) && (latest === undefined || t.date > latest)) latest = t.date;
+  }
   return latest;
 }
 
