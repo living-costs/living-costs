@@ -104,6 +104,10 @@ test('Groceries shows one row of month cells per account, with not covered month
   const bankA = page.getByRole('group', { name: /^Bank A current: / });
   await expect(bankA.locator('.uncovered')).toHaveCount(0);
   await expect(bankA.getByRole('button')).toHaveCount(12);
+  // A month's cells line up across accounts: same left edge and width in each column.
+  const boxes = (/** @type {import('@playwright/test').Locator} */ g) => g.locator(':scope > *')
+    .evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)]; }));
+  expect(await boxes(bankB)).toEqual(await boxes(bankA));
   const labels = await page.locator('#screen .account-share').allTextContents();
   expect(labels).toHaveLength(2);
   expect(labels.reduce((s, t) => s + minor(t.slice(t.indexOf(': ') + 2)), 0)).toBe(73784);
