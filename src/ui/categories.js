@@ -98,7 +98,7 @@ function guide(app) {
     ]),
     guidePanel('budget-types-heading', 'Budget types', 'Spend, Income and Contribution only', [
       [BUDGET_LABELS.fixed, 'Regular charges such as rent or subscriptions. Uses each charge\'s latest amount, as often as it was charged. Open the category on Typical month to mark a charge Stopped.'],
-      [BUDGET_LABELS.variable, `Costs that change month to month, such as groceries. Uses the middle month, with a typical range between percentiles ${lo} and ${hi}.`],
+      [BUDGET_LABELS.variable, `Costs that change month to month, such as groceries. Uses the median month, with a typical range between percentiles ${lo} and ${hi}.`],
       [BUDGET_LABELS.annual, 'Irregular or yearly costs, such as insurance. Uses the yearly total divided by 12.'],
       [BUDGET_LABELS.oneoff, 'Costs you do not expect again. Listed on their own, outside every total.'],
     ])));
