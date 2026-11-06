@@ -17,10 +17,31 @@ import { renderTransactionList, listView } from './transactions.js';
 
 /**
  * View state that is not saved: the category shown, the month cell pressed, if any, and whether
- * the last draw had anything to show. It survives redraws; opening a different category resets it.
+ * the last draw had anything to show. It survives redraws; opening a different category, Back,
+ * and leaving the screen reset it.
  * @type {{categoryId: string, month: {month: string, accountId: string}|null, shown: boolean}}
  */
 const view = { categoryId: '', month: null, shown: false };
+
+/** Forget the view state, so the next opening starts with no month pressed. */
+export function reset() {
+  view.categoryId = '';
+  view.month = null;
+  view.shown = false;
+}
+
+/** Whether the element that last took focus was in the view. Set once the view first draws. */
+let focusInView = false;
+let tracking = false;
+
+/** Note where focus goes, so a redraw can tell focus lost from the view from focus elsewhere. */
+function trackFocus() {
+  if (tracking) return;
+  tracking = true;
+  document.addEventListener('focusin', (e) => {
+    focusInView = e.target instanceof Element && e.target.closest('.category-view') !== null;
+  });
+}
 
 /**
  * The one line that explains the figure, in terms of its budget type. The amounts are the Row's
@@ -56,14 +77,17 @@ export function explanation(detail, kind, m) {
 }
 
 /**
- * Render the opened category into `root`, ending with Back to Typical month.
- * @param {HTMLElement} root
+ * Render the opened category into `screen`, ending with Back to Typical month.
+ * @param {HTMLElement} screen
  * @param {App} app
  * @param {string} categoryId
  * @param {() => void} onBack
  * @returns {void}
  */
-export function renderCategoryView(root, app, categoryId, onBack) {
+export function renderCategoryView(screen, app, categoryId, onBack) {
+  trackFocus();
+  // Focus was in this category's view before the redraw that is now drawing it again.
+  const lostFrom = view.categoryId === categoryId && view.shown && focusInView;
   if (view.categoryId !== categoryId) {
     view.categoryId = categoryId;
     view.month = null;
@@ -74,8 +98,10 @@ export function renderCategoryView(root, app, categoryId, onBack) {
   const detail = categoryDetail(state, app.tuning, categoryId);
   const name = detail?.row.name ?? category?.name ?? 'Category';
   const backButton = h('div', { class: 'actions' }, h('button', {
-    type: 'button', class: 'secondary', 'data-focus-key': 'category-back', onClick: onBack,
+    type: 'button', class: 'secondary', 'data-focus-key': 'category-back', onClick: () => { reset(); onBack(); },
   }, 'Back to Typical month'));
+  const root = h('div', { class: 'category-view' });
+  screen.append(root);
   root.append(h('h3', { tabindex: '-1', 'data-focus-key': 'category-heading' }, name));
 
   const emptied = view.shown;
@@ -88,7 +114,7 @@ export function renderCategoryView(root, app, categoryId, onBack) {
     if (emptied) {
       queueMicrotask(() => {
         const active = document.activeElement;
-        if (!active || active === document.body || root.contains(active)) focusKey('category-empty');
+        if (!active || active === document.body || screen.contains(active)) focusKey('category-empty');
       });
     }
     return;
@@ -116,7 +142,8 @@ export function renderCategoryView(root, app, categoryId, onBack) {
   const txns = state.transactions.filter((t) => detail.transactionIds.has(t.id));
   const month = view.month;
   const ids = new Set(txns.filter((t) => !month || (t.accountId === month.accountId && monthOf(t.date) === month.month)).map((t) => t.id));
-  const list = h('section', { 'aria-labelledby': 'category-transactions' }, h('h4', { id: 'category-transactions' }, 'Transactions'));
+  const list = h('section', { 'aria-labelledby': 'category-transactions' },
+    h('h4', { id: 'category-transactions', tabindex: '-1', 'data-focus-key': 'category-transactions' }, 'Transactions'));
   root.append(list);
   renderTransactionList(list, app, {
     only: {
@@ -124,6 +151,14 @@ export function renderCategoryView(root, app, categoryId, onBack) {
     },
   });
   root.append(backButton);
+  // An edit in the view, such as Counts as on a row, can remove the control that had focus, and
+  // App.rerender then puts focus on the screen heading. Land in the Transactions section instead.
+  if (lostFrom) {
+    queueMicrotask(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body || active === screen.querySelector('h2')) focusKey('category-transactions');
+    });
+  }
 }
 
 /**
@@ -173,7 +208,8 @@ function bucketSection(app, root, detail, money, several, accountNames, bucketNa
   const chosen = listView(listKey).bucketId;
   /** @param {BucketLine} line */
   const stoppedBox = (line, /** @type {string} */ name) => h('input', {
-    type: 'checkbox', class: 'select', checked: line.stopped, 'aria-label': `Stopped: ${name}`,
+    type: 'checkbox', class: 'select', checked: line.stopped,
+    'aria-label': several ? `Stopped: ${name}, ${accountNames.get(line.accountId) ?? ''}` : `Stopped: ${name}`,
     'data-focus-key': `category-stopped-${line.bucketId}-${line.accountId}`,
     onChange: (/** @type {Event} */ e) => {
       const box = /** @type {HTMLInputElement} */ (e.target);
@@ -183,7 +219,7 @@ function bucketSection(app, root, detail, money, several, accountNames, bucketNa
         return;
       }
       whileSaving(root, async () => {
-        const after = box.checked ? stoppedDateFor(detail.buckets, line.bucketId) : undefined;
+        const after = box.checked ? stoppedDateFor(app.store.state, line.bucketId) : undefined;
         try {
           await app.store.apply(setBucketStopped(app.store.state, line.bucketId, after));
         } catch (err) {

@@ -11,7 +11,7 @@ import { typicalMonth } from '../typical.js';
 import { formatMoney } from '../money.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { help, plural, focusKey, keyed } from './form.js';
-import { renderCategoryView } from './category-view.js';
+import { renderCategoryView, reset as resetCategoryView } from './category-view.js';
 
 /** Screen state that is not saved. It survives redraws; reset() clears it. */
 const ui = {
@@ -25,6 +25,7 @@ const ui = {
  */
 export function reset() {
   ui.openId = null;
+  resetCategoryView();
 }
 
 /** @param {string} id */

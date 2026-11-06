@@ -167,6 +167,54 @@ test('splitting a transaction out updates the month cell, and the split row says
   await expect.poll(juneTotal).toBe(before);
   await expect(note).toHaveCount(0);
   await search.fill('');
+});
+
+test('moving a row to another category removes it and puts focus on Transactions', async () => {
+  const june = page.getByRole('group', { name: /^Bank A current: / }).getByRole('button', { name: /^Jun 2026/ });
+  const juneTotal = async () => minor((await june.textContent() ?? '').replace('Jun 2026', '').replace(', unusual', ''));
+  const before = await juneTotal();
+  const all = await listRows().count();
+  expect(all).toBeGreaterThan(1);
+  const label = 'Counts as for CARD PURCHASE TESCO STORES 2041 on 13/06/2026';
+  const shop = (rows) => rows.filter({ hasText: '-£73.92' });
+  await expect(shop(listRows())).toHaveCount(1);
+  // selectOption does not move focus, so focus the select as a keyboard user would have.
+  const moved = shop(listRows()).getByLabel(label);
+  await moved.focus();
+  await moved.selectOption({ label: 'Gifts' });
+
+  await expect(shop(listRows())).toHaveCount(0);
+  await expect(listRows()).toHaveCount(all - 1);
+  await expect.poll(juneTotal).toBe(before - 7392);
+  await expect(page.getByRole('heading', { level: 4, name: 'Transactions', exact: true })).toBeFocused();
+
+  // Put it back, from the Transactions screen.
+  await openScreen(page, 'Transactions');
+  const search = page.getByLabel('Search transactions');
+  await search.fill('73.92');
+  const select = shop(listRows()).getByLabel(label);
+  await select.selectOption({ label: "Use bucket's category (Groceries)" });
+  await expect(select.locator('option:checked')).toHaveText("Use bucket's category (Groceries)");
+  await search.fill('');
+  await openScreen(page, 'Typical month');
+});
+
+test('a pressed month is not kept after Back', async () => {
+  await open('Living costs', 'Groceries');
+  const march = page.getByRole('group', { name: /^Bank A current: / }).getByRole('button', { name: /^Mar 2026/ });
+  await march.click();
+  await expect(march).toHaveAttribute('aria-pressed', 'true');
+  await back().click();
+  await open('Living costs', 'Groceries');
+  const pressed = page.locator('#screen .month-cells button[aria-pressed="true"]');
+  await expect(pressed).toHaveCount(0);
+  // Nor after leaving through the nav.
+  await march.click();
+  await expect(march).toHaveAttribute('aria-pressed', 'true');
+  await openScreen(page, 'Buckets');
+  await openScreen(page, 'Typical month');
+  await open('Living costs', 'Groceries');
+  await expect(pressed).toHaveCount(0);
   await back().click();
 });
 
@@ -194,7 +242,8 @@ test('Stopped lowers the figure here and on Typical month, and unticking restore
   expect(adds).toBe(1199);
   const lowered = pounds(8997 - adds);
 
-  const stopped = page.getByRole('checkbox', { name: 'Stopped: SPOTIFY', exact: true });
+  // Two accounts: the tick's name says which account's row it is.
+  const stopped = page.getByRole('checkbox', { name: 'Stopped: SPOTIFY, Credit card', exact: true });
   await stopped.check();
   await expect.poll(async () => (await readStore(page, 'buckets')).find((b) => b.displayName === 'SPOTIFY')?.stoppedAfter)
     .toBe('2026-10-02');
