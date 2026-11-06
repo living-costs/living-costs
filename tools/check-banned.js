@@ -111,6 +111,12 @@ export const EXCEPTIONS = [
     reason: "The app's one entry module, same-origin; everything else loads from it as a static import.",
   },
   {
+    file: 'index.html',
+    pattern: '<script',
+    match: '<script src="src/theme-init.js">',
+    reason: 'Same-origin classic script that applies a saved light or dark theme before first paint, to avoid a flash. It only reads localStorage and sets one attribute.',
+  },
+  {
     file: 'favicon.svg',
     pattern: 'http://',
     match: 'http://www.w3.org/2000/svg',

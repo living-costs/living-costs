@@ -1,24 +1,30 @@
 :root {
-  --text: #1a1a1a;
-  --muted: #3b3b3b;
-  --bg: #f4f4f2;
-  --surface: #ffffff;
-  --border: #595959;
-  --accent: #0b3d91;
-  --accent-contrast: #ffffff;
-  --banner-bg: #fff4d6;
-  --intro-bg: #e8f1fb;
-  --help-rule: #8aa6d6;
-  --hairline: #d4d4ce;
-  --focus: #0b3d91;
-  --error: #a4000f;
-  --tab-border: #8c8c86;
-  --tab-back: #deded8;
-  --tab-back-hover: #e9e9e4;
+  /* Follows the OS and browser. The footer toggle sets data-theme to force light or dark.
+     Each light-dark() pair is (light, dark). */
+  color-scheme: light dark;
+  --text: light-dark(#1a1a1a, #e8e8e6);
+  --muted: light-dark(#3b3b3b, #c4c4c0);
+  --bg: light-dark(#f4f4f2, #161616);
+  --surface: light-dark(#ffffff, #222222);
+  --border: light-dark(#595959, #8f8f8a);
+  --accent: light-dark(#0b3d91, #8ab4ff);
+  --accent-contrast: light-dark(#ffffff, #0b1a33);
+  --banner-bg: light-dark(#fff4d6, #4a3b0a);
+  --intro-bg: light-dark(#e8f1fb, #1c2a40);
+  --help-rule: light-dark(#8aa6d6, #4a6aa6);
+  --hairline: light-dark(#d4d4ce, #3a3a38);
+  --focus: light-dark(#0b3d91, #8ab4ff);
+  --error: light-dark(#a4000f, #ff8a8a);
+  --tab-border: light-dark(#8c8c86, #6a6a66);
+  --tab-back: light-dark(#deded8, #2c2c2a);
+  --tab-back-hover: light-dark(#e9e9e4, #383836);
   --attention-bg: #ffd84d;
   --attention-text: #1a1a1a;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 
@@ -109,7 +115,7 @@ nav button:focus-visible { z-index: 2; }
 .nav-row button:last-child { border-radius: 0 6px 6px 0; }
 .nav-row button:hover { background: var(--intro-bg); }
 .nav-row button.attention { background: var(--attention-bg); color: var(--attention-text); }
-.nav-row button[aria-current="page"] { background: var(--accent); color: var(--accent-contrast); font-weight: bold; }
+.nav-row button[aria-current="page"], .nav-row button[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); font-weight: bold; }
 .nav-row .count {
   padding: 0.125rem 0.4rem;
   border-radius: 999px;
