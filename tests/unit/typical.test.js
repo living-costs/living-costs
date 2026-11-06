@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import tuning from '../../src/tuning.js';
 import { emptyState, applyToState } from '../../src/changes.js';
 import { addDays, monthRange } from '../../src/dates.js';
-import { typicalMonth, median, percentile } from '../../src/typical.js';
+import { typicalMonth, median, percentile, unusualFlags, categoryDetail } from '../../src/typical.js';
 
 const YEAR = monthRange('2025-11', '2026-10');
 
@@ -172,7 +172,7 @@ test('a one-off category is listed in oneOffs and kept out of living', () => {
   assert.equal(tm.totals.living, 90000);
 });
 
-test('fixed: a bucket with no charge in the last fixedActiveMonths contributes 0', () => {
+test('fixed: a bucket that stopped charging still counts its charges in the window', () => {
   const state = build({
     categories: [cat('bills', 'spend', 'fixed')],
     buckets: [bucket('energy', 'bills'), bucket('gym', 'bills')],
@@ -181,9 +181,20 @@ test('fixed: a bucket with no charge in the last fixedActiveMonths contributes 0
       ...monthly('A', YEAR.slice(0, 9), '05', -3000, 'gym'), // last charge in Jul 2026
     ],
   });
+  assert.equal(row(typicalMonth(state, tuning), 'bills').perMonth, 9500 + 2250);
+});
+
+test('fixed: a Stopped bucket adds nothing, refunds included', () => {
+  const state = build({
+    categories: [cat('bills', 'spend', 'fixed')],
+    buckets: [bucket('energy', 'bills'), { ...bucket('gym', 'bills'), stoppedAfter: '2026-07-05' }],
+    transactions: [
+      ...monthly('A', YEAR, '05', -9500, 'energy'),
+      ...monthly('A', YEAR.slice(0, 9), '05', -3000, 'gym'),
+      txn('A', '2026-08-01', 1000, 'gym'),
+    ],
+  });
   assert.equal(row(typicalMonth(state, tuning), 'bills').perMonth, 9500);
-  // With 4 active months (Jul to Oct), the gym counts: divRound(3000 × 9, 12) = 2250.
-  assert.equal(row(typicalMonth(state, { ...tuning, fixedActiveMonths: 4 }), 'bills').perMonth, 11750);
 });
 
 test('split parts count in their own categories; fixed parts group by the transaction bucket', () => {
@@ -261,7 +272,7 @@ test('spend rows are ordered largest per month first', () => {
   assert.deepEqual(tm.spend.map((r) => r.categoryId), ['large', 'small']);
 });
 
-test('fixed: a refund counts only from a bucket that is still active', () => {
+test('fixed: an old bucket and its refund still count', () => {
   const tm = typicalMonth(build({
     categories: [cat('broadband', 'spend', 'fixed')],
     buckets: [bucket('new', 'broadband'), bucket('old', 'broadband')],
@@ -271,22 +282,51 @@ test('fixed: a refund counts only from a bucket that is still active', () => {
       txn('A', '2026-04-10', 4500, 'old'),
     ],
   }), tuning);
-  assert.deepEqual(row(tm, 'broadband'), {
-    categoryId: 'broadband', name: 'broadband', budgetType: 'fixed', perMonth: 3500, perYear: 42000,
-  });
+  assert.equal(row(tm, 'broadband').perMonth, 3500 + 750 - 375);
 });
 
-test('fixed: an ended bucket with a refund gives 0, never negative', () => {
+test("fixed: a bucket's refund lowers its figure but never below 0", () => {
   const tm = typicalMonth(build({
     categories: [cat('broadband', 'spend', 'fixed')],
-    buckets: [bucket('old', 'broadband')],
-    transactions: [...monthly('A', YEAR.slice(0, 3), '06', -3000, 'old'), txn('A', '2026-04-10', 4500, 'old')],
+    buckets: [bucket('old', 'broadband'), bucket('old2', 'broadband')],
+    transactions: [
+      ...monthly('A', YEAR.slice(0, 3), '06', -3000, 'old'), txn('A', '2026-04-10', 4500, 'old'),
+      ...monthly('A', YEAR.slice(0, 3), '07', -3000, 'old2'), txn('A', '2026-04-11', 12000, 'old2'),
+    ],
   }), tuning);
-  assert.equal(row(tm, 'broadband').perMonth, 0);
-  assert.equal(row(tm, 'broadband').perYear, 0);
+  assert.equal(row(tm, 'broadband').perMonth, 375);
 });
 
-test('fixed: a refund in an active bucket still lowers perMonth', () => {
+test('fixed: council tax over 10 months, with the window ending in March', () => {
+  const tm = typicalMonth(build({
+    batches: [batch('A', '2025-04-01', '2026-03-31')],
+    categories: [cat('ctax', 'spend', 'fixed')], buckets: [bucket('council', 'ctax')],
+    transactions: monthly('A', monthRange('2025-04', '2026-01'), '01', -18000, 'council'),
+  }), tuning);
+  assert.equal(row(tm, 'ctax').perMonth, 15000);
+});
+
+test('fixed: a renamed employer across two buckets gives the full salary', () => {
+  const tm = typicalMonth(build({
+    categories: [cat('salary', 'income', 'fixed')],
+    buckets: [bucket('emp-old', 'salary'), bucket('emp-new', 'salary')],
+    transactions: [
+      ...monthly('A', YEAR.slice(0, 9), '25', 250000, 'emp-old'),
+      ...monthly('A', YEAR.slice(9), '25', 250000, 'emp-new'),
+    ],
+  }), tuning);
+  assert.equal(row(tm, 'salary').perMonth, 250000);
+});
+
+test('fixed: a yearly charge counts as a twelfth', () => {
+  const tm = typicalMonth(build({
+    categories: [cat('subs', 'spend', 'fixed')], buckets: [bucket('stream', 'subs'), bucket('prime', 'subs')],
+    transactions: [...monthly('A', YEAR, '05', -1000, 'stream'), txn('A', '2026-01-15', -9500, 'prime')],
+  }), tuning);
+  assert.equal(row(tm, 'subs').perMonth, 1000 + 792);
+});
+
+test('fixed: a refund still lowers perMonth', () => {
   const tm = typicalMonth(build({
     categories: [cat('broadband', 'spend', 'fixed')],
     buckets: [bucket('new', 'broadband')],
@@ -304,4 +344,179 @@ test('rows with equal figures are in name order ignoring case', () => {
   const tm = /** @type {any} */ (typicalMonth(s, tuning));
   // Code-unit order would put Zoo before apples.
   assert.deepEqual(tm.spend.map((r) => r.name), ['apples', 'Zoo']);
+});
+
+/** @param {any} o @param {string[]} keys */
+const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
+
+test('unusualFlags: exactly the percent is not unusual', () => {
+  assert.deepEqual(unusualFlags([100, 100, 0, 200, 100, 125], 25), [false, false, true, true, false, false]);
+});
+
+test('unusualFlags handles zero and negative medians', () => {
+  assert.deepEqual(unusualFlags([0, 0, 5], 25), [false, false, true]);
+  assert.deepEqual(unusualFlags([-100, -100, -300], 25), [false, false, true]);
+  assert.deepEqual(unusualFlags([], 25), []);
+});
+
+test('categoryDetail: variable over two accounts with different coverage', () => {
+  const S = ['2026-08', '2026-09', '2026-10'];
+  const state = build({
+    accounts: [acct('A'), acct('S')],
+    batches: [yearBatch('A'), batch('S', '2026-08-01', '2026-10-31')],
+    categories: [cat('groc', 'spend', 'variable')], buckets: [bucket('shop', 'groc')],
+    transactions: [
+      ...YEAR.map((m) => txn('A', `${m}-15`, m === '2026-03' ? -20000 : -10000, 'shop')),
+      ...monthly('S', S, '20', -5000, 'shop'),
+    ],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'groc'));
+  assert.deepEqual(d.row, row(typicalMonth(state, tuning), 'groc'));
+  assert.equal(d.currency, 'GBP');
+  assert.deepEqual(d.months, YEAR);
+  assert.deepEqual(d.accounts.map((a) => [a.accountId, a.share]), [['A', 10000], ['S', 5000]]);
+  assert.equal(d.accounts[0].share + d.accounts[1].share, d.row.perMonth);
+  const [a, s] = d.accounts;
+  assert.deepEqual(a.cells.map((c) => c.month), YEAR);
+  assert.deepEqual(a.cells.map((c) => c.total), YEAR.map((m) => (m === '2026-03' ? 20000 : 10000)));
+  assert.deepEqual(a.cells.map((c) => c.unusual), YEAR.map((m) => m === '2026-03'));
+  assert.equal(s.cells.length, 12);
+  assert.deepEqual(s.cells.slice(0, 9).map((c) => c.total), Array(9).fill(null));
+  assert.deepEqual(s.cells.slice(9).map((c) => c.total), [5000, 5000, 5000]);
+  // Flags use only S's covered months: over all 12 as 0, its median would be 0 and Aug to Oct unusual.
+  assert.deepEqual(s.cells.map((c) => c.unusual), Array(12).fill(false));
+  assert.deepEqual(d.buckets, []);
+});
+
+test('categoryDetail: annual account shares are scaled yearly totals that add to perYear', () => {
+  const state = build({
+    accounts: [acct('A'), acct('S')],
+    batches: [yearBatch('A'), batch('S', '2026-05-01', '2026-10-31')],
+    categories: [cat('gifts', 'spend', 'annual')], buckets: [bucket('present', 'gifts')],
+    transactions: [txn('A', '2025-12-10', -30000, 'present'), txn('S', '2026-06-10', -10000, 'present')],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'gifts'));
+  assert.deepEqual(d.accounts.map((a) => [a.accountId, a.share]), [['A', 30000], ['S', 20000]]);
+  assert.equal(d.row.perYear, 50000);
+  assert.deepEqual(d.row, row(typicalMonth(state, tuning), 'gifts'));
+});
+
+test('categoryDetail: fixed bucket lines add up to perMonth, and a stopped line is 0', () => {
+  const state = build({
+    categories: [cat('bills', 'spend', 'fixed')],
+    buckets: [bucket('energy', 'bills'), { ...bucket('gym', 'bills'), stoppedAfter: '2026-07-05' }],
+    transactions: [
+      ...monthly('A', YEAR, '05', -9500, 'energy'),
+      ...monthly('A', YEAR.slice(0, 9), '05', -3000, 'gym'),
+    ],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'bills'));
+  assert.deepEqual(d.row, row(typicalMonth(state, tuning), 'bills'));
+  assert.equal(d.buckets.reduce((s, b) => s + b.perMonth, 0), d.row.perMonth);
+  assert.deepEqual(d.buckets.map((b) => [b.bucketId, b.accountId, b.count, b.latest, b.latestDate, b.perMonth, b.stopped]),
+    [['energy', 'A', 12, 9500, '2026-10-05', 9500, false], ['gym', 'A', 9, 3000, '2026-07-05', 0, true]]);
+  assert.deepEqual(d.accounts.map((a) => [a.accountId, a.share]), [['A', 9500]]);
+});
+
+test('categoryDetail: fixed lines are ordered by perMonth, then display name', () => {
+  const state = build({
+    categories: [cat('subs', 'spend', 'fixed')],
+    buckets: [
+      { ...bucket('z1', 'subs'), displayName: 'Zed' }, { ...bucket('a1', 'subs'), displayName: 'apple' },
+      bucket('big', 'subs'),
+    ],
+    transactions: [
+      ...monthly('A', YEAR, '05', -1000, 'z1'), ...monthly('A', YEAR, '06', -1000, 'a1'),
+      ...monthly('A', YEAR, '07', -5000, 'big'),
+    ],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'subs'));
+  assert.deepEqual(d.buckets.map((b) => b.bucketId), ['big', 'a1', 'z1']);
+});
+
+test('a refund-only bucket line has count 0', () => {
+  const state = build({
+    categories: [cat('broadband', 'spend', 'fixed')],
+    buckets: [bucket('new', 'broadband'), bucket('old', 'broadband')],
+    transactions: [...monthly('A', YEAR, '05', -3500, 'new'), txn('A', '2026-04-10', 4500, 'old')],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'broadband'));
+  const old = d.buckets.find((b) => b.bucketId === 'old');
+  assert.deepEqual(pick(old, ['count', 'latest', 'latestDate', 'perMonth']), { count: 0, latest: 0, latestDate: '', perMonth: 0 });
+  assert.equal(d.buckets.reduce((s, b) => s + b.perMonth, 0), d.row.perMonth);
+});
+
+test('stopped applies to every line of a bucket', () => {
+  const state = build({
+    accounts: [acct('A'), acct('C', 'card')],
+    batches: [yearBatch('A'), yearBatch('C')],
+    categories: [cat('bills', 'spend', 'fixed')],
+    buckets: [bucket('energy', 'bills'), { ...bucket('gym', 'bills'), stoppedAfter: '2026-07-05' }],
+    transactions: [
+      ...monthly('A', YEAR, '05', -9500, 'energy'),
+      ...monthly('C', YEAR.slice(0, 9), '05', -3000, 'gym'),
+      ...monthly('A', YEAR.slice(0, 6), '06', -3000, 'gym'),
+    ],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'bills'));
+  assert.deepEqual(d.buckets.map((b) => [b.bucketId, b.accountId, b.count, b.perMonth, b.stopped]),
+    [['energy', 'A', 12, 9500, false], ['gym', 'A', 6, 0, true], ['gym', 'C', 9, 0, true]]);
+  assert.deepEqual(d.accounts.map((a) => [a.accountId, a.share]), [['A', 9500], ['C', 0]]);
+});
+
+test('categoryDetail: counted transactions include overrides and split parts, not transfers or uncovered months', () => {
+  const plain = txn('A', '2026-02-03', -2500, 'diy');
+  const refund = txn('A', '2026-02-09', 700, 'diy');
+  const movedIn = { ...txn('A', '2026-03-03', -1800, 'cafe'), fingerprint: 'moved' };
+  const movedOut = { ...txn('A', '2026-03-04', -900, 'diy'), fingerprint: 'out' };
+  const split = { ...txn('A', '2026-04-03', -10000, 'amazon'), fingerprint: 'split1' };
+  const transfer = { ...txn('A', '2026-05-01', -20000, 'diy'), fingerprint: 'xa' };
+  const other = { ...txn('S', '2026-05-02', 20000, 'diy'), fingerprint: 'xb' };
+  const uncovered = txn('C', '2026-10-02', -5000, 'diy');
+  const state = build({
+    accounts: [acct('A'), acct('S'), acct('C', 'card')],
+    batches: [yearBatch('A'), yearBatch('S'), batch('C', '2025-11-01', '2026-10-20')],
+    categories: [cat('home', 'spend', 'variable'), cat('groc', 'spend', 'variable'), cat('eat', 'spend', 'variable')],
+    buckets: [bucket('diy', 'home'), bucket('cafe', 'eat'), bucket('amazon', 'groc')],
+    transactions: [plain, refund, movedIn, movedOut, split, transfer, other, uncovered],
+    overrides: [
+      { fingerprint: 'moved', categoryId: 'home' },
+      { fingerprint: 'out', categoryId: 'eat' },
+      { fingerprint: 'split1', splits: [{ amountMinor: -6000, categoryId: 'groc' }, { amountMinor: -4000, categoryId: 'home' }] },
+    ],
+    transferPairs: [{ key: 'xa\nxb', fingerprintA: 'xa', fingerprintB: 'xb', status: 'confirmed' }],
+  });
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'home'));
+  assert.ok(d.transactionIds.has(movedIn.id));
+  assert.equal(d.partMinor.get(split.id), -4000);
+  assert.ok(!d.transactionIds.has(transfer.id));
+  assert.ok(!d.transactionIds.has(uncovered.id));
+  assert.deepEqual([...d.transactionIds].sort(), [plain.id, refund.id, movedIn.id, split.id].sort());
+  assert.deepEqual([...d.partMinor].sort(), [[plain.id, -2500], [refund.id, 700], [movedIn.id, -1800], [split.id, -4000]].sort());
+  assert.deepEqual(d.accounts.map((a) => a.accountId), ['A']);
+});
+
+test('categoryDetail returns null for one-off, transfer, unknown and empty categories, and mixed currencies', () => {
+  const state = build({
+    accounts: [acct('A'), acct('S')],
+    batches: [yearBatch('A'), yearBatch('S')],
+    categories: [cat('rent', 'spend', 'fixed'), cat('big', 'spend', 'oneoff'), cat('between', 'transfer'), cat('quiet', 'spend', 'variable')],
+    buckets: [bucket('lettings', 'rent'), bucket('boiler', 'big'), bucket('moved', 'between')],
+    transactions: [
+      ...monthly('A', YEAR, '01', -90000, 'lettings'), txn('A', '2026-01-20', -240000, 'boiler'),
+      txn('A', '2026-02-20', -5000, 'moved'),
+    ],
+  });
+  assert.ok(categoryDetail(state, tuning, 'rent'));
+  assert.equal(categoryDetail(state, tuning, 'big'), null);
+  assert.equal(categoryDetail(state, tuning, 'between'), null);
+  assert.equal(categoryDetail(state, tuning, 'nope'), null);
+  assert.equal(categoryDetail(state, tuning, 'quiet'), null);
+  const mixed = build({
+    accounts: [acct('A'), acct('E', 'bank', 'EUR')],
+    batches: [yearBatch('A'), yearBatch('E')],
+    categories: [cat('rent', 'spend', 'fixed')], buckets: [bucket('lettings', 'rent')],
+    transactions: [txn('A', '2026-01-05', -100, 'lettings'), txn('E', '2026-01-05', -100, 'lettings', 'EUR')],
+  });
+  assert.equal(categoryDetail(mixed, tuning, 'rent'), null);
 });

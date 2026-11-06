@@ -44,6 +44,7 @@ const SCREENS = {
  * @type {Partial<Record<ScreenName, () => void>>}
  */
 const RESETS = {
+  typical: typical.reset,
   buckets: buckets.reset,
   transfers: transfers.reset,
   backup: backup.reset,

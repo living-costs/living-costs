@@ -5,7 +5,7 @@
 /** @import {App} from '../main.js' */
 /** @import {Transaction} from '../types.js' */
 import { h } from '../dom.js';
-import { buildContext } from '../resolve.js';
+import { buildContext, resolve } from '../resolve.js';
 import { searchTransactions } from '../search.js';
 import { sortedCategories } from '../categories.js';
 import { formatMoney } from '../money.js';
@@ -22,6 +22,24 @@ import { countsAsCell, appendSplitDialog } from './counts-as.js';
  * @type {Map<string, View>}
  */
 const views = new Map();
+
+/**
+ * Limits a list to some transactions. key: the view key (stored in `views`), ids: the
+ * transactions allowed, bucketIds: the Bucket filter's options, partMinor: each split
+ * transaction's signed sum in categoryName.
+ * @typedef {{key: string, ids: Set<string>, bucketIds: string[], categoryName: string, partMinor: Map<string, number>}} Only
+ */
+
+/**
+ * The stored View for a key, created empty if missing.
+ * @param {string} key
+ * @returns {View}
+ */
+export function listView(key) {
+  const v = views.get(key) ?? { query: '', bucketId: '', from: '', to: '' };
+  views.set(key, v);
+  return v;
+}
 
 /**
  * @param {HTMLElement} root
@@ -44,28 +62,28 @@ export function render(root, app) {
  * redraws only the results, so focus and text are kept.
  * @param {HTMLElement} root
  * @param {App} app
- * @param {{bucketId?: string}} filters a fixed bucket hides the Bucket filter
+ * @param {{bucketId?: string, only?: Only}} filters a fixed bucket hides the Bucket filter; `only` limits the list to
+ *   some transactions and the Bucket filter to some buckets
  * @returns {void}
  */
 export function renderTransactionList(root, app, filters) {
   const state = app.store.state;
   const fixed = filters.bucketId;
-  const viewKey = fixed ? `bucket:${fixed}` : 'all';
-  const v = views.get(viewKey) ?? { query: '', bucketId: '', from: '', to: '' };
-  views.set(viewKey, v);
-  if (v.bucketId && !state.buckets.some((b) => b.id === v.bucketId)) v.bucketId = '';
-  const p = fixed ? `txns-${fixed}` : 'txns';
+  const only = filters.only;
+  const v = listView(only ? only.key : fixed ? `bucket:${fixed}` : 'all');
+  if (v.bucketId && (!state.buckets.some((b) => b.id === v.bucketId) || (only && !only.bucketIds.includes(v.bucketId)))) v.bucketId = '';
+  const p = only ? `txns-${only.key}` : fixed ? `txns-${fixed}` : 'txns';
 
   const countEl = h('p', { 'aria-live': 'polite' });
   const results = h('div');
-  const update = () => drawResults(app, results, countEl, v, fixed, p);
+  const update = () => drawResults(app, results, countEl, v, fixed, p, only);
   /**
    * @param {'query'|'bucketId'|'from'|'to'} key
    * @returns {(e: Event) => void}
    */
   const set = (key) => (e) => { v[key] = valueOf(e); update(); };
 
-  const buckets = [...state.buckets].sort((a, b) => compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
+  const buckets = state.buckets.filter((b) => !only || only.bucketIds.includes(b.id)).sort((a, b) => compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
   root.append(
     h('div', { role: 'search', class: 'row filters' },
       field('Search transactions', h('input', {
@@ -90,12 +108,14 @@ export function renderTransactionList(root, app, filters) {
  * @param {View} v
  * @param {string|undefined} fixed
  * @param {string} prefix the list's prefix for ids and focus keys
+ * @param {Only|undefined} only
  */
-function drawResults(app, results, countEl, v, fixed, prefix) {
+function drawResults(app, results, countEl, v, fixed, prefix, only) {
   const state = app.store.state;
-  const found = searchTransactions(state.transactions, v.query,
+  let found = searchTransactions(state.transactions, v.query,
     { bucketId: fixed ?? (v.bucketId || undefined), from: v.from || undefined, to: v.to || undefined },
     { matchDays: app.tuning.transactionMatchDays });
+  if (only) found = found.filter((t) => only.ids.has(t.id));
   const shown = found.slice(0, app.tuning.transactionsShown);
   countEl.textContent = `Showing ${shown.length} of ${found.length}.`;
   if (shown.length === 0) {
@@ -111,7 +131,10 @@ function drawResults(app, results, countEl, v, fixed, prefix) {
     h('td', null, accounts.get(t.accountId) ?? ''),
     h('td', null, h('span', { class: 'raw' }, t.rawText)),
     h('td', { class: 'num' }, formatMoney(t.amountMinor, t.currency)),
-    h('td', null, countsAsCell(app, t, ctx, cats, prefix)));
+    h('td', null, countsAsCell(app, t, ctx, cats, prefix),
+      only && resolve(t, ctx).source === 'split'
+        ? h('span', { class: 'muted' }, `${formatMoney(only.partMinor.get(t.id) ?? 0, t.currency)} of this counts as ${only.categoryName}`)
+        : null));
   results.replaceChildren(h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-label': 'Matching transactions' },
     h('table', null,
       h('thead', null, h('tr', null,

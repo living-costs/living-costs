@@ -9,7 +9,7 @@
  *   rowCount:number,coversFrom:string,coversTo:string}} Batch */
 /** @typedef {{id:string,fingerprint:string,accountId:string,batchId:string,date:string,amountMinor:number,
  *   currency:string,rawText:string,rawType?:string,bucketId:string,flaggedRuleId?:string}} Transaction */
-/** @typedef {{id:string,keys:string[],displayName:string,categoryId?:string,exampleRawTexts:string[]}} Bucket */
+/** @typedef {{id:string,keys:string[],displayName:string,categoryId?:string,stoppedAfter?:string,exampleRawTexts:string[]}} Bucket */
 /** @typedef {{id:string,pattern:string,matchType:'keyAmount',amountMinor:number,
  *   expected:{count:number,period:'week'|'month'|'year'},bucketId:string,normaliserVersion:number}} Rule */
 /** @typedef {'spend'|'income'|'contribution'|'transfer'|'ignore'} CategoryKind */

@@ -1,6 +1,7 @@
 // Typical month screen: the window, stale-account notices, the summary, the uncategorised line,
 // one table each for living costs, income and contributions, and the one-offs list.
-// Every figure comes from typicalMonth; this only lays it out.
+// Every figure comes from typicalMonth; this only lays it out. A category name opens that
+// category's view (category-view.js) in place of the tables.
 
 /** @import {App} from '../main.js' */
 /** @import {Row, TypicalMonth} from '../typical.js' */
@@ -9,7 +10,26 @@ import { h } from '../dom.js';
 import { typicalMonth } from '../typical.js';
 import { formatMoney } from '../money.js';
 import { formatDate, formatMonth } from '../dates.js';
-import { help, plural } from './form.js';
+import { help, plural, focusKey, keyed } from './form.js';
+import { renderCategoryView, reset as resetCategoryView } from './category-view.js';
+
+/** Screen state that is not saved. It survives redraws; reset() clears it. */
+const ui = {
+  /** @type {string|null} the category opened from a table */
+  openId: null,
+};
+
+/**
+ * Entering the screen from the nav shows the tables, not a category opened earlier. Redraws
+ * after a store change do not call this, so they stay in the category.
+ */
+export function reset() {
+  ui.openId = null;
+  resetCategoryView();
+}
+
+/** @param {string} id */
+const openKey = (id) => `typical-open-${id}`;
 
 /**
  * @param {HTMLElement} root
@@ -19,6 +39,18 @@ import { help, plural } from './form.js';
 export function render(root, app) {
   const state = app.store.state;
   const heading = h('h2', { tabindex: '-1', class: 'visually-hidden' }, 'Typical month');
+  const openId = ui.openId;
+  if (openId) {
+    root.append(heading);
+    renderCategoryView(root, app, openId, () => {
+      ui.openId = null;
+      app.rerender();
+      // The category may have left the tables, then its heading is the place to land.
+      if (keyed(openKey(openId))) focusKey(openKey(openId));
+      else root.querySelector('h2')?.focus();
+    });
+    return;
+  }
   if (state.transactions.length === 0) {
     root.append(heading,
       h('p', null, 'Nothing to show yet. Add your statements on the Accounts screen first.'),
@@ -55,10 +87,16 @@ export function render(root, app) {
       h('button', { type: 'button', 'aria-describedby': 'typical-uncategorised', onClick: () => app.navigate('categorise') }, 'Categorise')));
   }
 
+  /** @param {string} id */
+  const onOpen = (id) => {
+    ui.openId = id;
+    app.rerender();
+    focusKey('category-heading');
+  };
   for (const part of [
-    rowsTable('typical-living', 'Living costs', tm.spend, money),
-    rowsTable('typical-income', 'Income', tm.income, money),
-    rowsTable('typical-contributions', 'Contributions', tm.contribution, money),
+    rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen),
+    rowsTable('typical-income', 'Income', tm.income, money, onOpen),
+    rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen),
     oneOffList(state, tm, money),
   ]) if (part) root.append(part);
 }
@@ -122,13 +160,15 @@ function typeText(r, money) {
 
 /**
  * One table of rows with a decorative bar sized against the largest row. Nothing when empty.
+ * Each category name is a button that opens it.
  * @param {string} id the heading's id
  * @param {string} title
  * @param {Row[]} rows largest first
  * @param {(minor: number) => string} money
+ * @param {(categoryId: string) => void} onOpen
  * @returns {HTMLElement|null}
  */
-function rowsTable(id, title, rows, money) {
+function rowsTable(id, title, rows, money, onOpen) {
   if (rows.length === 0) return null;
   const largest = Math.max(0, ...rows.map((r) => r.perMonth));
   return h('section', { 'aria-labelledby': id },
@@ -140,7 +180,10 @@ function rowsTable(id, title, rows, money) {
           h('th', { scope: 'col', class: 'num' }, 'Per month'), h('th', { scope: 'col', class: 'num' }, 'Per year'),
           h('th', { scope: 'col' }, h('span', { class: 'visually-hidden' }, 'Share of largest')))),
         h('tbody', null, ...rows.map((r) => h('tr', null,
-          h('th', { scope: 'row' }, r.name),
+          h('th', { scope: 'row' }, h('button', {
+            type: 'button', class: 'secondary name', 'data-focus-key': openKey(r.categoryId),
+            onClick: () => onOpen(r.categoryId),
+          }, r.name)),
           h('td', null, typeText(r, money)),
           h('td', { class: 'num' }, money(r.perMonth)),
           h('td', { class: 'num' }, money(r.perYear)),

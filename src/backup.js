@@ -283,6 +283,8 @@ function readBucket(o, label, p) {
   c.need(isText(displayName), 'name');
   if (has(o, 'categoryId')) c.need(isId(categoryId), 'category');
   c.need(isTextList(exampleRawTexts), 'list of examples');
+  const stoppedAfter = get(o, 'stoppedAfter');
+  if (has(o, 'stoppedAfter')) c.need(isIsoDate(stoppedAfter), 'stopped date');
   /** @type {Bucket} */
   const bucket = {
     id: isId(id) ? id : '',
@@ -291,6 +293,7 @@ function readBucket(o, label, p) {
     exampleRawTexts: isTextList(exampleRawTexts) ? [...exampleRawTexts] : [],
   };
   if (isId(categoryId)) bucket.categoryId = categoryId;
+  if (isIsoDate(stoppedAfter)) bucket.stoppedAfter = stoppedAfter;
   return bucket;
 }
 

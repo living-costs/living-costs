@@ -87,7 +87,7 @@ Mapping        { id, headerSignature, dateColumn, dateFormat, descriptionColumn,
 Batch          { id, importId, accountId, fileName, fileHash, importedAt, rowCount, coversFrom, coversTo }
 Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currency,
                  rawText, rawType?, bucketId }
-Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[] }
+Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[], stoppedAfter? }
 Rule           { id, pattern, matchType, amountMinor?, expected?: { count, period: week | month | year },
                  bucketId, normaliserVersion }
 Category       { id, name, kind, budgetType?, defaultId? }
@@ -154,8 +154,8 @@ Every window and threshold lives in one data-only module, `src/tuning.js`, which
 ```js
 export default {
   windowMonths: 12,           // typical month: latest N complete months
-  fixedActiveMonths: 2,       // fixed: a bucket with nothing in the last N complete months has ended
   variableRange: [25, 75],    // variable: typical range as percentiles
+  unusualMonthPercent: 25,    // open category: a month this % away from its row's median is marked unusual
   transactionMatchDays: 3,    // transfer pairs and overlapping-row matches: ± days
   coverageGapDays: 3,         // gap between batches in one account still counted as covered
   unusualMultiple: 5,         // unusual amount: more than N × the bucket median…
@@ -333,7 +333,7 @@ A month is complete when every non-placeholder account that has coverage both be
 
 Category totals are net of refunds. Each type is worked out as follows (Claude's call on the details):
 
-- **Fixed:** the sum over the category's buckets of each bucket's monthly equivalent: its most recent charge × its charges per year ÷ 12. Charges per year come from the bucket's history in the window. A weekly £90 standing order counts as £390 a month, not as £360 or £450, depending on whether the last month had four or five Mondays. Only buckets with a transaction in the last `fixedActiveMonths` complete months count, and older ones are treated as ended. Transactions moved into a fixed category by override are grouped by bucket in the same way.
+- **Fixed:** the sum over the category's buckets of each bucket's monthly equivalent: its most recent charge × its charges per year ÷ 12. Charges per year come from the bucket's history in the window. A weekly £90 standing order counts as £390 a month, not as £360 or £450, depending on whether the last month had four or five Mondays. Every bucket with a charge in the window counts. A bucket the user marks Stopped adds nothing, and a newer charge on import clears the mark. Each bucket's figure is never below 0. Transactions moved into a fixed category by override are grouped by bucket in the same way. The opened category view is described in `2026-11-05-open-category-design.md`.
 - **Variable:** the median of the category's monthly totals across the window. The typical range is the `variableRange` percentiles, which start as the lower and upper quartiles.
 - **Annual:** the window total ÷ the number of months in the window. Per year is the window total, scaled to 12 months.
 - **One-off:** excluded from the table and listed below it.

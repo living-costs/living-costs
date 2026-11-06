@@ -10,6 +10,7 @@ import { checkboxField, focusKey, field, help, plural } from './form.js';
 import { whileSaving } from './saving.js';
 import { cmp } from '../order.js';
 /** @import {Child} from '../dom.js' */
+import { resumedBuckets } from '../buckets.js';
 import { prepareFiles, suggestAccounts, mapFiles, planImport, commitImport } from '../import.js';
 import { applyMapping, mappingProblems } from '../mapping.js';
 import { formatMoney, currencyExponent } from '../money.js';
@@ -755,10 +756,14 @@ function onImport(app, scope, focusTo) {
     // Synchronous from the check above to here, so nothing can change the state in between.
     // The commit's own write bumps changeCount, but the flow restarts straight after it.
     const changes = commitImport(state, account, /** @type {ImportPlan} */ (flow.plan), flow.decisions, flow.planned, new Date());
+    const resumed = resumedBuckets(state, changes);
     await app.store.apply(changes);
     const batches = /** @type {{rowCount:number}[]} */ (changes.put?.batches ?? []);
     if (firstEver && batches.length > 0 && navigator.storage?.persist) navigator.storage.persist().catch(() => {});
     const rows = batches.reduce((n, b) => n + b.rowCount, 0);
-    restart(app, [`Imported ${plural(rows, 'row', 'rows')} from ${plural(batches.length, 'file', 'files')} into ${account.name}.`]);
+    restart(app, [
+      `Imported ${plural(rows, 'row', 'rows')} from ${plural(batches.length, 'file', 'files')} into ${account.name}.`,
+      ...resumed.map((b) => `${b.displayName} was marked Stopped and has charged again, so it counts again.`),
+    ]);
   }, focusTo);
 }

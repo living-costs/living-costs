@@ -60,6 +60,10 @@ export function assignBuckets(state, incoming) {
     }
     const tb = work.get(target);
     if (tb && addExample(tb, t.rawText)) changedBuckets.add(target);
+    if (tb?.stoppedAfter && t.date > tb.stoppedAfter && isCharge(state, tb, t.amountMinor)) {
+      delete tb.stoppedAfter;
+      changedBuckets.add(target);
+    }
     /** @type {Transaction} */
     const txn = { ...t, bucketId: target };
     if (flaggedRuleId) txn.flaggedRuleId = flaggedRuleId;
@@ -93,6 +97,10 @@ export function mergeBuckets(state, survivorId, mergedIds, { displayName, catego
   /** @type {Bucket} */
   const next = { id: survivor.id, keys, displayName, exampleRawTexts: examples.slice(0, 5) };
   if (categoryId !== undefined) next.categoryId = categoryId;
+  const group = [survivor, ...mergedIds.filter((id) => id !== survivorId).map((id) => state.buckets.find((x) => x.id === id))];
+  if (group.every((b) => b?.stoppedAfter)) {
+    next.stoppedAfter = group.reduce((m, b) => (/** @type {string} */ (b?.stoppedAfter) > m ? /** @type {string} */ (b?.stoppedAfter) : m), '');
+  }
   const transactions = state.transactions.filter((t) => merged.has(t.bucketId)).map((t) => ({ ...t, bucketId: survivorId }));
   const rules = state.rules.filter((r) => merged.has(r.bucketId)).map((r) => ({ ...r, bucketId: survivorId }));
   /** @type {Account[]} */
@@ -121,4 +129,57 @@ export function setBucketCategory(state, bucketId, categoryId) {
   if (!b) throw new Error(`Unknown bucket ${bucketId}`);
   const { categoryId: _old, ...rest } = b;
   return { put: { buckets: [categoryId === undefined ? rest : { ...rest, categoryId }] } };
+}
+
+/**
+ * @param {State} state
+ * @param {string} bucketId
+ * @param {string|undefined} stoppedAfter undefined removes the mark
+ * @returns {Changes}
+ */
+export function setBucketStopped(state, bucketId, stoppedAfter) {
+  const b = state.buckets.find((x) => x.id === bucketId);
+  if (!b) throw new Error(`Unknown bucket ${bucketId}`);
+  const { stoppedAfter: _old, ...rest } = b;
+  return { put: { buckets: [stoppedAfter === undefined ? rest : { ...rest, stoppedAfter }] } };
+}
+
+/**
+ * Whether an amount is a charge for this bucket: money in for an income or contribution bucket,
+ * money out for any other. A refund is not a charge.
+ * @param {State} state
+ * @param {Bucket} bucket
+ * @param {number} amountMinor
+ * @returns {boolean}
+ */
+export function isCharge(state, bucket, amountMinor) {
+  const kind = state.categories.find((c) => c.id === bucket.categoryId)?.kind;
+  return kind === 'income' || kind === 'contribution' ? amountMinor > 0 : amountMinor < 0;
+}
+
+/**
+ * The date of a bucket's latest charge among all its transactions, in any month or account.
+ * @param {State} state
+ * @param {string} bucketId
+ * @returns {string|undefined}
+ */
+export function stoppedDateFor(state, bucketId) {
+  const bucket = state.buckets.find((b) => b.id === bucketId);
+  if (!bucket) return undefined;
+  /** @type {string|undefined} */
+  let latest;
+  for (const t of state.transactions) {
+    if (t.bucketId === bucketId && isCharge(state, bucket, t.amountMinor) && (latest === undefined || t.date > latest)) latest = t.date;
+  }
+  return latest;
+}
+
+/**
+ * Buckets that were marked Stopped and no longer are after these changes.
+ * @param {State} state
+ * @param {Changes} changes
+ * @returns {Bucket[]}
+ */
+export function resumedBuckets(state, changes) {
+  return /** @type {Bucket[]} */ (changes.put?.buckets ?? []).filter((b) => !b.stoppedAfter && state.buckets.some((x) => x.id === b.id && x.stoppedAfter));
 }

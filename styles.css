@@ -275,6 +275,24 @@ dl.summary .sub { font-weight: normal; padding-left: 1rem; }
 .uncategorised p { margin: 0; }
 table.typical td.num { font-variant-numeric: tabular-nums; }
 table.typical td.bar-cell { width: 8rem; min-width: 8rem; vertical-align: middle; }
+table.typical th button.name { text-align: left; }
+
+/* An opened category. A pressed toggle (a month cell or a bucket name) is filled in. */
+button.secondary[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); }
+.category-view h4 { margin: 1rem 0 0.25rem; font-size: 1rem; }
+.account-share { margin: 0.5rem 0 0.25rem; font-weight: 600; }
+.month-cells { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.25rem 0 0.5rem; }
+.month-cells > * {
+  min-width: 5.5rem;
+  padding: 0.125rem 0.5rem;
+  text-align: center;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.month-cells .uncovered { border: 1px dashed var(--border); border-radius: 4px; }
+.month-cells .unusual { font-weight: 700; border-width: 2px; }
+/* Muted, but no further than WCAG AA contrast allows: at .6 the bucket name and muted text fail it. */
+tr.stopped { opacity: .75; }
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
