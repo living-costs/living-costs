@@ -89,7 +89,7 @@ Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currenc
                  rawText, rawType?, bucketId }
 Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[], stoppedAfter? }
 Rule           { id, pattern, matchType, amountMinor?, expected?: { count, period: week | month | year },
-                 bucketId, normaliserVersion }
+                 bucketId }
 Category       { id, name, kind, budgetType?, defaultId? }
 Override       { fingerprint, categoryId? , splits?: [{ amountMinor, categoryId }], unusualDismissed? }
 TransferPair   { fingerprintA, fingerprintB, status: confirmed | rejected }
@@ -98,7 +98,7 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
 
 - **Money:** `amountMinor` is an integer. Debits are negative and credits positive, whatever the source file's convention. Minor units come from the currency's exponent (GBP is 2), and no floats are used anywhere in parsing or arithmetic.
 - **Fingerprint (Claude's call):** a stable identity that survives undoing an import, re-importing, and restoring a backup. It's built from `accountId | date | amountMinor | rawText | n`, where `n` is the ordinal among otherwise identical rows in that account. Overrides, transfer decisions and flagged-item decisions are keyed by fingerprint, not by transaction ID. Undoing a batch leaves them dormant, and re-importing the same rows reattaches them.
-- **Storage:** IndexedDB with a schema version and migrations. Request `navigator.storage.persist()` on first import.
+- **Storage:** IndexedDB with a single data version and upgrade steps (see `2026-11-06-data-versioning-design.md`). Request `navigator.storage.persist()` on first import.
 
 ## Import
 
@@ -344,11 +344,11 @@ Category totals are net of refunds. Each type is worked out as follows (Claude's
 
 As in `CLAUDE.md`, with these additions:
 
-- **Contents:** accounts and mappings, buckets, rules (including amount rules), categories, `offeredDefaultIds`, transfer decisions, and all fingerprint-keyed overrides: category moves, splits, dismissed unusual-amount flags, and decisions on flagged amount-rule rows.
-- **Transactions and batches (changed 2026-11-05, owner's decision):** left out by default. The user re-imports the original CSVs, and fingerprints reattach every decision. Ticking **Include transactions** (unticked each time the screen opens) adds both lists, saved as `living-costs-full-backup-YYYY-MM-DD.json`. They're restored exactly as saved, without re-bucketing. Validation also checks that every transaction's account, batch, bucket and flagged rule exist, that it's in its batch's account and currency, and that each batch's row count matches the transactions it holds. Repeated fingerprints are allowed, because overlapping imports can legitimately repeat one.
-- **Schema version 2** is the only version accepted (Claude's call: no backups existed before it).
-- **Restore:** validates the schema version and structure first. It then **replaces** all data after an explicit confirmation (Claude's call: no merging). The confirmation and the notice afterwards say whether the transactions come back or the statements need importing again.
-- **Saving:** uses `showSaveFilePicker()`, with a download as the fallback. The UI shows the last backup date and warns that a Google Drive copy isn't encrypted and can include dates, amounts and descriptions.
+- **Contents:** accounts and mappings, buckets, rules (including amount rules), categories, `offeredDefaultIds`, transfer decisions, all fingerprint-keyed overrides (category moves, splits, dismissed unusual-amount flags, and decisions on flagged amount-rule rows), and every transaction and import batch.
+- **Transactions and batches (changed 2026-11-06, owner's decision):** every backup holds both lists, in the one `living-costs-backup-YYYY-MM-DD.json` file. Restoring needs no re-import, and they're restored as saved, without re-bucketing. Undo by batch and the identical-file block still work. Validation checks that every transaction's account, batch, bucket and flagged rule exist, that it's in its batch's account and currency, and that each batch's row count matches the transactions it holds. Repeated fingerprints are allowed, because overlapping imports can legitimately repeat one.
+- **Data version:** backups carry the same `DATA_VERSION` as stored data (`src/version.js`). The version 2 format is the first; no earlier backups existed. See `2026-11-06-data-versioning-design.md`.
+- **Restore:** upgrades an older backup to the current version, using the same steps as stored data, then validates the structure. A backup from a newer version is refused. It then **replaces** all data after an explicit confirmation (Claude's call: no merging).
+- **Saving:** uses `showSaveFilePicker()`, with a download as the fallback. The UI shows the last backup date and warns that a Google Drive copy isn't encrypted and holds every imported transaction, with dates, amounts and descriptions.
 
 ## Screens
 
@@ -367,7 +367,7 @@ There's a simple top navigation (owner's design). The three main screens, Help, 
     5. Back up.
     6. Later, import new statements and work through the long tail.
 
-  Help shows on first launch, with a "Got it" button that dismisses it. After that it's always available from the navigation. It shows again automatically whenever there's no data, for example after undoing every import or restoring a backup before re-importing (Claude's call). The dismissed state is stored in Settings and isn't backed up. The text is static and lives in `index.html` or a module, not in data.
+  Help shows on first launch, with a "Got it" button that dismisses it. After that it's always available from the navigation. It shows again automatically whenever there's no data, for example after undoing every import or deleting all data (Claude's call). The dismissed state is stored in Settings and isn't backed up. The text is static and lives in `index.html` or a module, not in data.
 - **Typical month:** the home screen once data exists and Help has been dismissed.
 - **Categorise:** the card.
 - **Buckets:** the all-buckets list.
@@ -386,7 +386,7 @@ Rough mockups from the design conversation are in `.superpowers/brainstorm/` (gi
 - **Real statements stay local.** They live in `fixtures/`, which is gitignored. With the owner's consent, Claude may read them to learn formats. Nothing from them (rows, names, merchants, amounts, account numbers or filenames) may appear in code, tests, docs or commits.
 - **`.gitignore`** blocks real downloads by pattern (Claude's call):
   - `*.csv` everywhere except `tests/fixtures/*.csv`
-  - backup files, `living-costs-backup*.json` and `living-costs-full-backup*.json`
+  - backup files, `living-costs-backup*.json` and `living-costs-full-backup*.json` (the second is the older full-backup name)
 
   This covers the four real export naming styles: account-number-and-date names, card-digits-and-date names, a generic `Statements.csv`, and `Transactions_Export_<Mon>_<YYYY>_<digits>.csv`.
 - **Committed fixtures are synthesized from scratch** in `tests/fixtures/`. All use `DD/MM/YYYY` dates. Together they reproduce every quirk of the four real formats:
