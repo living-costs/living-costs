@@ -34,7 +34,6 @@ const ui = {
  */
 export function reset() {
   ui.openId = null;
-  ui.ticked.clear();
   resetCategoryView();
 }
 

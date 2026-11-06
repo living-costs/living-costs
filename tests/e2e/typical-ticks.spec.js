@@ -129,10 +129,13 @@ test('axe passes with ticks, and 320px has no horizontal scroll', async () => {
   await page.setViewportSize({ width: 1280, height: 800 });
 });
 
-test('ticks clear when the screen is opened from the nav', async () => {
+test('ticks survive the nav and clear on reload', async () => {
   await expect(tick('Groceries')).toBeChecked();
   await openScreen(page, 'Categorise');
   await openScreen(page, 'Typical month');
+  await expect(tick('Groceries')).toBeChecked();
+  expect((await summaryLines()).at(-1)).toBe('Ticked (3 categories): £2,187.84'); // £900.00 + £737.84 + £550.00
+  await page.reload();
   await expect(tick('Groceries')).not.toBeChecked();
   expect((await summaryLines()).at(-1)).toBe('Left over: £720.44');
 });
