@@ -461,3 +461,87 @@ test('restore clears a half-finished import', async ({ page }) => {
   await expect(heading(page)).toHaveText('Help');
   await expectNoImportInProgress(page);
 });
+
+// --- Clear categorisation ----------------------------------------------------------------------
+
+const CLEAR_CONFIRM = 'Clear all categorisation? Your accounts, categories and transactions stay. Save a backup first if you might want it.';
+
+/** @param {Page} page */
+const clearButton = (page) => page.getByRole('button', { name: 'Clear categorisation', exact: true });
+
+test('clear categorisation: declining changes nothing', async ({ page }) => {
+  await trackCspViolations(page);
+  await page.goto('./');
+  await expect(heading(page)).toHaveText('Help');
+  await importFiles(page, { files: ['card.csv'], account: FIXTURE_ACCOUNTS.card });
+  await openScreen(page, 'Backup');
+  await expect(page.getByRole('heading', { name: 'Clear categorisation', level: 3 })).toBeVisible();
+  const before = await snapshotAll(page);
+
+  /** @type {string[]} */
+  const dialogs = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+    await dialog.dismiss();
+  });
+  await clearButton(page).click();
+  await expect.poll(() => dialogs.length).toBe(1);
+  expect(dialogs).toEqual([`confirm: ${CLEAR_CONFIRM}`]);
+  await expect(heading(page)).toHaveText('Backup');
+  await expect(clearButton(page)).toBeFocused();
+  expect(await snapshotAll(page)).toEqual(before);
+  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
+});
+
+test('clear categorisation: accepting keeps what was loaded and drops every decision', async ({ page }) => {
+  await page.addInitScript(noPicker);
+  await trackCspViolations(page);
+  await setupFixtureApp(page);
+
+  // An override and a backup date as well.
+  await openScreen(page, 'Transactions');
+  await page.getByLabel('Search transactions').fill('24/09');
+  await page.getByLabel('Counts as for AMAZON.CO.UK*115GL077M on 24/09/2026').selectOption({ label: 'Gifts' });
+  await expect.poll(async () => (await readStore(page, 'overrides')).length).toBe(1);
+  await openScreen(page, 'Backup');
+  await Promise.all([page.waitForEvent('download'), saveButton(page).click()]);
+  await expect(page.getByText(/^Last backup: /)).toBeVisible();
+  const before = await snapshotAll(page);
+  for (const name of ['rules', 'overrides', 'transferPairs']) expect(before[name].length, name).toBeGreaterThan(0);
+  expect(before.buckets.some((/** @type {any} */ b) => b.categoryId)).toBe(true);
+
+  /** @type {string[]} */
+  const dialogs = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+    await dialog.accept();
+  });
+  await clearButton(page).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Categorisation cleared.' })).toBeVisible();
+  await expect(heading(page)).toHaveText('Categorise');
+  await expect(page.locator('#card-heading')).toBeVisible();
+  expect(dialogs).toEqual([`confirm: ${CLEAR_CONFIRM}`]);
+
+  const expectCleared = async () => {
+    const after = await snapshotAll(page);
+    for (const name of ['rules', 'overrides', 'transferPairs']) expect(after[name], name).toEqual([]);
+    for (const name of ['settings', 'categories', 'batches']) expect(after[name], name).toEqual(before[name]);
+    expect(after.accounts).toEqual(before.accounts.map((/** @type {any} */ a) => ({ ...a, repaymentBucketIds: [] })));
+    const ids = (/** @type {any[]} */ ts) => ts.map((t) => t.id).toSorted();
+    expect(ids(after.transactions)).toEqual(ids(before.transactions));
+    expect(after.buckets.length).toBeGreaterThan(0);
+    for (const b of /** @type {any[]} */ (after.buckets)) {
+      expect(b.categoryId, b.displayName).toBeUndefined();
+      expect(b.keys, b.displayName).toHaveLength(1);
+    }
+  };
+  await expectCleared();
+  await expectNoAxeViolations(page);
+
+  // The backup date is kept, and survives a reload with everything else.
+  await openScreen(page, 'Backup');
+  await expect(page.getByText(/^Last backup: /)).toBeVisible();
+  await page.reload();
+  await expectCleared();
+  expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
+});

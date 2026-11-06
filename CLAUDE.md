@@ -73,6 +73,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Monthly budget view
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
+- Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions
 - Upgrade stored data and older backups silently. If an upgrade fails, offer to save a copy or delete and start afresh
 - A simple list of uncategorised items for later updates
 

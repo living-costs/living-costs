@@ -1,18 +1,21 @@
-// Backup screen: save a backup file, restore one after checking it, and delete loaded data. Restoring and deleting replace everything this app holds in this
-// browser, after the user confirms.
+// Backup screen: save a backup file, restore one after checking it, clear categorisation, and
+// delete loaded data. Each of the last three replaces what this app holds in this browser, after
+// the user confirms.
 
 /** @import {App} from '../main.js' */
 import { h } from '../dom.js';
 import { formatLocalDate } from '../dates.js';
 import { buildBackup, validateBackup, restoreChanges, backupFileName } from '../backup.js';
 import { firstRunChanges } from '../categories.js';
+import { clearDecisions } from '../clear.js';
 import { field, help } from './form.js';
 import { whileSaving, isSaving } from './saving.js';
 import { resetImport } from './import.js';
 
 const WARNING = "A backup saved to Google Drive isn't encrypted. It holds every transaction you've imported: dates, amounts, descriptions and account details.";
 const CONFIRM = 'Replace all data in this browser with this backup?';
-const DELETE_CONFIRM = 'Delete all data in this browser? Save a backup first if you might want it.';
+const CLEAR_CONFIRM = 'Clear all categorisation? Your accounts, categories and transactions stay. Save a backup first if you might want it.';
+const DELETE_CONFIRM ='Delete all data in this browser? Save a backup first if you might want it.';
 
 /** @type {{status: string, errors: string[]}} */
 let view = { status: '', errors: [] };
@@ -49,6 +52,15 @@ export function render(root, app) {
     h('h3', null, 'Restore'),
     help("Restoring replaces everything this app holds in this browser. Backups from older versions of this app are upgraded as they're restored."),
     field('Restore from backup', input),
+    h('h3', null, 'Clear categorisation'),
+    help('This removes every decision about your transactions: bucket categories, names and merges, '
+      + 'moved and split transactions, transfer decisions, amount rules and card repayments. '
+      + 'Your accounts, categories and imported transactions stay.'),
+    h('div', { class: 'actions' },
+      h('button', {
+        type: 'button', 'data-saves': true, 'data-focus-key': 'backup-clear',
+        onClick: () => clearAll(app, root, heading),
+      }, 'Clear categorisation')),
     h('h3', null, 'Delete loaded data'),
     help('This removes everything this app holds in this browser.'),
     h('div', { class: 'actions' },
@@ -194,6 +206,24 @@ async function deleteAll(app, root, focusTo) {
     resetImport();
     app.navigate('help');
     showNotice('All data deleted.');
+  }, focusTo);
+}
+
+/**
+ * After confirmation, clear every decision and keep what was loaded, then show Categorise.
+ * The confirm comes first, so declining leaves focus on the button.
+ * @param {App} app
+ * @param {HTMLElement} root
+ * @param {HTMLElement} focusTo
+ */
+async function clearAll(app, root, focusTo) {
+  if (isSaving() || !window.confirm(CLEAR_CONFIRM)) return;
+  await whileSaving(root, async () => {
+    await app.store.replaceAll(clearDecisions(app.store.state));
+    reset();
+    app.session.skipped.clear();
+    app.navigate('categorise');
+    showNotice('Categorisation cleared.');
   }, focusTo);
 }
 
