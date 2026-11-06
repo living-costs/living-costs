@@ -160,7 +160,6 @@ Found by reading the current code. The builder should confirm each one.
 ## Follow-up tasks (separate, not part of this work)
 
 - **Backup versioning and compatibility.** Decide how schema version bumps work and whether older backups can be restored or migrated. Today restore rejects every version but the current one. Until users exist, formats may change freely.
-- **Dark mode.** Make the app readable in macOS dark mode.
 
 ## Left to the builder
 
