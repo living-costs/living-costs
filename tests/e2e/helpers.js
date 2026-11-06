@@ -15,6 +15,22 @@ export async function expectNoAxeViolations(page) {
 }
 
 /**
+ * An opened view's Back to button is the only one, on the same line as the view's heading, after
+ * it with at least a 24px gap. Run at a window wide enough for both to fit on one line.
+ * @param {import('@playwright/test').Locator} heading
+ * @param {import('@playwright/test').Locator} button
+ */
+export async function expectBackBesideHeading(heading, button) {
+  await expect(button).toHaveCount(1);
+  const [hb, bb] = [await heading.boundingBox(), await button.boundingBox()];
+  if (!hb || !bb) throw new Error('heading or button not shown');
+  // The same line: the button's vertical middle is inside the heading's box.
+  expect(bb.y + bb.height / 2).toBeGreaterThan(hb.y);
+  expect(bb.y + bb.height / 2).toBeLessThan(hb.y + hb.height);
+  expect(bb.x - (hb.x + hb.width)).toBeGreaterThanOrEqual(24);
+}
+
+/**
  * Records request URLs (excluding blob: and data:) from now on.
  * @returns {() => string[]} returns the URLs seen so far
  */

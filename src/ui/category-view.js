@@ -77,7 +77,7 @@ export function explanation(detail, kind, m) {
 }
 
 /**
- * Render the opened category into `screen`, ending with Back to Typical month.
+ * Render the opened category into `screen`, with Back to Typical month beside its name.
  * @param {HTMLElement} screen
  * @param {App} app
  * @param {string} categoryId
@@ -97,18 +97,18 @@ export function renderCategoryView(screen, app, categoryId, onBack) {
   const category = state.categories.find((c) => c.id === categoryId);
   const detail = categoryDetail(state, app.tuning, categoryId);
   const name = detail?.row.name ?? category?.name ?? 'Category';
-  const backButton = h('div', { class: 'actions' }, h('button', {
-    type: 'button', class: 'secondary', 'data-focus-key': 'category-back', onClick: () => { reset(); onBack(); },
-  }, 'Back to Typical month'));
   const root = h('div', { class: 'category-view' });
   screen.append(root);
-  root.append(h('h3', { tabindex: '-1', 'data-focus-key': 'category-heading' }, name));
+  root.append(h('div', { class: 'view-heading' },
+    h('h3', { tabindex: '-1', 'data-focus-key': 'category-heading' }, name),
+    h('button', {
+      type: 'button', class: 'secondary', 'data-focus-key': 'category-back', onClick: () => { reset(); onBack(); },
+    }, 'Back to Typical month')));
 
   const emptied = view.shown;
   view.shown = !!(detail && category);
   if (!detail || !category) {
-    root.append(h('p', { tabindex: '-1', 'data-focus-key': 'category-empty' }, `Nothing counts as ${name} in these months now.`),
-      backButton);
+    root.append(h('p', { tabindex: '-1', 'data-focus-key': 'category-empty' }, `Nothing counts as ${name} in these months now.`));
     // The view has just emptied, usually by an edit made in it. Once App.rerender has put focus
     // back, move focus that is still in the view (or was lost) to the line that says why.
     if (emptied) {
@@ -153,7 +153,6 @@ export function renderCategoryView(screen, app, categoryId, onBack) {
       key: listKey, ids, bucketIds: [...new Set(txns.map((t) => t.bucketId))], categoryName: name, partMinor: detail.partMinor,
     },
   });
-  root.append(backButton);
   // An edit in the view, such as Counts as on a row, can remove the control that had focus, and
   // App.rerender then puts focus on the screen heading. Land in the Transactions section instead.
   if (lostFrom) {
