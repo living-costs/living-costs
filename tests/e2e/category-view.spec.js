@@ -2,7 +2,9 @@
 // UI. One page is set up once and shared, in order, by every test here.
 /** @import {Page, BrowserContext} from '@playwright/test' */
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, readStore } from './helpers.js';
+import {
+  expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, readStore, expectBackBesideHeading,
+} from './helpers.js';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -80,6 +82,10 @@ test('Salary opens from Typical month with the Fixed explanation', async () => {
   // One account: no Account column.
   await expect(bucketTable().getByRole('columnheader', { name: 'Account' })).toHaveCount(0);
   await expect(listRows()).toHaveCount(12);
+});
+
+test('Back to Typical month sits beside the category name, and only there', async () => {
+  await expectBackBesideHeading(viewHeading('Salary'), back());
 });
 
 test('the bucket lines add up to the figure', async () => {

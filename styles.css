@@ -157,6 +157,10 @@ button {
 
 h2 { margin: 0.5rem 0; font-size: 1.25rem; }
 h3 { margin: 1rem 0 0.25rem; font-size: 1.1rem; }
+/* An opened bucket or category: its name, then its Back to button on the same line, with a clear
+   gap between them. On a narrow window the button wraps under the name. */
+.view-heading { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2rem; row-gap: 0.5rem; margin: 1rem 0 0.25rem; }
+.view-heading h3 { margin: 0; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
 

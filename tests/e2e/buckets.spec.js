@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations, importFiles, readStore } from './helpers.js';
+import { expectNoAxeViolations, trackCspViolations, importFiles, readStore, expectBackBesideHeading } from './helpers.js';
 
 const BANK_A = { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' };
 const CARD = { new: { name: 'Credit card', kind: 'card' }, mapping: 'card' };
@@ -213,6 +213,8 @@ test('merge', async ({ page }) => {
 test('drill in', async ({ page }) => {
   await nameButton(page, 'AMAZON.CO.UK').click();
   await expect(page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 })).toBeFocused();
+  await expectBackBesideHeading(page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 }),
+    page.getByRole('button', { name: 'Back to buckets' }));
   // The bucket is fixed, so there is no Bucket filter.
   await expect(page.getByLabel('Bucket', { exact: true })).toHaveCount(0);
   const txnSearch = page.getByLabel('Search transactions');

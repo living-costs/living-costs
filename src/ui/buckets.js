@@ -428,20 +428,20 @@ function mergeDialog(app, d, chosen, cats) {
 }
 
 /**
- * One bucket's transactions, with search, and Back to buckets. Browser back does the same.
+ * One bucket's transactions, with search, and Back to buckets beside its name. Browser back does
+ * the same.
  * @param {HTMLElement} root
  * @param {App} app
  * @param {Bucket} b
  */
 function drillIn(root, app, b) {
-  root.append(h('h3', { tabindex: '-1', 'data-focus-key': 'bucket-heading' }, b.displayName));
+  root.append(h('div', { class: 'view-heading' },
+    h('h3', { tabindex: '-1', 'data-focus-key': 'bucket-heading' }, b.displayName),
+    h('button', { type: 'button', class: 'secondary', 'data-focus-key': 'bucket-back', onClick: back }, 'Back to buckets')));
   renderTransactionList(root, app, { bucketId: b.id });
   showing(() => {
     ui.drillId = null;
     app.rerender();
     focusKey(nameKey(b.id));
   });
-  root.append(h('div', { class: 'actions' }, h('button', {
-    type: 'button', class: 'secondary', 'data-focus-key': 'bucket-back', onClick: back,
-  }, 'Back to buckets')));
 }
