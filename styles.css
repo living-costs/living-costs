@@ -163,7 +163,9 @@ h3 { margin: 1rem 0 0.25rem; font-size: 1.1rem; }
 button.secondary { background: var(--surface); color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* A pointer on clickable controls. Buttons look like buttons, so no hover shade is needed. */
-button:not(:disabled), select:not(:disabled), label.choice { cursor: pointer; }
+button:not(:disabled), select:not(:disabled), label.choice,
+input:is([type="checkbox"], [type="radio"], [type="file"]):not(:disabled),
+input[type="file"]:not(:disabled)::file-selector-button { cursor: pointer; }
 
 /* Forms */
 .field { margin: 0.75rem 0; }
