@@ -7,7 +7,7 @@ export default {
   variableRange: [25, 75],    // variable: typical range as percentiles
   unusualMonthPercent: 25,    // open category: a month this % away from its row's median is marked unusual
   transactionMatchDays: 3,    // transfer pairs and overlapping-row matches: ± days
-  coverageGapDays: 3,         // gap between batches in one account still counted as covered
+  coverageGapDays: 21,        // gap between batches in one account still counted as covered
   unusualMultiple: 5,         // unusual amount: more than N × the bucket median…
   unusualMinMajor: 100,       // …and at least this many major currency units
   relatedMinWordLength: 3,    // "Looks related": shared whole word of at least N letters

@@ -132,7 +132,7 @@ Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }
 - **Nothing is ever deleted automatically.**
 - **Wrong account:** if the file's header signature doesn't match the chosen account's saved mapping, the app warns before importing.
 - **Undo** removes a batch's transactions, or every batch from one multi-file import. Fingerprint-keyed decisions stay dormant.
-- **Accounts-by-month table:** accounts as rows and months as columns. Each cell shows covered, partial or missing, with the transaction count. Placeholder accounts show "not itemised". Coverage comes from each batch's declared covered period. A gap of up to `coverageGapDays` between consecutive batches in one account counts as covered, since banks' export boundaries don't always line up.
+- **Accounts-by-month table:** accounts as rows and months as columns. Each cell shows covered, partial or missing, with the transaction count. Placeholder accounts show "not itemised". Coverage comes from each batch's declared covered period. Coverage comes from each file's first and last transaction dates, so a quiet spell where two files meet looks like a gap. A gap of up to `coverageGapDays` between consecutive batches in one account counts as covered. A partial month whose previous and next months are both covered also counts as covered (owner's decision, 2026-11-06). A missing statement that runs across a month boundary leaves both months partial, so it is still shown.
 
 ## Extending formats
 
@@ -157,7 +157,7 @@ export default {
   variableRange: [25, 75],    // variable: typical range as percentiles
   unusualMonthPercent: 25,    // open category: a month this % away from its row's median is marked unusual
   transactionMatchDays: 3,    // transfer pairs and overlapping-row matches: ± days
-  coverageGapDays: 3,         // gap between batches in one account still counted as covered
+  coverageGapDays: 21,        // gap between batches in one account still counted as covered
   unusualMultiple: 5,         // unusual amount: more than N × the bucket median…
   unusualMinMajor: 100,       // …and at least this many major currency units
   relatedMinWordLength: 3,    // "Looks related": shared whole word of at least N letters
@@ -314,7 +314,7 @@ This is the payoff screen.
 
 The window is up to the latest **`windowMonths` complete months** (12 to start), stated in the heading, for example "Based on 12 complete months, Nov 2025 to Oct 2026".
 
-A month is complete when every non-placeholder account that has coverage both before and after that month covers the whole of it (Claude's call). An account that starts later doesn't make earlier months incomplete. If fewer than `windowMonths` complete months exist, the heading says so, and annual figures are scaled by 12 ÷ n.
+A month is complete when at least one non-placeholder account covers the whole of it, by the table's rule above. A gap in one account doesn't remove the month for the others: each account counts only the months it covers itself (D1). (Owner's decision, 2026-11-06. It replaces Claude's earlier rule, under which one account's partial month removed that month for every account.) If fewer than `windowMonths` complete months exist, the heading says so, and annual figures are scaled by 12 ÷ n.
 
 ### Layout
 
