@@ -3,8 +3,8 @@
 // own month count. D8: integer minor units throughout, rounded with divRound only.
 /** @import {State, Account, Transaction, BudgetType, Category} from './types.js' */
 /** @import {ResolveContext} from './resolve.js' */
-/** @import {Window} from './coverage.js' */
-import { analysisWindow, staleAccounts } from './coverage.js';
+/** @import {Window, MonthRange} from './coverage.js' */
+import { analysisWindow, completeMonths, coveringAccounts, staleAccounts } from './coverage.js';
 import { buildContext, resolve } from './resolve.js';
 import { divRound, currenciesOf } from './money.js';
 import { cmp, compareNames } from './order.js';
@@ -12,15 +12,23 @@ import { monthOf } from './dates.js';
 
 /**
  * Figures are positive in the category's natural direction: money out for spend, money in for
- * income and contribution.
+ * income and contribution. month: the compared month's figure, on every row when comparing.
+ * monthOnly: the category has no transactions in the window, only in the compared month.
  * @typedef {{categoryId:string,name:string,budgetType:BudgetType,perMonth:number,perYear:number,
- *   range?:[number,number]}} Row
+ *   range?:[number,number],month?:number,monthOnly?:true}} Row
  */
 /** @typedef {{txn:Transaction,categoryId:string,amountMinor:number}} OneOff */
 /** @typedef {{income:number,living:number,contributions:number,share:number,leftOver:number}} Totals */
+/** @typedef {{range:MonthRange|null, compare:string|null}} TypicalChoices */
 /**
- * @typedef {{currency:string,months:string[],complete:boolean,stale:Account[],spend:Row[],income:Row[],
- *   contribution:Row[],oneOffs:OneOff[],uncategorised:{spending:number,income:number},totals:Totals}} TypicalMonth
+ * missing: accounts, in state.accounts order, with transactions counted in the window that don't
+ * cover the compared month. totals: as TypicalMonth.totals, from each row's month figure.
+ * @typedef {{month:string, missing:Account[], totals:Totals}} Comparison
+ */
+/**
+ * @typedef {{currency:string,months:string[],complete:boolean,isDefault:boolean,stale:Account[],spend:Row[],
+ *   income:Row[],contribution:Row[],oneOffs:OneOff[],uncategorised:{spending:number,income:number},
+ *   totals:Totals,compare:Comparison|null}} TypicalMonth
  */
 /** @typedef {{mixedCurrencies:true,currencies:string[]}} MixedCurrencies */
 /** @typedef {{windowMonths:number,coverageGapDays:number,variableRange:number[],unusualMonthPercent:number}} TypicalTuning */
@@ -53,7 +61,7 @@ import { monthOf } from './dates.js';
 /** @typedef {{months:Map<string,number>,total:number,buckets:Map<string,BucketCharges>}} AccountSums */
 /** @typedef {{byAccount:Map<string,AccountSums>,partMinor:Map<string,number>}} CategorySums */
 /**
- * @typedef {{window:Window,ctx:ResolveContext,monthsOf:(accountId:string)=>Set<string>,
+ * @typedef {{ctx:ResolveContext,monthsOf:(accountId:string)=>Set<string>,
  *   sums:Map<string,CategorySums>,oneOffs:OneOff[],uncategorised:{spending:number,income:number}}} Collected
  */
 
@@ -128,12 +136,12 @@ const counted = (category) => category.kind === 'spend' || category.kind === 'in
 /**
  * The one pass over the transactions behind both typicalMonth and categoryDetail: each counted
  * transaction's net per category, by account, month and bucket, plus one-offs and uncategorised.
+ * A transaction counts only in a month its account covers within `window`.
  * @param {State} state
- * @param {TypicalTuning} tuning
+ * @param {Window} window
  * @returns {Collected}
  */
-function collect(state, tuning) {
-  const window = analysisWindow(state, tuning);
+function collect(state, window) {
   const ctx = buildContext(state);
   /** @param {string} accountId */
   const monthsOf = (accountId) => window.accountMonths.get(accountId) ?? new Set();
@@ -188,7 +196,7 @@ function collect(state, tuning) {
       }
     }
   }
-  return { window, ctx, monthsOf, sums, oneOffs, uncategorised };
+  return { ctx, monthsOf, sums, oneOffs, uncategorised };
 }
 
 /**
@@ -252,39 +260,120 @@ function buildRow(category, byAccount, monthsOf, ctx, tuning) {
 }
 
 /**
+ * The summary figures, from one figure per row.
+ * @param {Record<'spend'|'income'|'contribution', Row[]>} tables
+ * @param {(row:Row)=>number} figure
+ * @returns {Totals}
+ */
+function totalsOf(tables, figure) {
+  /** @param {Row[]} rows */
+  const sum = (rows) => rows.reduce((acc, r) => acc + figure(r), 0);
+  const living = sum(tables.spend);
+  const contributions = sum(tables.contribution);
+  const income = sum(tables.income);
+  const share = living - contributions;
+  return { income, living, contributions, share, leftOver: income - share };
+}
+
+/**
+ * Each category's net in `month`, in its natural direction, over the accounts that cover that
+ * month: a second collect pass with a one-month window, so resolving is exactly as for the window.
  * @param {State} state
  * @param {TypicalTuning} tuning
+ * @param {string} month YYYY-MM
+ * @returns {{covering:Set<string>, figures:Map<string, number>}}
+ */
+function monthFigures(state, tuning, month) {
+  const covering = coveringAccounts(state, tuning, month);
+  const accountMonths = new Map(state.accounts.map((a) => [a.id, new Set(covering.has(a.id) ? [month] : [])]));
+  const { sums } = collect(state, { months: [month], complete: true, isDefault: false, accountMonths });
+  /** @type {Map<string, number>} */
+  const figures = new Map();
+  for (const [categoryId, c] of sums) {
+    let total = 0;
+    for (const s of c.byAccount.values()) total += s.months.get(month) ?? 0;
+    figures.set(categoryId, total);
+  }
+  return { covering, figures };
+}
+
+/**
+ * The typical month over the chosen window (the default window when `choices.range` is null),
+ * with every row's figure for `choices.compare` when that month is complete.
+ * @param {State} state
+ * @param {TypicalTuning} tuning
+ * @param {TypicalChoices} [choices]
  * @returns {TypicalMonth|MixedCurrencies}
  */
-export function typicalMonth(state, tuning) {
+export function typicalMonth(state, tuning, choices = { range: null, compare: null }) {
   const currencies = currenciesOf(state.transactions);
   if (currencies.length > 1) return { mixedCurrencies: true, currencies };
   const currency = currencies[0] ?? state.accounts[0]?.currency ?? 'GBP';
 
-  const { window, ctx, monthsOf, sums, oneOffs, uncategorised } = collect(state, tuning);
+  const window = analysisWindow(state, tuning, choices.range);
+  const { ctx, monthsOf, sums, oneOffs, uncategorised } = collect(state, window);
+  const compareMonth = choices.compare;
+  const month = compareMonth !== null && window.complete && completeMonths(state, tuning).includes(compareMonth)
+    ? monthFigures(state, tuning, compareMonth) : null;
+
   /** @type {Record<'spend'|'income'|'contribution', Row[]>} */
   const tables = { spend: [], income: [], contribution: [] };
   for (const [categoryId, c] of sums) {
     const category = ctx.categories.get(categoryId);
     if (!category || !counted(category)) continue;
-    tables[category.kind].push(buildRow(category, c.byAccount, monthsOf, ctx, tuning).row);
+    const { row } = buildRow(category, c.byAccount, monthsOf, ctx, tuning);
+    // Annual compares its typical figure: one month's total says little about a yearly cost.
+    if (month) row.month = row.budgetType === 'annual' ? row.perMonth : month.figures.get(categoryId) ?? 0;
+    tables[category.kind].push(row);
+  }
+  if (month) {
+    // A category seen only in the compared month still gets a row, so the month column adds up.
+    // Annual never does: its month figure is its typical one, 0.
+    for (const [categoryId, figure] of month.figures) {
+      const category = ctx.categories.get(categoryId);
+      if (sums.has(categoryId) || !category || !counted(category)) continue;
+      const budgetType = category.budgetType ?? 'variable';
+      if (budgetType === 'annual') continue;
+      tables[category.kind].push({
+        categoryId, name: category.name, budgetType, perMonth: 0, perYear: 0, month: figure, monthOnly: true,
+      });
+    }
   }
   for (const rows of Object.values(tables)) {
     rows.sort((a, b) => b.perMonth - a.perMonth || compareNames(a.name, b.name) || cmp(a.categoryId, b.categoryId));
   }
   oneOffs.sort((a, b) => cmp(a.txn.date, b.txn.date));
 
-  /** @param {Row[]} rows */
-  const sum = (rows) => rows.reduce((acc, r) => acc + r.perMonth, 0);
-  const living = sum(tables.spend);
-  const contributions = sum(tables.contribution);
-  const income = sum(tables.income);
-  const share = living - contributions;
+  /** @type {Comparison|null} */
+  let compare = null;
+  if (compareMonth !== null && month) {
+    const inWindow = new Set([...sums.values()].flatMap((c) => [...c.byAccount.keys()]));
+    compare = {
+      month: compareMonth,
+      missing: state.accounts.filter((a) => inWindow.has(a.id) && !month.covering.has(a.id)),
+      totals: totalsOf(tables, (r) => r.month ?? 0),
+    };
+  }
   return {
-    currency, months: window.months, complete: window.complete, stale: staleAccounts(state, window),
+    currency, months: window.months, complete: window.complete, isDefault: window.isDefault,
+    stale: staleAccounts(state, window),
     spend: tables.spend, income: tables.income, contribution: tables.contribution, oneOffs, uncategorised,
-    totals: { income, living, contributions, share, leftOver: income - share },
+    totals: totalsOf(tables, (r) => r.perMonth), compare,
   };
+}
+
+/**
+ * The choices that still apply to `complete`. A range with from after to, or with none of
+ * `complete` inside it, becomes null, and so does a compared month `complete` doesn't include.
+ * @param {string[]} complete the complete months, as completeMonths gives them
+ * @param {TypicalChoices} choices
+ * @returns {TypicalChoices}
+ */
+export function settleChoices(complete, choices) {
+  const { range, compare } = choices;
+  const keepRange = range !== null && range.from <= range.to
+    && complete.some((m) => m >= range.from && m <= range.to);
+  return { range: keepRange ? range : null, compare: compare !== null && complete.includes(compare) ? compare : null };
 }
 
 /**
@@ -294,14 +383,16 @@ export function typicalMonth(state, tuning) {
  * @param {State} state
  * @param {TypicalTuning} tuning
  * @param {string} categoryId
+ * @param {MonthRange|null} [range] the chosen window, as given to typicalMonth
  * @returns {CategoryDetail|null}
  */
-export function categoryDetail(state, tuning, categoryId) {
+export function categoryDetail(state, tuning, categoryId, range = null) {
   const currencies = currenciesOf(state.transactions);
   if (currencies.length > 1) return null;
   const currency = currencies[0] ?? state.accounts[0]?.currency ?? 'GBP';
 
-  const { window, ctx, monthsOf, sums } = collect(state, tuning);
+  const window = analysisWindow(state, tuning, range);
+  const { ctx, monthsOf, sums } = collect(state, window);
   const category = ctx.categories.get(categoryId);
   const c = sums.get(categoryId);
   if (!category || !counted(category) || !c) return null;

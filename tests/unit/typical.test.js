@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import tuning from '../../src/tuning.js';
 import { emptyState, applyToState } from '../../src/changes.js';
 import { addDays, monthRange } from '../../src/dates.js';
-import { typicalMonth, median, percentile, unusualFlags, categoryDetail } from '../../src/typical.js';
+import { typicalMonth, median, percentile, unusualFlags, categoryDetail, settleChoices } from '../../src/typical.js';
 
 const YEAR = monthRange('2025-11', '2026-10');
 
@@ -519,4 +519,184 @@ test('categoryDetail returns null for one-off, transfer, unknown and empty categ
     transactions: [txn('A', '2026-01-05', -100, 'lettings'), txn('E', '2026-01-05', -100, 'lettings', 'EUR')],
   });
   assert.equal(categoryDetail(mixed, tuning, 'rent'), null);
+});
+
+// Groceries: 10000 a month Nov to Jun, 6000 Jul to Oct. Rent: 90000 every month. Gifts: 48000 in Dec.
+const seasonal = build({
+  categories: [cat('groceries', 'spend', 'variable'), cat('rent', 'spend', 'fixed'), cat('gifts', 'spend', 'annual')],
+  buckets: [bucket('shop', 'groceries'), bucket('lettings', 'rent'), bucket('present', 'gifts')],
+  transactions: [
+    ...monthly('A', YEAR.slice(0, 8), '15', -10000, 'shop'),
+    ...monthly('A', YEAR.slice(8), '15', -6000, 'shop'),
+    ...monthly('A', YEAR, '01', -90000, 'lettings'),
+    txn('A', '2025-12-10', -48000, 'present'),
+  ],
+});
+
+test('a chosen range gives the typical figures over its months only', () => {
+  const tm = /** @type {any} */ (typicalMonth(seasonal, tuning, { range: { from: '2025-11', to: '2026-06' }, compare: null }));
+  assert.deepEqual(tm.months, monthRange('2025-11', '2026-06'));
+  assert.equal(row(tm, 'groceries').perMonth, 10000);
+  assert.equal(tm.isDefault, false);
+  assert.equal(tm.compare, null);
+  assert.equal(row(tm, 'groceries').month, undefined);
+});
+
+test('the default window is marked as the default', () => {
+  const tm = /** @type {any} */ (typicalMonth(seasonal, tuning));
+  assert.equal(tm.isDefault, true);
+  assert.equal(tm.compare, null);
+  assert.equal(row(tm, 'groceries').perMonth, 10000); // median of eight 10000s and four 6000s
+});
+
+test('compare: fixed and variable use the month total, annual its typical figure', () => {
+  const tm = /** @type {any} */ (typicalMonth(seasonal, tuning, { range: { from: '2025-11', to: '2026-06' }, compare: '2026-10' }));
+  assert.equal(row(tm, 'groceries').month, 6000);
+  assert.equal(row(tm, 'rent').month, 90000);
+  // divRound(48000 × 12, 8) = 72000 a year, 6000 a month.
+  assert.equal(row(tm, 'gifts').perMonth, 6000);
+  assert.equal(row(tm, 'gifts').month, row(tm, 'gifts').perMonth);
+  assert.equal(tm.compare?.month, '2026-10');
+  assert.equal(tm.compare?.totals.living, 6000 + 90000 + row(tm, 'gifts').perMonth);
+  assert.deepEqual(tm.compare?.missing, []);
+});
+
+test('comparing leaves the typical figures unchanged', () => {
+  const plain = /** @type {any} */ (typicalMonth(seasonal, tuning));
+  const compared = /** @type {any} */ (typicalMonth(seasonal, tuning, { range: null, compare: '2026-03' }));
+  const strip = (/** @type {any[]} */ rows) => rows.map(({ month, ...r }) => r);
+  assert.deepEqual(strip(compared.spend), plain.spend);
+  assert.deepEqual(compared.totals, plain.totals);
+  assert.deepEqual(compared.spend.map((/** @type {any} */ r) => r.month), [90000, 10000, 4000]);
+});
+
+test('compare is null when the month is not complete', () => {
+  assert.equal(/** @type {any} */ (typicalMonth(seasonal, tuning, { range: null, compare: '2026-11' })).compare, null);
+  const none = build({
+    batches: [],
+    categories: [cat('rent', 'spend', 'fixed')], buckets: [bucket('lettings', 'rent')],
+    transactions: [txn('A', '2026-01-01', -90000, 'lettings')],
+  });
+  const tm = /** @type {any} */ (typicalMonth(none, tuning, { range: null, compare: '2026-01' }));
+  assert.equal(tm.complete, false);
+  assert.equal(tm.compare, null);
+  assert.equal(row(tm, 'rent').month, undefined);
+});
+
+test('a category only in the compared month gets a month-only row; annual does not', () => {
+  const state = build({
+    accounts: [acct('A'), acct('B')],
+    batches: [yearBatch('A'), batch('B', '2026-08-01', '2026-10-31')],
+    categories: [cat('rent', 'spend', 'fixed'), cat('contrib', 'contribution', 'fixed'), cat('holiday', 'spend', 'annual')],
+    buckets: [bucket('lettings', 'rent'), bucket('other', 'contrib'), bucket('trip', 'holiday')],
+    transactions: [
+      ...monthly('A', YEAR, '01', -90000, 'lettings'),
+      ...monthly('B', ['2026-08', '2026-09', '2026-10'], '01', 55000, 'other'),
+      txn('A', '2026-10-10', -30000, 'trip'),
+    ],
+  });
+  const tm = /** @type {any} */ (typicalMonth(state, tuning, { range: { from: '2025-11', to: '2026-06' }, compare: '2026-10' }));
+  assert.deepEqual(row(tm, 'contrib'), {
+    categoryId: 'contrib', name: 'contrib', budgetType: 'fixed', perMonth: 0, perYear: 0, month: 55000, monthOnly: true,
+  });
+  assert.equal(row(tm, 'holiday'), undefined);
+  assert.equal(row(tm, 'rent').monthOnly, undefined);
+  assert.deepEqual(tm.compare?.totals, { income: 0, living: 90000, contributions: 55000, share: 35000, leftOver: -35000 });
+  assert.deepEqual(tm.totals, { income: 0, living: 90000, contributions: 0, share: 90000, leftOver: -90000 });
+});
+
+test('compare.missing lists window accounts that do not cover the month', () => {
+  const state = build({
+    accounts: [acct('A'), acct('B'), acct('C')],
+    batches: [yearBatch('A'), batch('B', '2026-08-01', '2026-10-31'), batch('C', '2026-08-01', '2026-10-31')],
+    categories: [cat('rent', 'spend', 'fixed'), cat('contrib', 'contribution', 'fixed')],
+    buckets: [bucket('lettings', 'rent'), bucket('other', 'contrib')],
+    transactions: [
+      ...monthly('A', YEAR, '01', -90000, 'lettings'),
+      ...monthly('B', ['2026-08', '2026-09', '2026-10'], '01', 55000, 'other'),
+    ],
+  });
+  // C covers Aug to Oct too, but has nothing counted in the window.
+  const june = /** @type {any} */ (typicalMonth(state, tuning, { range: null, compare: '2026-06' }));
+  assert.deepEqual(june.compare?.missing.map((/** @type {any} */ a) => a.id), ['B']);
+  const sept = /** @type {any} */ (typicalMonth(state, tuning, { range: null, compare: '2026-09' }));
+  assert.deepEqual(sept.compare?.missing, []);
+});
+
+test('month figures resolve splits and transfers like the typical ones', () => {
+  const state = build({
+    accounts: [acct('A'), acct('S')],
+    batches: [yearBatch('A'), yearBatch('S')],
+    categories: [cat('groceries', 'spend', 'variable'), cat('household', 'spend', 'fixed')],
+    buckets: [bucket('amazon', 'groceries'), bucket('diy', 'household'), bucket('mystery')],
+    transactions: [
+      { ...txn('A', '2026-10-03', -10000, 'amazon'), fingerprint: 'split1' },
+      { ...txn('A', '2026-10-05', -20000, 'diy'), fingerprint: 'xa' },
+      { ...txn('S', '2026-10-06', 20000, 'mystery'), fingerprint: 'xb' },
+      txn('A', '2026-10-07', -500, 'mystery'),
+    ],
+    overrides: [{ fingerprint: 'split1', splits: [{ amountMinor: -7000, categoryId: 'groceries' }, { amountMinor: -3000, categoryId: 'household' }] }],
+    transferPairs: [{ key: 'xa\nxb', fingerprintA: 'xa', fingerprintB: 'xb', status: 'confirmed' }],
+  });
+  const tm = /** @type {any} */ (typicalMonth(state, tuning, { range: null, compare: '2026-10' }));
+  assert.equal(row(tm, 'groceries').month, 7000);
+  assert.equal(row(tm, 'household').month, 3000);
+  assert.equal(tm.compare?.totals.living, 10000);
+  assert.deepEqual(tm.uncategorised, { spending: 500, income: 0 });
+});
+
+test('month columns reconcile with the compare totals', () => {
+  const state = build({
+    accounts: [acct('A'), acct('B')],
+    batches: [yearBatch('A'), batch('B', '2026-08-01', '2026-10-31')],
+    categories: [
+      cat('salary', 'income', 'fixed'), cat('groceries', 'spend', 'variable'), cat('rent', 'spend', 'fixed'),
+      cat('gifts', 'spend', 'annual'), cat('contrib', 'contribution', 'fixed'),
+    ],
+    buckets: [
+      bucket('emp', 'salary'), bucket('shop', 'groceries'), bucket('lettings', 'rent'),
+      bucket('present', 'gifts'), bucket('other', 'contrib'),
+    ],
+    transactions: [
+      ...monthly('A', YEAR, '25', 250000, 'emp'),
+      ...monthly('A', YEAR.slice(0, 8), '15', -10000, 'shop'),
+      ...monthly('A', YEAR.slice(8), '15', -6000, 'shop'),
+      ...monthly('A', YEAR, '01', -90000, 'lettings'),
+      txn('A', '2025-12-10', -48000, 'present'),
+      ...monthly('B', ['2026-08', '2026-09', '2026-10'], '01', 55000, 'other'),
+    ],
+  });
+  const tm = /** @type {any} */ (typicalMonth(state, tuning, { range: { from: '2025-11', to: '2026-06' }, compare: '2026-10' }));
+  /** @param {any[]} rows */
+  const sumMonth = (rows) => rows.reduce((acc, r) => acc + r.month, 0);
+  const t = tm.compare.totals;
+  assert.equal(sumMonth(tm.spend), t.living);
+  assert.equal(sumMonth(tm.income), t.income);
+  assert.equal(sumMonth(tm.contribution), t.contributions);
+  assert.equal(t.share, t.living - t.contributions);
+  assert.equal(t.leftOver, t.income - t.share);
+  assert.deepEqual(t, { income: 250000, living: 102000, contributions: 55000, share: 47000, leftOver: 203000 });
+  assert.ok([...tm.spend, ...tm.income, ...tm.contribution].every((r) => typeof r.month === 'number'));
+});
+
+test('settleChoices drops choices that are no longer complete', () => {
+  const complete = monthRange('2026-01', '2026-06');
+  assert.deepEqual(settleChoices(complete, { range: { from: '2026-02', to: '2026-04' }, compare: '2026-05' }),
+    { range: { from: '2026-02', to: '2026-04' }, compare: '2026-05' });
+  assert.deepEqual(settleChoices(complete, { range: { from: '2025-01', to: '2025-06' }, compare: '2026-09' }),
+    { range: null, compare: null });
+  assert.deepEqual(settleChoices(complete, { range: { from: '2026-04', to: '2026-02' }, compare: null }),
+    { range: null, compare: null });
+  // A range that still overlaps the complete months keeps its own from and to.
+  assert.deepEqual(settleChoices(complete, { range: { from: '2025-10', to: '2026-02' }, compare: null }),
+    { range: { from: '2025-10', to: '2026-02' }, compare: null });
+});
+
+test('categoryDetail with a range matches the row typicalMonth gives', () => {
+  const range = { from: '2025-11', to: '2026-06' };
+  const tm = /** @type {any} */ (typicalMonth(seasonal, tuning, { range, compare: null }));
+  const d = categoryDetail(seasonal, tuning, 'groceries', range);
+  assert.deepEqual(d?.row, row(tm, 'groceries'));
+  assert.deepEqual(d?.months, monthRange('2025-11', '2026-06'));
+  assert.deepEqual(categoryDetail(seasonal, tuning, 'groceries')?.months, YEAR);
 });

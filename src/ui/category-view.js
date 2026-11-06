@@ -5,6 +5,7 @@
 
 /** @import {App} from '../main.js' */
 /** @import {CategoryKind} from '../types.js' */
+/** @import {MonthRange} from '../coverage.js' */
 /** @import {CategoryDetail, BucketLine} from '../typical.js' */
 import { h } from '../dom.js';
 import { categoryDetail } from '../typical.js';
@@ -83,9 +84,10 @@ export function explanation(detail, kind, m) {
  * @param {App} app
  * @param {string} categoryId
  * @param {() => void} onBack
+ * @param {MonthRange|null} [range] the chosen window, if any
  * @returns {void}
  */
-export function renderCategoryView(screen, app, categoryId, onBack) {
+export function renderCategoryView(screen, app, categoryId, onBack, range = null) {
   trackFocus();
   // Focus was in this category's view before the redraw that is now drawing it again.
   const lostFrom = view.categoryId === categoryId && view.shown && focusInView;
@@ -96,7 +98,7 @@ export function renderCategoryView(screen, app, categoryId, onBack) {
   }
   const state = app.store.state;
   const category = state.categories.find((c) => c.id === categoryId);
-  const detail = categoryDetail(state, app.tuning, categoryId);
+  const detail = categoryDetail(state, app.tuning, categoryId, range);
   const name = detail?.row.name ?? category?.name ?? 'Category';
   const root = h('div', { class: 'category-view' });
   screen.append(root);
