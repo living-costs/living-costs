@@ -5,15 +5,16 @@
 
 /** @import {App} from '../main.js' */
 /** @import {CategoryKind} from '../types.js' */
-/** @import {CategoryDetail, BucketLine, AccountSeries} from '../typical.js' */
+/** @import {CategoryDetail, BucketLine} from '../typical.js' */
 import { h } from '../dom.js';
 import { categoryDetail } from '../typical.js';
 import { setBucketStopped, stoppedDateFor } from '../buckets.js';
 import { formatMoney } from '../money.js';
-import { formatDate, formatMonth, monthOf } from '../dates.js';
+import { formatDate, monthOf } from '../dates.js';
 import { help, plural, focusKey, KIND_WORDS } from './form.js';
 import { whileSaving, isSaving } from './saving.js';
 import { renderTransactionList, listView } from './transactions.js';
+import { monthGrid } from './month-grid.js';
 
 /**
  * View state that is not saved: the category shown, the month cell pressed, if any, and whether
@@ -133,12 +134,18 @@ export function renderCategoryView(screen, app, categoryId, onBack) {
 
   root.append(h('p', { id: 'category-explanation' }, explanation(detail, category.kind, money)));
 
+  const shares = new Map(detail.accounts.map((a) => [a.accountId, a.share]));
+  const annual = detail.row.budgetType === 'annual';
   root.append(h('section', { 'aria-labelledby': 'category-each-month' },
     h('h4', { id: 'category-each-month' }, 'Each month'),
-    // One grid for every account, so a month's cells line up down the page. Every account has a
-    // cell for each month in the window; the CSS reads the column count from data-months.
-    h('div', { class: 'month-grid', 'data-months': String(detail.accounts[0]?.cells.length ?? 0) },
-      ...detail.accounts.flatMap((a) => monthCells(app, a, several, accountNames, money, detail.row.budgetType === 'annual')))));
+    monthGrid({
+      prefix: 'category', series: detail.accounts, money, pressed: view.month,
+      label: (accountId) => {
+        const share = money(shares.get(accountId) ?? 0);
+        return `${accountNames.get(accountId) ?? ''}: ${annual ? `${share} a year` : share}`;
+      },
+      onToggle: (next) => { view.month = next; app.rerender(); },
+    })));
 
   if (detail.row.budgetType === 'fixed') root.append(bucketSection(app, root, detail, money, several, accountNames, bucketNames, listKey));
 
@@ -162,36 +169,6 @@ export function renderCategoryView(screen, app, categoryId, onBack) {
       if (!active || active === document.body || active === screen.querySelector('h2')) focusKey('category-transactions');
     });
   }
-}
-
-/**
- * One account's month cells: a toggle button per covered month, and "not covered" for the rest.
- * With several accounts, a label with the account's share comes first.
- * @param {App} app
- * @param {AccountSeries} a
- * @param {boolean} several
- * @param {Map<string, string>} accountNames
- * @param {(minor: number) => string} money
- * @param {boolean} annual the share is a yearly figure
- * @returns {HTMLElement[]}
- */
-function monthCells(app, a, several, accountNames, money, annual) {
-  const labelId = several ? `category-account-${a.accountId}` : 'category-each-month';
-  const cells = h('div', { class: 'month-cells', role: 'group', 'aria-labelledby': labelId }, ...a.cells.map((c) => {
-    if (c.total === null) return h('span', { class: 'muted uncovered' }, formatMonth(c.month), h('br'), 'not covered');
-    const on = view.month?.month === c.month && view.month.accountId === a.accountId;
-    return h('button', {
-      type: 'button', class: c.unusual ? 'secondary unusual' : 'secondary', 'aria-pressed': String(on),
-      'data-focus-key': `category-month-${a.accountId}-${c.month}`,
-      onClick: () => {
-        view.month = on ? null : { month: c.month, accountId: a.accountId };
-        app.rerender();
-      },
-    }, formatMonth(c.month), h('br'), money(c.total), c.unusual ? h('span', { class: 'visually-hidden' }, ', unusual') : null);
-  }));
-  if (!several) return [cells];
-  const share = annual ? `${money(a.share)} a year` : money(a.share);
-  return [h('p', { id: labelId, class: 'account-share' }, `${accountNames.get(a.accountId) ?? ''}: ${share}`), cells];
 }
 
 /**

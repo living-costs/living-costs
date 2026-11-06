@@ -5,9 +5,10 @@
 /** @import {App} from '../main.js' */
 /** @import {Bucket, Category, Transaction, Changes} from '../types.js' */
 /** @import {BucketCount} from '../progress.js' */
+/** @import {PressedMonth} from './month-grid.js' */
+/** @typedef {ReturnType<typeof bucketMonths>} BucketMonths */
 import { h } from '../dom.js';
-import { analysisWindow } from '../coverage.js';
-import { bucketCounts, cardQueue, progress, percentDone, monthlyFigure } from '../progress.js';
+import { bucketCounts, cardQueue, progress, percentDone, monthlyFigure, bucketMonths } from '../progress.js';
 import { relatedBuckets, unusualTransactions, repeatingAmounts } from '../insights.js';
 import { createAmountRule, resolveFlag } from '../rules.js';
 import { mergeBuckets, setBucketCategory } from '../buckets.js';
@@ -16,8 +17,10 @@ import { setCategoryOverride, dismissUnusual } from '../overrides.js';
 import { combine } from '../changes.js';
 import { formatMoney, soleCurrency } from '../money.js';
 import { cmp } from '../order.js';
-import { formatDate } from '../dates.js';
+import { formatDate, monthOf } from '../dates.js';
 import { whileSaving } from './saving.js';
+import { monthGrid } from './month-grid.js';
+import { renderTransactionList } from './transactions.js';
 import { focusKey, plural, valueOf, field, emptyDraft, categoryForm, categoryHint } from './form.js';
 
 /**
@@ -48,12 +51,14 @@ const ui = {
   repeatCount: '1',
   /** @type {{field: 'name'|'count', message: string}|null} */
   repeatError: null,
+  /** @type {PressedMonth|null} the Each month cell pressed, if any */
+  month: null,
 };
 
 /** @param {string} bucketId */
 function resetUi(bucketId) {
   Object.assign(ui, {
-    bucketId, newOpen: false, draft: emptyDraft(), newError: '',
+    bucketId, month: null, newOpen: false, draft: emptyDraft(), newError: '',
     moveId: null, moveTarget: '', moveError: '', repeatAmount: null, repeatName: '', repeatCount: '1', repeatError: null,
   });
 }
@@ -170,10 +175,13 @@ function card(app, bucket, counts) {
   });
 
   const current = bucket.categoryId ? cats.find((c) => c.id === bucket.categoryId) : undefined;
+  const count = counts.get(bucket.id);
+  const months = count ? bucketMonths(state, app.tuning, count) : undefined;
   /** @type {(HTMLElement|null)[]} */
   const children = [
     h('h3', { id: 'card-heading' }, bucket.displayName),
-    h('p', { id: 'card-summary' }, summaryText(app, counts.get(bucket.id))),
+    h('p', { id: 'card-summary' }, summaryText(count, months)),
+    count && months ? eachMonth(app, bucket, count, months) : null,
     current ? h('p', null, `Category: ${current.name}`) : null,
     examples(all),
     categoryGroup(app, cats, assign),
@@ -194,23 +202,60 @@ function card(app, bucket, counts) {
 }
 
 /**
- * "£X over N months · M transactions · about £Y a month", from the counted transactions. Each
- * account counts over its own months (D1), so "over N months" is left out when the bucket's
- * accounts count different numbers of months.
- * @param {App} app
+ * "£X over N months · M transactions · about £Y a month", from the counted transactions not
+ * moved to another category. Each account counts over its own months (D1), so "over N months" is
+ * left out when the bucket's accounts count different numbers of months.
  * @param {BucketCount|undefined} count
+ * @param {BucketMonths|undefined} months
  * @returns {string}
  */
-function summaryText(app, count) {
-  if (!count) return 'None of its transactions fall in the months being counted.';
-  const { accountMonths } = analysisWindow(app.store.state, app.tuning);
-  const { perMonth, months: n } = monthlyFigure(count, accountMonths);
-  const months = n === null ? '' : ` over ${plural(n, 'month', 'months')}`;
-  const txns = plural(count.txns.length, 'transaction', 'transactions');
-  const currency = soleCurrency(count.txns);
-  if (!currency) return `${txns}${months}`;
+function summaryText(count, months) {
+  if (!count || !months) return 'None of its transactions fall in the months being counted.';
+  const kept = months.kept;
+  if (!kept) return 'Every one of its transactions in the months being counted is moved to another category.';
+  const { perMonth, months: n } = monthlyFigure(kept, months.accountMonths);
+  const over = n === null ? '' : ` over ${plural(n, 'month', 'months')}`;
+  const txns = plural(kept.txns.length, 'transaction', 'transactions');
+  const currency = soleCurrency(kept.txns);
+  if (!currency) return `${txns}${over}`;
   const monthly = n !== 0 ? ` · about ${formatMoney(perMonth, currency)} a month` : '';
-  return `${formatMoney(count.absTotal, currency)}${months} · ${txns}${monthly}`;
+  return `${formatMoney(kept.absTotal, currency)}${over} · ${txns}${monthly}`;
+}
+
+/**
+ * Each month: the bucket's monthly totals, without transactions moved to another category.
+ * Pressing a month lists its transactions, moved ones included, each with Counts as. Amounts are
+ * shown only when the bucket's counted transactions share one currency.
+ * @param {App} app
+ * @param {Bucket} bucket
+ * @param {BucketCount} count
+ * @param {BucketMonths} months
+ * @returns {HTMLElement|null}
+ */
+function eachMonth(app, bucket, count, months) {
+  const currency = soleCurrency(count.txns);
+  if (!currency) return null;
+  const pressed = ui.month;
+  if (pressed && !months.accounts.some((a) => a.accountId === pressed.accountId
+    && a.cells.some((c) => c.month === pressed.month && c.total !== null))) ui.month = null;
+  const accountNames = new Map(app.store.state.accounts.map((a) => [a.id, a.name]));
+  const section = h('section', { 'aria-labelledby': 'card-each-month' },
+    h('h4', { id: 'card-each-month' }, 'Each month'),
+    monthGrid({
+      prefix: 'card', series: months.accounts, pressed: ui.month,
+      money: (minor) => formatMoney(minor, currency),
+      label: (accountId) => accountNames.get(accountId) ?? '',
+      onToggle: (next) => { ui.month = next; app.rerender(); },
+    }));
+  const month = ui.month;
+  if (month) {
+    const ids = new Set(count.txns.filter((t) => t.accountId === month.accountId && monthOf(t.date) === month.month).map((t) => t.id));
+    renderTransactionList(section, app, {
+      bucketId: bucket.id,
+      only: { key: `card:${bucket.id}`, ids, bucketIds: [bucket.id], categoryName: '', partMinor: new Map() },
+    });
+  }
+  return section;
 }
 
 /**
