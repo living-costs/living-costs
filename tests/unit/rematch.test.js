@@ -74,6 +74,22 @@ test('a rule pattern with several new keys takes the most common at the rule amo
   assert.deepEqual(r.buckets[0].keys, ['A', 'B']);
 });
 
+test('a rule pattern counts only the transactions it routes, not others in the rule bucket', () => {
+  const first = (/** @type {string} */ s) => s.split(' ')[0];
+  const second = (/** @type {string} */ s) => s.split(' ')[1];
+  const d = data({
+    buckets: [bucket('b1', ['P']), bucket('b2', ['Q'])],
+    rules: [{ id: 'r1', pattern: 'P', matchType: 'keyAmount', amountMinor: -500, bucketId: 'b2' }],
+    transactions: [
+      tx('1', 'P A', 'b1', -200), tx('2', 'P B', 'b2', -500),
+      // Same bucket and amount, but under the bucket's other old key Q: not routed by the rule.
+      tx('3', 'Q A', 'b2', -500), tx('4', 'Q A', 'b2', -500),
+    ],
+  });
+  const r = rematch(d, first, second);
+  assert.equal(r.rules[0].pattern, 'B');
+});
+
 test('a bucket with only examples gets keys from them', () => {
   const d = data({ buckets: [bucket('b1', ['OLD'], ['Shop One'])] });
   const r = rematch(d, () => 'OLD', (s) => s.toUpperCase());

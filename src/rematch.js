@@ -62,8 +62,10 @@ export function rematch(data, oldN, newN) {
     if (candidates.length === 1) return { ...r, pattern: candidates[0] };
     /** @type {Map<string, number>} */
     const counts = new Map();
+    // Only the transactions this rule routes: in its bucket, at its amount, under its old key.
     for (const t of data.transactions) {
       if (t.bucketId !== r.bucketId || t.amountMinor !== r.amountMinor) continue;
+      if (oldN(t.rawText, t.rawType) !== r.pattern) continue;
       const nk = newN(t.rawText, t.rawType);
       if (ts.has(nk)) counts.set(nk, (counts.get(nk) ?? 0) + 1);
     }
