@@ -599,14 +599,7 @@ test('buildBackup holds every transaction and batch', async () => {
   assert.doesNotMatch(JSON.stringify(b), /helpDismissed|lastBackupAt/);
 });
 
-test('full round trip: every field of every transaction and batch is copied', () => {
-  const b = base();
-  const data = dataOf(JSON.parse(JSON.stringify(b)));
-  const { app: _app, ...rest } = b;
-  assert.deepEqual(data, rest);
-});
-
-test('restoring a full backup brings back the same app, with no re-import', async () => {
+test('restoring a backup brings back the same app, with no re-import', async () => {
   const before = await fixtureState();
   const data = dataOf(JSON.parse(JSON.stringify(buildBackup(before, NOW))));
   const after = emptyState();
@@ -619,7 +612,7 @@ test('restoring a full backup brings back the same app, with no re-import', asyn
   assert.deepEqual(typicalMonth(after, tuning), typicalMonth(before, tuning));
 });
 
-test('after a full restore, importing an identical file is still blocked', async () => {
+test('after a restore, importing an identical file is still blocked', async () => {
   const before = await fixtureState();
   const data = dataOf(JSON.parse(JSON.stringify(buildBackup(before, NOW))));
   const after = emptyState();

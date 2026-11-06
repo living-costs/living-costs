@@ -1,5 +1,7 @@
 // Normaliser v1: raw bank description -> bucket key. Prefer too many buckets over wrong merges.
 
+// Names the frozen copies only (src/normalise-vN.js). Changing it triggers nothing: a rematch runs
+// only for a DATA_VERSION step in src/migrate.js that sets rematchFrom.
 export const NORMALISER_VERSION = 1;
 
 /** Processor and bank prefixes, stripped repeatedly from the start. */

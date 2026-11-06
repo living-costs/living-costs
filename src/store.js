@@ -14,7 +14,7 @@ import { validateBackup, restoreChanges } from './backup.js';
 /**
  * What opening the saved data gave: a store to start the app on, data from a newer version of the
  * app (left alone), or older data that could not be upgraded (left alone). `copy` is that data as
- * it was stored, in backup format, and `deleteAll` empties every store.
+ * it was stored, in backup format, and `deleteAll` empties every store, then closes the database.
  * @typedef {{kind: 'ready', store: Store} | {kind: 'newer'}
  *   | {kind: 'failed', errors: string[], copy: Record<string, unknown>, deleteAll: () => Promise<void>}} Opened
  */
@@ -48,7 +48,11 @@ export async function openStore(now = new Date()) {
       kind: 'failed',
       errors: result.errors,
       copy: rowsAsBackup(rows, Number.isNaN(version) ? 1 : version, now),
-      deleteAll: () => write(db, {}, STORE_NAMES),
+      // Closed once cleared, so the fresh start that follows is the only open connection.
+      deleteAll: async () => {
+        await write(db, {}, STORE_NAMES);
+        db.close();
+      },
     };
   }
   const changes = restoreChanges(result.data, thisBrowser(rows), { keepLastBackup: true });
