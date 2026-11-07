@@ -35,8 +35,8 @@ const today = (page) => page.evaluate(() => {
   return { iso: `${y}-${m}-${day}`, shown: `${day}/${m}/${y}` };
 });
 
-/** The Per month cell of Subscriptions in the typical month's Living costs table. @param {Page} page */
-const subscriptionsPerMonth = (page) => page.getByRole('table', { name: 'Living costs', exact: true }).getByRole('row')
+/** The Per month cell of Subscriptions in the typical month's Regular spending table. @param {Page} page */
+const subscriptionsPerMonth = (page) => page.getByRole('table', { name: 'Regular spending', exact: true }).getByRole('row')
   .filter({ has: page.getByRole('rowheader', { name: 'Subscriptions', exact: true }) }).getByRole('cell').nth(2);
 
 /** Fresh app, on the Backup screen. @param {Page} page */

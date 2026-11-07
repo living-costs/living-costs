@@ -286,9 +286,9 @@ table.buckets input.select { width: 1.5rem; height: 1.5rem; min-height: 0; margi
 
 /* Typical month */
 hgroup p { margin: 0 0 0.5rem; }
-/* The summary card: the screen's main figures. Left over is the total under a solid rule; Ticked
-   is a second total, set apart by a gap and a dashed accent rule. Each row is one size: the
-   sub lines smaller, the totals larger. */
+/* The summary card: the screen's main figures. Remaining sits under a solid rule with its parts
+   below it; Ticked is a second total, set apart by a gap and a dashed accent rule. Each row is
+   one of two sizes: the main lines, Remaining and Ticked included, and the smaller sub lines. */
 .summary-panel {
   display: inline-block;
   max-width: 100%;
@@ -309,14 +309,15 @@ dl.summary dt { font-weight: 600; }
 dl.summary dd { margin: 0; padding-left: 2.5rem; text-align: right; font-variant-numeric: tabular-nums; }
 dl.summary .sub { font-weight: normal; font-size: 1rem; color: var(--muted); }
 dl.summary dt.sub { padding-left: 1rem; }
-dl.summary .total, dl.summary .ticked { margin-top: 0.25rem; padding-top: 0.4rem; font-size: 1.5rem; font-weight: 700; }
-dl.summary .total { border-top: 2px solid var(--text); }
+dl.summary .rule, dl.summary .ticked { margin-top: 0.25rem; padding-top: 0.4rem; }
+dl.summary .rule { border-top: 2px solid var(--text); }
 dl.summary .ticked { margin-top: 1.25rem; border-top: 2px dashed var(--accent); color: var(--accent); }
-/* A narrow window: less padding and smaller totals, so the list fits a 320px screen unscrolled. */
+/* The note under "not accounted for": its own line, wrapping within the label column. */
+:is(dl.summary, table.summary-compare) .note { display: block; width: 0; min-width: 100%; font-size: 0.8rem; font-style: italic; }
+/* A narrow window: less padding, so the list fits a 320px screen unscrolled. */
 @media (max-width: 30rem) {
   .summary-panel { padding: 0.5rem 0.75rem 0.75rem; }
   dl.summary dd { padding-left: 1rem; }
-  dl.summary .total, dl.summary .ticked { font-size: 1.25rem; }
 }
 .uncategorised { align-items: center; }
 .uncategorised p { margin: 0; }
@@ -341,13 +342,14 @@ table.summary-compare td.num { font-weight: normal; }
 table.summary-compare thead th { font-size: 0.85rem; color: var(--muted); }
 table.summary-compare th[scope=row] { padding-left: 0; }
 table.summary-compare tr.sub :is(th, td) { font-weight: normal; font-size: 1rem; color: var(--muted); }
-table.summary-compare tr.sub th { padding-left: 1rem; }
-/* The gap before Ticked is Left over's bottom padding, since a row's own padding sits inside its rule. */
-/* Baseline, so the smaller Change text lines up with the larger figures beside it. */
+table.summary-compare tr.sub th, table.summary-compare tr.note-row td { padding-left: 1rem; }
+table.summary-compare tr.note-row td { padding-top: 0; }
+/* Baseline, so each figure lines up with the first line of its label. */
 table.summary-compare :is(th, td) { vertical-align: baseline; }
-table.summary-compare tr:is(.total, .ticked) :is(th, td) { padding-top: 0.4rem; font-size: 1.5rem; font-weight: 700; }
-table.summary-compare tr:is(.total, .ticked) :is(td.change, td.same) { font-size: 1.15rem; }
-table.summary-compare tr.total :is(th, td) { border-top: 2px solid var(--text); padding-bottom: 1.25rem; }
+table.summary-compare tr:is(.rule, .ticked) :is(th, td) { padding-top: 0.4rem; }
+table.summary-compare tr.rule :is(th, td) { border-top: 2px solid var(--text); }
+/* The gap before Ticked is the row above's bottom padding, since a row's own padding sits inside its rule. */
+table.summary-compare tr:has(+ tr.ticked) :is(th, td) { padding-bottom: 1.25rem; }
 table.summary-compare tr.ticked :is(th, td) { border-top: 2px dashed var(--accent); color: var(--accent); }
 table.typical td.same, table.summary-compare td.same { color: var(--muted); }
 table.typical td.change, table.summary-compare td.change { font-weight: 600; }

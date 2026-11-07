@@ -55,28 +55,45 @@ test('heading and window', async () => {
 
 test('rows show the reconciled figures', async () => {
   expect(await cells('Income', 'Salary')).toEqual({ type: 'Fixed', perMonth: '£2,500.00', perYear: '£30,000.00' });
-  expect((await cells('Living costs', 'Subscriptions')).perMonth).toBe('£89.97');
+  expect((await cells('Regular spending', 'Subscriptions')).perMonth).toBe('£89.97');
   expect((await cells('Contributions', 'Contributions from others')).perMonth).toBe('£550.00');
-  expect(await cells('Living costs', 'Housing (rent or mortgage)')).toMatchObject({ type: 'Fixed', perMonth: '£900.00' });
-  expect(await cells('Living costs', 'Gifts')).toEqual({ type: 'Annual (£480.00 a year)', perMonth: '£40.00', perYear: '£480.00' });
-  expect(await cells('Living costs', 'Other Card (not itemised)'))
+  expect(await cells('Regular spending', 'Housing (rent or mortgage)')).toMatchObject({ type: 'Fixed', perMonth: '£900.00' });
+  expect(await cells('Regular spending', 'Gifts')).toEqual({ type: 'Annual (£480.00 a year)', perMonth: '£40.00', perYear: '£480.00' });
+  expect(await cells('Regular spending', 'Other Card (not itemised)'))
     .toMatchObject({ type: 'Variable (£130.00–£160.00)', perMonth: '£147.50' });
-  expect(await cells('Living costs', 'Groceries')).toMatchObject({ type: 'Variable (£650.14–£898.40)', perMonth: '£737.84' });
+  expect(await cells('Regular spending', 'Groceries')).toMatchObject({ type: 'Variable (£650.14–£898.40)', perMonth: '£737.84' });
   expect((await cells('Income', 'Other income')).perMonth).toBe('£104.14');
   // Largest first.
-  await expect(table('Living costs').getByRole('rowheader').first()).toHaveText('Housing (rent or mortgage)');
+  await expect(table('Regular spending').getByRole('rowheader').first()).toHaveText('Housing (rent or mortgage)');
 });
 
 test('summary with contributions', async () => {
   await expect(summary('Income')).toHaveText('£2,604.14');
-  await expect(summary('Living costs')).toHaveText('£2,433.70');
+  await expect(summary('Regular spending')).toHaveText('£2,433.70');
   await expect(summary('less contributions from others')).toHaveText('£550.00');
   await expect(summary('your share')).toHaveText('£1,883.70');
-  await expect(summary('Left over')).toHaveText('£720.44');
+  await expect(summary('Remaining')).toHaveText('£720.44');
 });
 
-test('one-offs are listed apart from living costs', async () => {
-  await expect(row('Living costs', 'Big one-offs')).toHaveCount(0);
+test('Remaining is broken down into its parts, a dash for a part with no transactions', async () => {
+  const lines = await page.locator('dl.summary').evaluate((dl) => [...dl.querySelectorAll('dt')]
+    .map((dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`));
+  // One-offs: £2,400.00 over 12 months. Uncategorised: £32.99 of spending, as each account's
+  // per month. Not accounted for: £720.44 − £200.00 − £2.75.
+  expect(lines.slice(lines.indexOf('Remaining: £720.44'))).toEqual([
+    'Remaining: £720.44', 'saved: —none', 'one-offs: £200.00', 'uncategorised: £2.75', 'ignored: —none',
+    'not accounted fortypical month vs actual months, and money in accounts not tracked: £517.69', 'Ticked: —none',
+  ]);
+  await expect(page.locator('dl.summary dt .note')).toHaveText('typical month vs actual months, and money in accounts not tracked');
+  // Remaining and Ticked are the size of Regular spending, not larger.
+  const size = (/** @type {string} */ label) => page.locator('dl.summary dt').filter({ hasText: new RegExp(`^${label}$`) })
+    .evaluate((dt) => getComputedStyle(dt).fontSize);
+  expect(await size('Remaining')).toBe(await size('Regular spending'));
+  expect(await size('Ticked')).toBe(await size('Regular spending'));
+});
+
+test('one-offs are listed apart from regular spending', async () => {
+  await expect(row('Regular spending', 'Big one-offs')).toHaveCount(0);
   const oneOffs = page.getByRole('list', { name: 'One-offs' });
   await expect(oneOffs.getByRole('listitem')).toHaveCount(1);
   await expect(oneOffs).toContainText('Big one-offs');
@@ -87,7 +104,7 @@ test('bars are decorative and sized against the largest row', async () => {
   const bars = page.locator('#screen span.bar');
   expect(await bars.count()).toBeGreaterThan(0);
   for (const bar of await bars.all()) await expect(bar).toHaveAttribute('aria-hidden', 'true');
-  const width = (category) => row('Living costs', category).locator('span.bar').evaluate((el) => el.style.width);
+  const width = (category) => row('Regular spending', category).locator('span.bar').evaluate((el) => el.style.width);
   expect(await width('Housing (rent or mortgage)')).toBe('100%');
   // Groceries £737.84 of Housing £900.00 is 81.98%, rounded to 82%.
   expect(await width('Groceries')).toBe('82%');

@@ -72,7 +72,8 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Default categories from the owner-editable `src/default-categories.js`. New entries are offered once to existing users, and their choices are never overwritten
 - Monthly budget view
 - Typical month: choose the window's first and last month, and compare one month against it
-- Savings: a Saving category kind and a Savings account kind, shown as a separate total on Typical month
+- Savings: a Saving category kind and a Savings account kind, shown as saved under Remaining on Typical month
+- Typical month's Remaining broken down into saved, one-offs, uncategorised, ignored and not accounted for
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions

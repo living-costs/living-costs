@@ -16,8 +16,8 @@ const FAILED = "Your saved data couldn't be upgraded to this version of the app.
 /** @param {Page} page */
 const heading = (page) => page.locator('#screen h2');
 
-/** The Per month cell of Subscriptions in the typical month's Living costs table. @param {Page} page */
-const subscriptionsPerMonth = (page) => page.getByRole('table', { name: 'Living costs', exact: true }).getByRole('row')
+/** The Per month cell of Subscriptions in the typical month's Regular spending table. @param {Page} page */
+const subscriptionsPerMonth = (page) => page.getByRole('table', { name: 'Regular spending', exact: true }).getByRole('row')
   .filter({ has: page.getByRole('rowheader', { name: 'Subscriptions', exact: true }) }).getByRole('cell').nth(2);
 
 test('version 1 data upgrades silently on load', async ({ page }) => {

@@ -15,7 +15,7 @@ The question the app answers: **what does my standard of living actually cost pe
 
 ## Goals
 
-- A **typical month** view: income, living costs and what's left over, with one row per category, monthly and yearly figures, and irregular spending spread fairly.
+- A **typical month** view: income, regular spending and what remains, with one row per category, monthly and yearly figures, and irregular spending spread fairly.
 - A quick picture early on. You can stop categorising once most of the money is covered and see a useful result. Then you can work through the long tail later.
 - Correct totals: transfers excluded, card spending counted at purchase, refunds offsetting spending, and no double counting.
 - Statement data never leaves the browser, and users can trust that without taking the owner's word for it.
@@ -331,17 +331,25 @@ A month is complete when at least one non-placeholder account covers the whole o
 
 ### Layout
 
-- **Summary:** figures at the top: **Income**, **Living costs**, and **Left over** (income minus living costs). When any contribution-kind category has transactions, Living costs expands to three lines: "Living costs £X", "less contributions from others £Y", and "your share £Z". Left over is then income minus your share.
+- **Summary:** figures at the top: **Income**, **Regular spending**, and **Remaining** (income minus regular spending). When any contribution-kind category has transactions, Regular spending expands to three lines: "Regular spending £X", "less contributions from others £Y", and "your share £Z". Remaining is then income minus your share. Remaining is the same size as Regular spending, under a solid rule. (Owner's decision, 2026-11-07: "Regular spending" and "Remaining" replace "Living costs" and "Left over", which no longer described the figures once savings were counted. The main table's heading follows. The app is still called Living Costs.)
+- **Remaining's parts:** under Remaining, always shown, each net money out per month:
+  - **saved:** the Savings table's total
+  - **one-offs:** One-off categories, net of one-off income
+  - **uncategorised:** uncategorised spending minus uncategorised income
+  - **ignored:** Ignore-kind categories
+  - **not accounted for:** Remaining minus the four parts above, with the note "typical month vs actual months, and money in accounts not tracked". It can be negative.
+
+  A part with no transactions shows a dash, read as "none", not £0.00. One-offs, uncategorised and ignored follow D1: each account's total over its own months, added up. When comparing a month, each part shows that month's figure and the change. A part with no transactions in either counts as 0 against the other, and with none in both, every column shows a dash. Transfers are in no part. A transfer to an account that isn't tracked counts under "ignored" only when it's in an Ignore category. Otherwise it falls into "not accounted for". The owner checks by eye that "not accounted for" isn't large, and there's no warning. (Owner's decision, 2026-11-07. It replaces the separate Savings line, which counted saving outside Left over.)
 - **Main table:** one row per spend category, largest first, with:
   - the budget type, plus the typical range for Variable or the yearly total for Annual
   - **Per month** and **Per year**
   - a decorative proportional bar
 
   Income categories go in their own table, using the same types. Contribution categories go in a third small table, also using the same types. The three tables' columns line up: each column takes the width of its widest cell across all three.
-- **Ticked total:** each row starts with a tick box. While any are ticked, the summary ends with "Ticked (n categories)", the plain sum of the ticked rows' per-month figures, whichever table they are in (and their month figure and change when comparing a month). A ticked category that isn't in the tables for the current window isn't counted. Ticks aren't saved: like the window, they survive opening a category, changing the window and the nav, and clear when the page reloads. (Owner's request, 2026-11-06.)
-- **One-offs:** a separate list below the main table. Each row shows the transaction, its category, its month and its amount. One-offs are excluded from Living costs.
-- **Uncategorised line:** "Uncategorised: £X spending and £Y income over the window are not included", linking to the categorise card. It covers income too, so "Left over" never looks complete while income is missing.
-- **Excluded:** transfers, Ignore-kind categories, and incomplete months.
+- **Ticked total:** each row starts with a tick box. Ticked is the same size as Regular spending, set apart by a dashed accent rule. While any are ticked, the summary ends with "Ticked (n categories)", the plain sum of the ticked rows' per-month figures, whichever table they are in (and their month figure and change when comparing a month). A ticked category that isn't in the tables for the current window isn't counted. Ticks aren't saved: like the window, they survive opening a category, changing the window and the nav, and clear when the page reloads. (Owner's request, 2026-11-06.)
+- **One-offs:** a separate list below the main table. Each row shows the transaction, its category, its month and its amount. One-offs are excluded from Regular spending, and shown as a part of Remaining.
+- **Uncategorised line:** "Uncategorised: £X spending and £Y income over the window are not included", linking to the categorise card. It covers income too, so "Remaining" never looks complete while income is missing.
+- **Excluded:** transfers and incomplete months. Ignore-kind categories are left out of the tables and shown only as a part of Remaining.
 
 ### Calculation per category
 
