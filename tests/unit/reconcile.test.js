@@ -162,7 +162,7 @@ test('totals are pinned', () => {
   // living = 90000 + 73784 + 15000 + 14750 + 14520 + 13300 + 8997 + 4720 + 4000 + 2899 + 1400
   // income = 250000 + 10414; share = living − 55000; leftOver = income − share
   assert.equal(90000 + 73784 + 15000 + 14750 + 14520 + 13300 + 8997 + 4720 + 4000 + 2899 + 1400, 243370);
-  assert.deepEqual(tm.totals, { income: 260414, living: 243370, contributions: 55000, share: 188370, leftOver: 72044 });
+  assert.deepEqual(tm.totals, { income: 260414, living: 243370, contributions: 55000, share: 188370, leftOver: 72044, savings: 0 });
 });
 
 test('totals add up from the rows', () => {
