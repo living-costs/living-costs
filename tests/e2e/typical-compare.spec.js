@@ -116,6 +116,9 @@ test('the month and Change columns reconcile with the summary', async () => {
     expect(await columnSum(name, 3)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(1).textContent())));
     expect(await columnSum(name, 4)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(2).textContent())));
   }
+  // Nothing ticked: the Ticked row is still there, a dash (read as none) in each column.
+  await expect(summary.getByRole('rowheader').last()).toHaveText('Ticked');
+  await expect(summaryCells('Ticked')).toHaveText(['—none', '—none', '—none']);
 });
 
 test('a month an account does not cover shows a banner', async () => {
@@ -131,10 +134,14 @@ test('comparison fits 320px and passes axe', async () => {
   await page.setViewportSize({ width: 320, height: 640 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   await expectNoAxeViolations(page);
-  // No cell breaks onto a second line: each is shorter than two lines of its own text.
+  // No cell breaks onto a second line: each cell's text is shorter than two lines of it. The text,
+  // not the cell, since padding and a taller neighbour in the row make the cell taller.
   const tall = await page.locator('table.summary-compare').locator('th, td').evaluateAll(
-    (cells) => cells.filter((c) => c.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(c).fontSize) * 1.2)
-      .map((c) => c.textContent));
+    (cells) => cells.filter((c) => {
+      const text = document.createRange();
+      text.selectNodeContents(c);
+      return text.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(c).fontSize) * 1.2;
+    }).map((c) => c.textContent));
   expect(tall).toEqual([]);
   await page.setViewportSize({ width: 1280, height: 800 });
 });

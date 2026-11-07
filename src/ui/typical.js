@@ -241,9 +241,11 @@ function lastCovered(state, accountId) {
 }
 
 /**
- * Income, Living costs and Left over. With contributions, Living costs is followed by
- * "less contributions from others" and "your share". With categories ticked, "Ticked (n categories)"
- * comes last: the plain sum of the ticked rows shown in the tables, whichever table they are in.
+ * The summary card: Income, Living costs and Left over, then Ticked as a second total of its own.
+ * With contributions, Living costs is followed by "less contributions from others" and "your share".
+ * Ticked is always there: the plain sum of the ticked rows shown in the tables, whichever table
+ * they are in, with their names below; with nothing ticked, a dash and a hint. Comparing a month
+ * turns the list into a table with the month and Change.
  * @param {TypicalMonth} tm
  * @param {(minor: number) => string} money
  * @param {Set<string>} ticked
@@ -251,30 +253,50 @@ function lastCovered(state, accountId) {
  */
 function summaryList(tm, money, ticked) {
   const t = tm.totals;
-  /** @type {[string, number, string?][]} */
-  const lines = [['Income', t.income], ['Living costs', t.living]];
-  if (tm.contribution.length > 0) {
-    lines.push(['less contributions from others', t.contributions, 'sub'], ['your share', t.share, 'sub']);
-  }
-  lines.push(['Left over', t.leftOver]);
-  const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution].filter((r) => ticked.has(r.categoryId));
-  const tickedLabel = `Ticked (${plural(tickedRows.length, 'category', 'categories')})`;
-  if (tickedRows.length > 0) lines.push([tickedLabel, tickedRows.reduce((sum, r) => sum + r.perMonth, 0)]);
   const c = tm.compare;
+  /** @type {[string, number, number, string?][]} label, typical, the compared month, class */
+  const lines = [['Income', t.income, c?.totals.income ?? 0], ['Living costs', t.living, c?.totals.living ?? 0]];
+  if (tm.contribution.length > 0) {
+    lines.push(['less contributions from others', t.contributions, c?.totals.contributions ?? 0, 'sub'],
+      ['your share', t.share, c?.totals.share ?? 0, 'sub']);
+  }
+  lines.push(['Left over', t.leftOver, c?.totals.leftOver ?? 0, 'total']);
+
+  const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution].filter((r) => ticked.has(r.categoryId));
+  const any = tickedRows.length > 0;
+  const tickedLabel = any ? `Ticked (${plural(tickedRows.length, 'category', 'categories')})` : 'Ticked';
+  const tickedTypical = tickedRows.reduce((sum, r) => sum + r.perMonth, 0);
+  const tickedMonth = tickedRows.reduce((sum, r) => sum + (r.month ?? 0), 0);
+  /** A dash for nothing ticked, read as "none". */
+  const none = () => [h('span', { 'aria-hidden': 'true' }, '—'), h('span', { class: 'visually-hidden' }, 'none')];
+  const which = h('p', { class: 'ticked-which' },
+    any ? tickedRows.map((r) => r.name).join(', ') : 'Tick categories below to add them up here.');
+
+  /** @type {HTMLElement} */
+  let body;
   if (c) {
-    const month = [c.totals.income, c.totals.living, ...(tm.contribution.length > 0 ? [c.totals.contributions, c.totals.share] : []), c.totals.leftOver,
-      ...(tickedRows.length > 0 ? [tickedRows.reduce((sum, r) => sum + (r.month ?? 0), 0)] : [])];
-    return h('div', { class: 'scroll summary-scroll', tabindex: '0', role: 'region', 'aria-label': 'Summary per month' }, h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
+    body = h('div', { class: 'scroll summary-scroll', tabindex: '0', role: 'region', 'aria-label': 'Summary per month' }, h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
       h('thead', null, h('tr', null, h('td'), h('th', { scope: 'col', class: 'num' }, 'Typical'),
         h('th', { scope: 'col', class: 'num' }, formatMonth(c.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
-      h('tbody', null, ...lines.map(([label, minor, cls], i) => h('tr', { class: cls },
-        h('th', { scope: 'row' }, label),
-        h('td', { class: 'num' }, money(minor)),
-        h('td', { class: 'num' }, money(month[i])),
-        h('td', { class: changeClass(month[i] - minor) }, changeText(month[i] - minor, money)))))));
+      h('tbody', null,
+        ...lines.map(([label, minor, month, cls]) => h('tr', { class: cls },
+          h('th', { scope: 'row' }, label),
+          h('td', { class: 'num' }, money(minor)),
+          h('td', { class: 'num' }, money(month)),
+          h('td', { class: changeClass(month - minor) }, changeText(month - minor, money)))),
+        h('tr', { class: 'ticked' },
+          h('th', { scope: 'row' }, tickedLabel),
+          ...(any
+            ? [h('td', { class: 'num' }, money(tickedTypical)), h('td', { class: 'num' }, money(tickedMonth)),
+              h('td', { class: changeClass(tickedMonth - tickedTypical) }, changeText(tickedMonth - tickedTypical, money))]
+            : [h('td', { class: 'num same' }, ...none()), h('td', { class: 'num same' }, ...none()), h('td', { class: 'num same' }, ...none())])))));
+  } else {
+    body = h('dl', { class: 'summary', 'aria-label': 'Summary per month' },
+      ...lines.flatMap(([label, minor, , cls]) => [h('dt', { class: cls }, label), h('dd', { class: cls }, money(minor))]),
+      h('dt', { class: 'ticked' }, tickedLabel),
+      h('dd', { class: 'ticked' }, ...(any ? [money(tickedTypical)] : none())));
   }
-  return h('dl', { class: 'summary', 'aria-label': 'Summary per month' },
-    ...lines.flatMap(([label, minor, cls]) => [h('dt', { class: cls }, label), h('dd', { class: cls }, money(minor))]));
+  return h('div', { class: 'summary-panel' }, h('p', { class: 'summary-cap' }, 'Per month'), body, which);
 }
 
 /**
