@@ -9,12 +9,15 @@ import { undoBatches } from '../import.js';
 import { accountsByMonth } from '../coverage.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { renderImport, importActive } from './import.js';
-import { whileSaving, isSaving } from './saving.js';
+import { whileSaving, isSaving, queueSave } from './saving.js';
 import { cmp } from '../order.js';
 import { help, plural, field, valueOf } from './form.js';
 import { setAccountKind } from '../accounts.js';
 
 export const ACCOUNT_KIND_LABELS = { bank: 'Bank', card: 'Card', savings: 'Savings', placeholder: 'Card (not imported)' };
+
+/** The kinds an account with a mapping can have, in menu order. */
+export const MAPPED_KINDS = /** @type {const} */ (['bank', 'card', 'savings']);
 
 /**
  * @param {HTMLElement} root
@@ -79,14 +82,23 @@ function accountCard(app, account, own) {
     h('h4', null, account.name),
     h('p', { class: 'muted' }, `${ACCOUNT_KIND_LABELS[account.kind]} · ${account.currency}`));
   if (account.kind !== 'placeholder') {
-    const kinds = /** @type {const} */ (['bank', 'card', 'savings']);
     card.append(field(`Kind for ${account.name}`, h('select', {
-      'data-focus-key': `kind-${account.id}`, 'data-saves': true,
+      'data-focus-key': `kind-${account.id}`,
       onChange: (/** @type {Event} */ e) => {
-        const kind = kinds.find((k) => k === valueOf(e));
-        if (kind) whileSaving(card, () => app.store.apply(setAccountKind(app.store.state, account.id, kind)));
+        const kind = MAPPED_KINDS.find((k) => k === valueOf(e));
+        if (!kind) return;
+        // Queued, not dropped, so a change made during another save is saved too.
+        queueSave(async () => {
+          try {
+            await app.store.apply(setAccountKind(app.store.state, account.id, kind));
+          } catch (err) {
+            // Nothing was saved: redraw so the select shows the kind the account still has.
+            app.rerender();
+            throw err;
+          }
+        });
       },
-    }, ...kinds.map((k) => h('option', { value: k, selected: account.kind === k }, ACCOUNT_KIND_LABELS[k])))));
+    }, ...MAPPED_KINDS.map((k) => h('option', { value: k, selected: account.kind === k }, ACCOUNT_KIND_LABELS[k])))));
   }
   if (own.length === 0) {
     card.append(h('p', null, 'No statements imported.'));

@@ -8,6 +8,7 @@
 import { h } from '../dom.js';
 import { checkboxField, focusKey, field, help, plural } from './form.js';
 import { whileSaving } from './saving.js';
+import { ACCOUNT_KIND_LABELS, MAPPED_KINDS } from './accounts.js';
 import { cmp } from '../order.js';
 /** @import {Child} from '../dom.js' */
 import { resumedBuckets } from '../buckets.js';
@@ -262,7 +263,7 @@ function onAccountContinue(app) {
   if (!account) return;
   flow.account = account;
   if (account.kind === 'placeholder' || !account.mapping) {
-    flow.form = { ...blankForm(), name: account.name, currency: account.currency, kind: account.kind === 'card' || account.kind === 'savings' ? account.kind : 'bank' };
+    flow.form = { ...blankForm(), name: account.name, currency: account.currency, kind: MAPPED_KINDS.find((k) => k === account.kind) ?? 'bank' };
     flow.formErrors = [];
     go(app, 'mapping');
     return;
@@ -411,12 +412,10 @@ function renderMapping(root, app) {
       'data-focus-key': 'map-kind',
       onChange: (/** @type {Event} */ e) => {
         const v = /** @type {HTMLSelectElement} */ (e.target).value;
-        f.kind = v === 'card' || v === 'savings' ? v : 'bank';
+        f.kind = MAPPED_KINDS.find((k) => k === v) ?? 'bank';
       },
     },
-    h('option', { value: 'bank', selected: f.kind === 'bank' }, 'Bank'),
-    h('option', { value: 'card', selected: f.kind === 'card' }, 'Card'),
-    h('option', { value: 'savings', selected: f.kind === 'savings' }, 'Savings'))),
+    ...MAPPED_KINDS.map((k) => h('option', { value: k, selected: f.kind === k }, ACCOUNT_KIND_LABELS[k])))),
     field('Currency', h('input', {
       type: 'text', value: f.currency, autocomplete: 'off', maxlength: '3', class: 'short', 'data-focus-key': 'map-currency',
       onInput: (/** @type {Event} */ e) => {

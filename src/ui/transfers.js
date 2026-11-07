@@ -44,7 +44,7 @@ export function reset() {
 export function render(root, app) {
   root.append(
     h('h2', { tabindex: '-1' }, 'Transfers'),
-    help('Money moving between your own accounts is neither spending nor income. Confirmed transfers are left out of every total.'),
+    help('Money moving between your own accounts is neither spending nor income. Confirmed transfers are left out of every total, except transfers to or from a Savings account, which count in Savings.'),
     suggestedSection(app),
     decidedSection(app, {
       status: 'confirmed', id: 'confirmed', title: 'Confirmed transfers',

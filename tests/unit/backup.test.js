@@ -297,6 +297,29 @@ test('a version 1 backup is upgraded and restores', () => {
   assert.equal('normaliserVersion' in data.rules[0], false);
 });
 
+test('a version 2 backup is upgraded: a Transfer category named Savings becomes Saving, others stay', () => {
+  const b = /** @type {any} */ ({ ...base(), schemaVersion: 2 });
+  b.categories = [
+    ...b.categories,
+    { id: 'c3', name: 'Savings', kind: 'transfer', position: 2 },
+    { id: 'c4', name: 'Savings pot', kind: 'spend', budgetType: 'variable', position: 3 },
+  ];
+  const data = dataOf(b);
+  assert.equal(data.schemaVersion, 3);
+  const c3 = data.categories.find((c) => c.id === 'c3');
+  const c4 = data.categories.find((c) => c.id === 'c4');
+  assert.equal(c3?.kind, 'saving');
+  assert.equal(c3?.budgetType, 'variable');
+  assert.deepEqual(c4, { id: 'c4', name: 'Savings pot', kind: 'spend', budgetType: 'variable', position: 3 });
+});
+
+test('a category ID that looks like a savings-account row is refused', () => {
+  const b = /** @type {any} */ (base());
+  b.categories[1].id = 'account:a1';
+  b.overrides[0].categoryId = 'account:a1';
+  assert.ok(errorsOf(b).includes('Category 2 has a missing or invalid ID.'), errorsOf(b).join('|'));
+});
+
 test('a broken version 1 backup is refused, never throws, and pollutes nothing', () => {
   assert.deepEqual(errorsOf({ ...base(), schemaVersion: 1, rules: 'x' }), ['The backup has no list of rules.', 'Transaction 1 points at a missing rule.']);
   const rule = JSON.parse('{"__proto__":{"polluted":1},"id":"r1","pattern":"X","matchType":"keyAmount","bucketId":"b3","normaliserVersion":1}');
