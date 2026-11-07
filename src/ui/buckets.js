@@ -109,7 +109,8 @@ export function render(root, app) {
       h('p', { id: 'buckets-window' }, `Totals and counts cover ${first === last ? first : `${first} to ${last}`}.`));
   }
   const results = h('div');
-  const update = () => drawList(app, results, rows, cats);
+  const suggestions = bucketSuggestions(state);
+  const update = () => drawList(app, results, rows, cats, suggestions);
   root.append(
     h('div', { role: 'search', class: 'row filters' },
       field('Search buckets', h('input', {
@@ -235,10 +236,10 @@ function mergeBar(app) {
  * @param {HTMLElement} results
  * @param {Row[]} rows
  * @param {Category[]} cats
+ * @param {Map<string, Category>} suggestions
  */
-function drawList(app, results, rows, cats) {
+function drawList(app, results, rows, cats, suggestions) {
   const shown = shownRows(app, rows);
-  const suggestions = bucketSuggestions(app.store.state);
   if (shown.length === 0) {
     results.replaceChildren(h('p', null, 'No buckets match.'));
     return;

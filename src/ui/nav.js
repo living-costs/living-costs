@@ -1,6 +1,6 @@
 // Top navigation: the three main screens as tabs, and the other six as two small labelled
 // groups. Transfers and Buckets are highlighted with a count while suggestions remain, and
-// Categorise shows how much is categorised by value. Both labels are refreshed on every redraw (updateNav).
+// Categorise shows how much is categorised by value. All three labels are refreshed on every redraw (updateNav).
 
 /** @import {App, ScreenName} from '../main.js' */
 import { h, clear } from '../dom.js';

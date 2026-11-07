@@ -53,6 +53,7 @@ test('named guards and block entries', () => {
     'COSTA DEL SOL HOTEL': null, 'COSTA COFFEE': 'coffee-shops', 'SSE ARENA WEMBLEY': null,
     'EMIRATES STADIUM': null, 'CO-OP FUNERALCARE': null, 'TESCO INSURANCE': 'insurance',
     'COOP BANK': null, 'CO-OP BANK': null, 'TESCO BANK INSURANCE': 'insurance',
+    'TFL.GOV.UK/CP': 'transport', 'AVIVA PENSION': null, 'LEGAL & GENERAL PENSION': null, 'AVIVA': 'insurance',
   };
   for (const [key, want] of Object.entries(cases)) assert.equal(matchKeys([key], merchants), want, key);
 });

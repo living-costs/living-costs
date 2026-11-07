@@ -34,7 +34,7 @@ Success means a bucket like `SAINSBURYS S/MKTS` shows "Groceries" as suggested o
 `src/merchants.js` is a data-only, owner-editable module, with no logic, in the style of `src/default-categories.js`:
 
 ```js
-/** @type {{name: string, defaultId: string}[]} */
+/** @type {{name: string, defaultId: string | null}[]} */
 export default [
   { name: 'SAINSBURYS', defaultId: 'groceries' },
   { name: 'COSTA COFFEE', defaultId: 'coffee-shops' },
@@ -165,7 +165,7 @@ The main design spec, `2026-11-04-living-costs-design.md`, gets a short Suggesti
 
 - **Unit tests** (`node:test`) for squashing and matching, with synthetic keys. Cover whole words, short names such as `BA` and `EE` not matching inside words, apostrophes, `&`, `+`, `www.` prefixes, `.co.uk`, `.com` and glued `COUK` suffixes, glued multi-word names, longest-wins, ties giving nothing, money-in buckets giving nothing, categorised buckets giving nothing, a deleted category giving nothing, and a retyped category giving nothing.
 - **A unit test validating `src/merchants.js`:**
-  - every `defaultId` exists in `src/default-categories.js` with `kind: 'spend'`
+  - every `defaultId` exists in `src/default-categories.js` with `kind: 'spend'`, or is null for a block entry
   - no two entries have the same squashed name
   - no entry is in a small denylist of generic words and bank names, kept in the test
 - **e2e (Playwright with axe):**

@@ -300,6 +300,7 @@ function categoryGroup(app, cats, assign, suggested) {
           'aria-keyshortcuts': key, title: categoryHint(c), 'aria-describedby': `cat-hint-${c.id}`,
           onClick: () => assign(c.id),
         }, key ? h('span', { class: 'key' }, key) : null, key ? ' ' : null, c.name,
+          suggested && c.id === suggested.id ? ' ' : null,
           suggested && c.id === suggested.id ? h('span', { class: 'suggested' }, 'Suggested') : null);
       }),
       ...cats.map((c) => h('span', { class: 'visually-hidden', id: `cat-hint-${c.id}` }, categoryHint(c))),

@@ -83,7 +83,7 @@ test('categorise card marks the suggested category', async ({ page }) => {
   await openScreen(page, 'Categorise');
   await skipToCard(page, 'TESCO STORES');
   const groceries = page.locator('#card').getByRole('button', { name: /^\d* ?Groceries/ });
-  await expect(groceries).toHaveAccessibleName(/suggested/i);
+  await expect(groceries).toHaveAccessibleName(/Groceries Suggested$/);
   await expect(groceries).toContainText('Suggested');
   await expect(page.locator('#card button', { hasText: 'Suggested' })).toHaveCount(1);
   await skipToCard(page, 'PARKING METER');

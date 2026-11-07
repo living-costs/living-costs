@@ -1,4 +1,4 @@
-// Merchant-name matching for category suggestions. The merchant list is credited to
+// Merchant-name matching for category suggestions. The merchant list is seeded from
 // EmmaExcel/merchant-categorizer on GitHub.
 
 import MERCHANTS from './merchants.js';
