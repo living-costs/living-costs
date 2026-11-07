@@ -283,6 +283,8 @@ dialog h3 { margin-top: 0; }
 .field.toggle > label.choice { font-weight: normal; }
 table.buckets td, table.buckets th { vertical-align: middle; }
 table.buckets input.select { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; }
+/* Suggested column: the chip on the left, Accept at the cell's right edge, so the buttons line up. */
+table.buckets .suggestion { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
 
 /* Typical month */
 hgroup p { margin: 0 0 0.5rem; }

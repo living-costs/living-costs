@@ -339,7 +339,7 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
         focusKey('bucket-heading');
       },
     }, b.displayName)),
-    h('td', null, ...(suggestion ? [h('button', {
+    h('td', null, ...(suggestion ? [h('div', { class: 'suggestion' }, h('span', { class: 'suggested-chip' }, suggestion.name), h('button', {
       type: 'button', class: 'secondary', 'aria-label': `Accept ${suggestion.name} for ${b.displayName}`,
       'data-focus-key': `bucket-accept-${b.id}`, 'data-saves': true,
       onClick: () => {
@@ -347,7 +347,7 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
         if (ui.show === 'all') focusKey(categoryKey(b.id));
         choose(suggestion.id);
       },
-    }, 'Accept'), ' ', h('span', { class: 'suggested-chip' }, suggestion.name)] : [])),
+    }, 'Accept'))] : [])),
     h('td', { class: 'num total' }, totalText(r)),
     h('td', { class: 'num count' }, String(r.count)),
     h('td', null, select));
