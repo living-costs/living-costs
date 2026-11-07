@@ -50,7 +50,7 @@ test('a chosen window recalculates and keeps focus', async () => {
 });
 
 test('the window is kept through a category view and the nav', async () => {
-  await table('Living costs').getByRole('button', { name: 'Groceries', exact: true }).click();
+  await table('Regular spending').getByRole('button', { name: 'Groceries', exact: true }).click();
   const bankA = page.getByRole('group', { name: 'Each month' }); // Bank B is outside the window
   await expect(bankA.getByRole('button', { name: /^Jun 2026/ })).toHaveCount(1);
   await expect(bankA.getByRole('button', { name: /^Jul 2026/ })).toHaveCount(0);
@@ -86,13 +86,13 @@ test('comparing Oct 2026 against Nov 2025 to Jun 2026', async () => {
   await page.getByLabel('Compare with').focus();
   await page.getByLabel('Compare with').selectOption('2026-10');
   await expect(page.getByLabel('Compare with')).toBeFocused();
-  await expect(table('Living costs').getByRole('columnheader'))
+  await expect(table('Regular spending').getByRole('columnheader'))
     .toHaveText(['Tick', 'Category', 'Type', 'Typical', 'Oct 2026', 'Change', 'Share of largest']);
-  await expect(rowCells('Living costs', 'Housing (rent or mortgage)')).toHaveText([
+  await expect(rowCells('Regular spending', 'Housing (rent or mortgage)')).toHaveText([
     '', 'Fixed', gbp(90000), gbp(90000), 'same', '']);
-  await expect(rowCells('Living costs', 'Groceries').nth(3))
+  await expect(rowCells('Regular spending', 'Groceries').nth(3))
     .toHaveText(gbp(-expected.monthlyTotals.Groceries['2026-10']));
-  const gifts = rowCells('Living costs', 'Gifts');
+  const gifts = rowCells('Regular spending', 'Gifts');
   await expect(gifts.nth(3)).toHaveText(/** @type {string} */ (await gifts.nth(2).textContent()));
   await expect(gifts.nth(4)).toHaveText('same');
   await expect(rowCells('Contributions', 'Contributions from others'))
@@ -112,9 +112,19 @@ test('the month and Change columns reconcile with the summary', async () => {
   };
   const summaryCells = (/** @type {string} */ line) => summary.getByRole('row')
     .filter({ has: page.getByRole('rowheader', { name: line, exact: true }) }).getByRole('cell');
-  for (const [name, line] of [['Living costs', 'Living costs'], ['Income', 'Income'], ['Contributions', 'less contributions from others']]) {
+  for (const [name, line] of [['Regular spending', 'Regular spending'], ['Income', 'Income'], ['Contributions', 'less contributions from others']]) {
     expect(await columnSum(name, 3)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(1).textContent())));
     expect(await columnSum(name, 4)).toBe(parseMinor(/** @type {string} */ (await summaryCells(line).nth(2).textContent())));
+  }
+  // Remaining's parts: a part with no transactions is a dash in each column; not accounted for is
+  // Remaining less the parts, typical and month.
+  await expect(summaryCells('ignored')).toHaveText(['—none', '—none', '—none']);
+  await expect(summary.locator('tr.note-row')).toHaveText('typical month vs actual months, and money in accounts not tracked');
+  for (const col of [0, 1]) {
+    /** @param {string} line */
+    const cell = async (line) => parseMinor(/** @type {string} */ (await summaryCells(line).nth(col).textContent()));
+    const parts = (await cell('saved')) + (await cell('one-offs')) + (await cell('uncategorised')) + (await cell('ignored'));
+    expect(await cell('not accounted for')).toBe((await cell('Remaining')) - parts);
   }
   // Nothing ticked: the Ticked row is still there, a dash (read as none) in each column.
   await expect(summary.getByRole('rowheader').last()).toHaveText('Ticked');
@@ -154,14 +164,14 @@ test('the choices survive the nav and reset on reload', async () => {
   await expect(page.getByLabel('Compare with')).toHaveValue('');
   await expect(page.getByLabel('Typical from')).toHaveValue('2025-11');
   await expect(page.getByLabel('to', { exact: true })).toHaveValue('2026-10');
-  await expect(table('Living costs').getByRole('columnheader', { name: 'Per year' })).toHaveCount(1);
+  await expect(table('Regular spending').getByRole('columnheader', { name: 'Per year' })).toHaveCount(1);
 });
 
 test('No month puts the tables back', async () => {
   await page.getByLabel('Compare with').selectOption('2026-10');
   await expect(page.locator('dl.summary')).toHaveCount(0);
   await page.getByLabel('Compare with').selectOption('');
-  await expect(table('Living costs').getByRole('columnheader'))
+  await expect(table('Regular spending').getByRole('columnheader'))
     .toHaveText(['Tick', 'Category', 'Type', 'Per month', 'Per year', 'Share of largest']);
   await expect(page.locator('dl.summary')).toHaveCount(1);
   await expect(page.getByText('Annual categories use the typical figure')).toHaveCount(0);

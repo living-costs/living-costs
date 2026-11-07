@@ -81,7 +81,7 @@ test('D1: an account covering only the last 3 months is divided by its own 3 mon
   }), tuning);
   assert.equal(row(tm, 'contrib').perMonth, 55000); // not 13750
   assert.equal(tm.contribution.length, 1);
-  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 55000, share: 35000, leftOver: 215000, savings: 0 });
+  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 55000, share: 35000, remaining: 215000, saved: null, oneOffs: null, uncategorised: null, ignored: null, unaccounted: 215000 });
 });
 
 test('variable: median month with the variableRange percentiles as the range', () => {
@@ -601,8 +601,8 @@ test('a category only in the compared month gets a month-only row; annual does n
   });
   assert.equal(row(tm, 'holiday'), undefined);
   assert.equal(row(tm, 'rent').monthOnly, undefined);
-  assert.deepEqual(tm.compare?.totals, { income: 0, living: 90000, contributions: 55000, share: 35000, leftOver: -35000, savings: 0 });
-  assert.deepEqual(tm.totals, { income: 0, living: 90000, contributions: 0, share: 90000, leftOver: -90000, savings: 0 });
+  assert.deepEqual(tm.compare?.totals, { income: 0, living: 90000, contributions: 55000, share: 35000, remaining: -35000, saved: null, oneOffs: null, uncategorised: null, ignored: null, unaccounted: -35000 });
+  assert.deepEqual(tm.totals, { income: 0, living: 90000, contributions: 0, share: 90000, remaining: -90000, saved: null, oneOffs: null, uncategorised: null, ignored: null, unaccounted: -90000 });
 });
 
 test('compare.missing lists window accounts that do not cover the month', () => {
@@ -674,8 +674,8 @@ test('month columns reconcile with the compare totals', () => {
   assert.equal(sumMonth(tm.income), t.income);
   assert.equal(sumMonth(tm.contribution), t.contributions);
   assert.equal(t.share, t.living - t.contributions);
-  assert.equal(t.leftOver, t.income - t.share);
-  assert.deepEqual(t, { income: 250000, living: 102000, contributions: 55000, share: 47000, leftOver: 203000, savings: 0 });
+  assert.equal(t.remaining, t.income - t.share);
+  assert.deepEqual(t, { income: 250000, living: 102000, contributions: 55000, share: 47000, remaining: 203000, saved: null, oneOffs: null, uncategorised: null, ignored: null, unaccounted: 203000 });
   assert.ok([...tm.spend, ...tm.income, ...tm.contribution].every((r) => typeof r.month === 'number'));
 });
 
@@ -737,13 +737,12 @@ test('saving: a monthly -20000 to a Saving category is a 20000 saving and change
   }), tuning));
   assert.equal(row(tm, 'sav').perMonth, 20000);
   assert.deepEqual(tm.saving.map((/** @type {any} */ r) => r.categoryId), ['sav']);
-  assert.equal(tm.totals.savings, 20000);
-  assert.equal(without.totals.savings, 0);
+  assert.equal(tm.totals.saved, 20000);
+  assert.equal(without.totals.saved, null);
   assert.deepEqual(without.saving, []);
-  const { savings: _with, ...rest } = tm.totals;
-  const { savings: _without, ...before } = without.totals;
-  assert.deepEqual(rest, before);
-  assert.deepEqual(rest, { income: 250000, living: 90000, contributions: 30000, share: 60000, leftOver: 190000 });
+  // Saving is a part of Remaining: Remaining stays, and what isn't accounted for goes down by it.
+  assert.deepEqual(without.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, remaining: 190000, saved: null, oneOffs: null, uncategorised: null, ignored: null, unaccounted: 190000 });
+  assert.deepEqual(tm.totals, { ...without.totals, saved: 20000, unaccounted: 170000 });
   assert.deepEqual(tm.uncategorised, without.uncategorised);
 });
 
@@ -767,7 +766,7 @@ test('a Fixed Saving category ignores a withdrawal-only bucket', () => {
     transactions: [...monthly('A', YEAR, '02', -20000, 'isa'), txn('A', '2026-03-20', 5000, 'back')],
   }), tuning, { range: null, compare: '2026-03' }));
   assert.equal(row(tm, 'sav').perMonth, 20000);
-  assert.equal(tm.totals.savings, 20000);
+  assert.equal(tm.totals.saved, 20000);
   // It does reduce that month's figure when comparing.
   assert.equal(row(tm, 'sav').month, 15000);
 });
@@ -779,7 +778,7 @@ test('a confirmed pair bank → savings counts once, on the bank side, in an acc
   assert.deepEqual(tm.saving.map((/** @type {any} */ r) => [r.categoryId, r.name, r.perMonth, r.accountId]), [['account:S', 'S', 10000, 'S']]);
   assert.equal(row(tm, 'account:S').budgetType, 'variable');
   assert.deepEqual(row(tm, 'account:S').range, [10000, 10000]);
-  assert.equal(tm.totals.savings, 10000);
+  assert.equal(tm.totals.saved, 10000);
   assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
   assert.equal(tm.totals.living, 0);
   assert.equal(tm.totals.income, 0);
@@ -794,7 +793,7 @@ test('a pair takes the bank side\'s Saving category', () => {
   }), tuning));
   assert.deepEqual(tm.saving.map((/** @type {any} */ r) => [r.categoryId, r.perMonth, r.accountId]), [['sav', 10000, undefined]]);
   assert.ok(!('accountId' in row(tm, 'sav')));
-  assert.equal(tm.totals.savings, 10000);
+  assert.equal(tm.totals.saved, 10000);
 });
 
 test('a withdrawal pair savings → bank counts negative', () => {
@@ -807,7 +806,7 @@ test('a withdrawal pair savings → bank counts negative', () => {
   // The categorised one lands in its Annual Saving category; the other in the account row.
   assert.equal(row(tm, 'sav').perYear, -12000);
   assert.equal(row(tm, 'account:S').month, -30000);
-  assert.equal(tm.compare.totals.savings, -30000 + row(tm, 'sav').perMonth);
+  assert.equal(tm.compare.totals.saved, -30000 + row(tm, 'sav').perMonth);
   assert.equal(tm.compare.totals.living, 0);
   assert.equal(tm.compare.totals.income, 0);
 });
@@ -822,7 +821,7 @@ test('a withdrawal pair in a month the bank side does not cover counts nothing',
   }), tuning));
   assert.ok(tm.months.includes('2026-06'));
   assert.deepEqual(tm.saving, []);
-  assert.equal(tm.totals.savings, 0);
+  assert.equal(tm.totals.saved, null);
   assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
 });
 
@@ -838,7 +837,7 @@ test('an unpaired Saving-category deposit inside a Savings account counts nothin
   });
   const tm = /** @type {any} */ (typicalMonth(state, tuning));
   assert.deepEqual(tm.saving.map((/** @type {any} */ r) => [r.categoryId, r.perMonth]), [['sav', 5000]]);
-  assert.equal(tm.totals.savings, 5000);
+  assert.equal(tm.totals.saved, 5000);
   assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
   assert.equal(categoryDetail(state, tuning, 'pot'), null);
   const d = /** @type {any} */ (categoryDetail(state, tuning, 'sav'));
@@ -851,17 +850,17 @@ test('changing S from savings to bank makes its pairs plain transfers again', ()
     accounts: [acct('A'), acct('S')], batches: savingsAccounts.batches, buckets: [bucket('xfer')], ...p,
   }), tuning));
   assert.deepEqual(banks.saving, []);
-  assert.equal(banks.totals.savings, 0);
+  assert.equal(banks.totals.saved, null);
   assert.deepEqual(banks.uncategorised, { spending: 0, income: 0 });
   // Both sides in Savings accounts: a plain transfer too.
   const both = /** @type {any} */ (typicalMonth(build({
     accounts: [acct('A', 'savings'), acct('S', 'savings')], batches: savingsAccounts.batches, buckets: [bucket('xfer')], ...p,
   }), tuning));
   assert.deepEqual(both.saving, []);
-  assert.equal(both.totals.savings, 0);
+  assert.equal(both.totals.saved, null);
 });
 
-test('Savings rows sum to totals.savings, typical and compared month', () => {
+test('Savings rows sum to totals.saved, typical and compared month', () => {
   const p = paired([...YEAR.map((m) => pair('A', 'S', `${m}-10`, 10000)), pair('A', 'T', '2026-10-12', 7000)]);
   const tm = /** @type {any} */ (typicalMonth(build({
     accounts: [...savingsAccounts.accounts, acct('T', 'savings')],
@@ -878,20 +877,23 @@ test('Savings rows sum to totals.savings, typical and compared month', () => {
     ],
     transferPairs: p.transferPairs,
   }), tuning, { range: { from: '2025-11', to: '2026-06' }, compare: '2026-10' }));
-  assert.equal(tm.totals.savings, sumOf(tm.saving, (r) => r.perMonth));
-  assert.equal(tm.compare.totals.savings, sumOf(tm.saving, (r) => r.month));
+  assert.equal(tm.totals.saved, sumOf(tm.saving, (r) => r.perMonth));
+  assert.equal(tm.compare.totals.saved, sumOf(tm.saving, (r) => r.month));
   assert.ok(tm.saving.every((/** @type {any} */ r) => typeof r.month === 'number'));
   // T has a pair only in the compared month: a month-only account row.
   assert.deepEqual(row(tm, 'account:T'), {
     categoryId: 'account:T', name: 'T', budgetType: 'variable', perMonth: 0, perYear: 0, month: 7000, monthOnly: true, accountId: 'T',
   });
   assert.equal(row(tm, 'sav').month, 25000);
-  assert.equal(tm.compare.totals.savings, 25000 + 15000 + 10000 + 7000);
-  assert.equal(tm.totals.savings, 20000 + 15000 + 10000);
+  assert.equal(tm.compare.totals.saved, 25000 + 15000 + 10000 + 7000);
+  assert.equal(tm.totals.saved, 20000 + 15000 + 10000);
   // The one-off sits in oneOffs, outside the Savings total.
   assert.deepEqual(tm.oneOffs.map((/** @type {any} */ o) => [o.categoryId, o.amountMinor]), [['big', 100000]]);
-  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, leftOver: 190000, savings: 45000 });
-  assert.deepEqual(tm.compare.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, leftOver: 190000, savings: 57000 });
+  // The one-off lump is a part of Remaining: 100000 over A's 8 window months. October has none.
+  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, remaining: 190000,
+    saved: 45000, oneOffs: 12500, uncategorised: null, ignored: null, unaccounted: 190000 - 45000 - 12500 });
+  assert.deepEqual(tm.compare.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, remaining: 190000,
+    saved: 57000, oneOffs: null, uncategorised: null, ignored: null, unaccounted: 190000 - 57000 });
 });
 
 test('categoryDetail for a Saving category matches its row, pairs included; an account: id gives null', () => {
@@ -914,4 +916,63 @@ test('categoryDetail for a Saving category matches its row, pairs included; an a
   assert.deepEqual(d.accounts.map((/** @type {any} */ a) => a.accountId), ['A']);
   assert.ok(row(tm, 'account:S'));
   assert.equal(categoryDetail(state, tuning, 'account:S'), null);
+});
+
+// Remaining's parts: saved, one-offs, uncategorised and ignored, each net money out per month,
+// and unaccounted, which is Remaining less the parts. A part with no transactions is null.
+const B3 = ['2026-08', '2026-09', '2026-10'];
+const parts = build({
+  accounts: [acct('A'), acct('B')],
+  batches: [yearBatch('A'), batch('B', '2026-08-01', '2026-10-31')],
+  categories: [
+    cat('salary', 'income', 'fixed'), cat('rent', 'spend', 'fixed'), cat('big', 'spend', 'oneoff'),
+    cat('windfall', 'income', 'oneoff'), cat('ign', 'ignore'), cat('between', 'transfer'),
+  ],
+  buckets: [
+    bucket('emp', 'salary'), bucket('lettings', 'rent'), bucket('boiler', 'big'), bucket('sofa', 'big'),
+    bucket('prize', 'windfall'), bucket('junk', 'ign'), bucket('moved', 'between'), bucket('mystery'),
+  ],
+  transactions: [
+    ...monthly('A', YEAR, '25', 250000, 'emp'),
+    ...monthly('A', YEAR, '01', -90000, 'lettings'),
+    txn('A', '2026-01-20', -240000, 'boiler'), txn('A', '2026-02-03', 12000, 'prize'),
+    txn('B', '2026-09-14', -30000, 'sofa'),
+    txn('A', '2026-02-11', -3000, 'mystery'), txn('A', '2026-04-07', -2500, 'mystery'), txn('A', '2026-05-07', 500, 'mystery'),
+    txn('B', '2026-09-20', -900, 'mystery'),
+    txn('A', '2026-05-08', -7777, 'junk'), txn('A', '2026-06-08', 1777, 'junk'),
+    txn('A', '2026-05-09', -8888, 'moved'),
+  ],
+});
+
+test('Remaining parts are net money out per month, each account over its own months', () => {
+  const tm = /** @type {any} */ (typicalMonth(parts, tuning));
+  assert.deepEqual(B3.map((m) => tm.months.includes(m)), [true, true, true]);
+  // One-offs: A (240000 − 12000) over 12 months, B 30000 over its 3; an income one-off reduces the part.
+  // Uncategorised: A 3000 + 2500 − 500 over 12 is divRound(5000, 12) = 417; B 900 over 3 is 300.
+  // Ignored: A 7777 − 1777 over 12. The Transfer-kind category is in no part.
+  assert.deepEqual(tm.totals, {
+    income: 250000, living: 90000, contributions: 0, share: 90000, remaining: 160000,
+    saved: null, oneOffs: 19000 + 10000, uncategorised: 417 + 300, ignored: 500,
+    unaccounted: 160000 - 29000 - 717 - 500,
+  });
+  // The one-offs list and the uncategorised line below the card are unchanged.
+  assert.deepEqual(tm.oneOffs.map((/** @type {any} */ o) => [o.categoryId, o.amountMinor]), [['big', 240000], ['windfall', 12000], ['big', 30000]]);
+  assert.deepEqual(tm.uncategorised, { spending: 6400, income: 500 });
+});
+
+test('Remaining parts for a compared month use that month only, null when it has none', () => {
+  const tm = /** @type {any} */ (typicalMonth(parts, tuning, { range: null, compare: '2026-09' }));
+  assert.deepEqual(tm.compare.totals, {
+    income: 250000, living: 90000, contributions: 0, share: 90000, remaining: 160000,
+    saved: null, oneOffs: 30000, uncategorised: 900, ignored: null, unaccounted: 160000 - 30000 - 900,
+  });
+});
+
+test('a part whose transactions net to 0 is 0, not null', () => {
+  const tm = /** @type {any} */ (typicalMonth(build({
+    categories: [cat('ign', 'ignore')], buckets: [bucket('junk', 'ign')],
+    transactions: [txn('A', '2026-03-01', -1000, 'junk'), txn('A', '2026-03-02', 1000, 'junk')],
+  }), tuning));
+  assert.equal(tm.totals.ignored, 0);
+  assert.equal(tm.totals.oneOffs, null);
 });

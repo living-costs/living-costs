@@ -21,8 +21,15 @@ import { savingsContext, accountRowId, ACCOUNT_ROW_PREFIX } from './savings.js';
  */
 /** @typedef {{txn:Transaction,categoryId:string,amountMinor:number}} OneOff */
 /**
- * savings: the sum of the saving rows, outside every other total.
- * @typedef {{income:number,living:number,contributions:number,share:number,leftOver:number,savings:number}} Totals
+ * remaining: income less your share. Its parts, each net money out per month and null when it has
+ * no transactions: saved, the sum of the saving rows; oneOffs; uncategorised; ignored, through
+ * Ignore-kind categories. unaccounted: remaining less the parts, which can be negative.
+ * @typedef {{income:number,living:number,contributions:number,share:number,remaining:number,
+ *   saved:number|null,oneOffs:number|null,uncategorised:number|null,ignored:number|null,unaccounted:number}} Totals
+ */
+/**
+ * Per month, as in Totals, or null when the part has no transactions.
+ * @typedef {{oneOffs:number|null,uncategorised:number|null,ignored:number|null}} Parts
  */
 /** @typedef {{range:MonthRange|null, compare:string|null}} TypicalChoices */
 /**
@@ -64,12 +71,14 @@ import { savingsContext, accountRowId, ACCOUNT_ROW_PREFIX } from './savings.js';
 
 /** @typedef {{count:number,latestDate:string,latest:number,opposite:number}} BucketCharges */
 /** @typedef {{months:Map<string,number>,total:number,buckets:Map<string,BucketCharges>}} AccountSums */
+/** Each Remaining part's money out, by account. @typedef {Record<keyof Parts, Map<string, number>>} PartSums */
 /** @typedef {{byAccount:Map<string,AccountSums>,partMinor:Map<string,number>}} CategorySums */
 /**
  * rowCategories: ctx.categories plus one synthetic Variable saving category per savings-account
  * row seen, keyed accountRowId(account id) and named after the account.
  * @typedef {{ctx:ResolveContext,monthsOf:(accountId:string)=>Set<string>,rowCategories:Map<string,Category>,
- *   sums:Map<string,CategorySums>,oneOffs:OneOff[],uncategorised:{spending:number,income:number}}} Collected
+ *   sums:Map<string,CategorySums>,oneOffs:OneOff[],uncategorised:{spending:number,income:number},
+ *   out:PartSums}} Collected
  */
 
 /**
@@ -149,7 +158,8 @@ const rowAccount = (categoryId) =>
 /**
  * The one pass over the transactions behind typicalMonth, monthFigures and categoryDetail: each
  * counted transaction's net per category, by account, month and bucket, plus one-offs and
- * uncategorised. A transaction counts only in a month its account covers within `window`.
+ * uncategorised, and the money out by account for each of Remaining's parts other than saved.
+ * A transaction counts only in a month its account covers within `window`.
  * A confirmed pair with exactly one side in a Savings account counts once, on the other side, in
  * that side's Saving category or else its savings-account row; every other transfer is skipped.
  * Inside a Savings account, a Saving category counts only through such a pair.
@@ -171,6 +181,10 @@ function collect(state, window) {
   /** @type {OneOff[]} */
   const oneOffs = [];
   const uncategorised = { spending: 0, income: 0 };
+  /** @type {PartSums} */
+  const out = { oneOffs: new Map(), uncategorised: new Map(), ignored: new Map() };
+  /** @param {keyof Parts} part @param {string} accountId @param {number} amount money out */
+  const addOut = (part, accountId, amount) => out[part].set(accountId, (out[part].get(accountId) ?? 0) + amount);
 
   for (const t of state.transactions) {
     const month = monthOf(t.date);
@@ -195,8 +209,10 @@ function collect(state, window) {
       if (!category) {
         if (part.amountMinor < 0) uncategorised.spending -= part.amountMinor;
         else uncategorised.income += part.amountMinor;
+        addOut('uncategorised', t.accountId, -part.amountMinor);
         continue;
       }
+      if (category.kind === 'ignore') addOut('ignored', t.accountId, -part.amountMinor);
       if (!counted(category)) continue;
       // Inside a Savings account only confirmed pairs count as saving, so a deposit isn't counted twice.
       if (category.kind === 'saving' && savingsAccounts.has(t.accountId)) continue;
@@ -207,6 +223,7 @@ function collect(state, window) {
     for (const [categoryId, { natural: amount, signed }] of net) {
       if (rowCategories.get(categoryId)?.budgetType === 'oneoff') {
         oneOffs.push({ txn: t, categoryId, amountMinor: amount });
+        addOut('oneOffs', t.accountId, -signed);
         continue;
       }
       let c = sums.get(categoryId);
@@ -229,7 +246,20 @@ function collect(state, window) {
       }
     }
   }
-  return { ctx, monthsOf, rowCategories, sums, oneOffs, uncategorised };
+  return { ctx, monthsOf, rowCategories, sums, oneOffs, uncategorised, out };
+}
+
+/**
+ * Each part's money out per month: each account's total over its own months (D1), added up.
+ * @param {PartSums} out
+ * @param {(accountId:string)=>Set<string>} monthsOf
+ * @returns {Parts}
+ */
+function partsOf(out, monthsOf) {
+  /** @param {Map<string, number>} byAccount */
+  const perMonth = (byAccount) => (byAccount.size === 0 ? null
+    : [...byAccount].reduce((sum, [accountId, total]) => sum + divRound(total, monthsOf(accountId).size), 0));
+  return { oneOffs: perMonth(out.oneOffs), uncategorised: perMonth(out.uncategorised), ignored: perMonth(out.ignored) };
 }
 
 /**
@@ -295,19 +325,24 @@ function buildRow(category, byAccount, monthsOf, ctx, tuning) {
 }
 
 /**
- * The summary figures, from one figure per row.
+ * The summary figures, from one figure per row and Remaining's other parts.
  * @param {Record<CountedKind, Row[]>} tables
  * @param {(row:Row)=>number} figure
+ * @param {(row:Row)=>boolean} has whether the row has transactions behind its figure
+ * @param {Parts} parts
  * @returns {Totals}
  */
-function totalsOf(tables, figure) {
+function totalsOf(tables, figure, has, parts) {
   /** @param {Row[]} rows */
   const sum = (rows) => rows.reduce((acc, r) => acc + figure(r), 0);
   const living = sum(tables.spend);
   const contributions = sum(tables.contribution);
   const income = sum(tables.income);
   const share = living - contributions;
-  return { income, living, contributions, share, leftOver: income - share, savings: sum(tables.saving) };
+  const remaining = income - share;
+  const saved = tables.saving.some(has) ? sum(tables.saving) : null;
+  const unaccounted = remaining - (saved ?? 0) - (parts.oneOffs ?? 0) - (parts.uncategorised ?? 0) - (parts.ignored ?? 0);
+  return { income, living, contributions, share, remaining, saved, ...parts, unaccounted };
 }
 
 /**
@@ -316,12 +351,12 @@ function totalsOf(tables, figure) {
  * @param {State} state
  * @param {TypicalTuning} tuning
  * @param {string} month YYYY-MM
- * @returns {{covering:Set<string>, figures:Map<string, number>, rowCategories:Map<string, Category>}}
+ * @returns {{covering:Set<string>, figures:Map<string, number>, rowCategories:Map<string, Category>, parts:Parts}}
  */
 function monthFigures(state, tuning, month) {
   const covering = coveringAccounts(state, tuning, month);
   const accountMonths = new Map(state.accounts.map((a) => [a.id, new Set(covering.has(a.id) ? [month] : [])]));
-  const { sums, rowCategories } = collect(state, { months: [month], complete: true, isDefault: false, accountMonths });
+  const { sums, rowCategories, out, monthsOf } = collect(state, { months: [month], complete: true, isDefault: false, accountMonths });
   /** @type {Map<string, number>} */
   const figures = new Map();
   for (const [categoryId, c] of sums) {
@@ -329,7 +364,7 @@ function monthFigures(state, tuning, month) {
     for (const s of c.byAccount.values()) total += s.months.get(month) ?? 0;
     figures.set(categoryId, total);
   }
-  return { covering, figures, rowCategories };
+  return { covering, figures, rowCategories, parts: partsOf(out, monthsOf) };
 }
 
 /**
@@ -346,7 +381,7 @@ export function typicalMonth(state, tuning, choices = { range: null, compare: nu
   const currency = currencies[0] ?? state.accounts[0]?.currency ?? 'GBP';
 
   const window = analysisWindow(state, tuning, choices.range);
-  const { ctx, monthsOf, rowCategories, sums, oneOffs, uncategorised } = collect(state, window);
+  const { ctx, monthsOf, rowCategories, sums, oneOffs, uncategorised, out } = collect(state, window);
   const compareMonth = choices.compare;
   const month = compareMonth !== null && window.complete && completeMonths(state, tuning).includes(compareMonth)
     ? monthFigures(state, tuning, compareMonth) : null;
@@ -389,7 +424,9 @@ export function typicalMonth(state, tuning, choices = { range: null, compare: nu
     compare = {
       month: compareMonth,
       missing: state.accounts.filter((a) => inWindow.has(a.id) && !month.covering.has(a.id)),
-      totals: totalsOf(tables, (r) => r.month ?? 0),
+      // Annual's month figure is its typical one, so it has transactions whenever it has a row.
+      totals: totalsOf(tables, (r) => r.month ?? 0,
+        (r) => r.budgetType === 'annual' || month.figures.has(r.categoryId), month.parts),
     };
   }
   return {
@@ -397,7 +434,7 @@ export function typicalMonth(state, tuning, choices = { range: null, compare: nu
     stale: staleAccounts(state, window),
     spend: tables.spend, income: tables.income, contribution: tables.contribution, saving: tables.saving,
     oneOffs, uncategorised,
-    totals: totalsOf(tables, (r) => r.perMonth), compare,
+    totals: totalsOf(tables, (r) => r.perMonth, (r) => !r.monthOnly, partsOf(out, monthsOf)), compare,
   };
 }
 

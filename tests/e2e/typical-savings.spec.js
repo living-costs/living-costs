@@ -1,4 +1,4 @@
-// Typical month: a savings account marked Savings gets a Savings table and a Savings summary line.
+// Typical month: a savings account marked Savings gets a Savings table, and the summary's saved line under Remaining.
 // Against the full fixture state; one page is set up once and shared, in order, by every test here.
 /** @import {Page, BrowserContext} from '@playwright/test' */
 import { test, expect } from '@playwright/test';
@@ -21,14 +21,16 @@ const summaryLines = () => page.locator('dl.summary').evaluate((dl) => [...dl.qu
 const line = async (label) => (await summaryLines()).find((l) => l.startsWith(`${label}: `))?.slice(label.length + 2) ?? '';
 const savingsRow = () => table('Savings').getByRole('row').filter({ has: tick('Bank A savings') });
 
-let leftOverBefore = '';
+let remainingBefore = '';
+let savedBefore = '';
 
 test.beforeAll(async ({ browser, baseURL }) => {
   context = await browser.newContext({ baseURL });
   page = await context.newPage();
   await trackCspViolations(page);
   await setupFixtureApp(page);
-  leftOverBefore = await line('Left over');
+  remainingBefore = await line('Remaining');
+  savedBefore = await line('saved');
   const accounts = await readStore(page, 'accounts');
   await writeStore(page, 'accounts', accounts.map((a) => (a.name === 'Bank A savings' ? { ...a, kind: 'savings' } : a)));
   await page.reload();
@@ -50,13 +52,13 @@ test('a Savings table follows Contributions, with the account as plain text', as
   expect(minor(perMonth ?? '')).not.toBe(0);
 });
 
-test('the summary has a Savings line after Left over, and Left over is unchanged', async () => {
+test('saved under Remaining is the Savings table, and Remaining is unchanged', async () => {
+  expect(savedBefore).toBe('—none');
   const lines = await summaryLines();
-  expect(lines.at(-1)).toBe('Ticked: —none');
-  expect(lines.at(-2)?.startsWith('Savings: ')).toBe(true);
-  expect(lines.at(-3)).toBe(`Left over: ${leftOverBefore}`);
+  expect(lines.indexOf(`saved: ${await line('saved')}`)).toBe(lines.indexOf(`Remaining: ${remainingBefore}`) + 1);
   const perMonth = await savingsRow().getByRole('cell').nth(2).textContent();
-  expect(await line('Savings')).toBe(perMonth);
+  expect(await line('saved')).toBe(perMonth);
+  expect(lines.some((l) => l.startsWith('Savings: '))).toBe(false);
 });
 
 test('ticking the savings row adds it to Ticked', async () => {
@@ -65,10 +67,10 @@ test('ticking the savings row adds it to Ticked', async () => {
   expect(await line('Ticked (1 category)')).toBe(perMonth);
 });
 
-test('comparing a month adds a Savings line with the month and Change', async () => {
+test('comparing a month gives saved the month and Change', async () => {
   await page.getByLabel('Compare with').selectOption('2026-10');
   const row = page.getByRole('table', { name: 'Summary per month' }).getByRole('row')
-    .filter({ has: page.getByRole('rowheader', { name: 'Savings', exact: true }) });
+    .filter({ has: page.getByRole('rowheader', { name: 'saved', exact: true }) });
   const cells = await row.getByRole('cell').allTextContents();
   expect(cells).toHaveLength(3);
   expect(cells[0]).toMatch(/£/);

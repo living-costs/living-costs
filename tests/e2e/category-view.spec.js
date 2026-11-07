@@ -99,7 +99,7 @@ test('the bucket lines add up to the figure', async () => {
 });
 
 test('Groceries shows one row of month cells per account, with not covered months', async () => {
-  await open('Living costs', 'Groceries');
+  await open('Regular spending', 'Groceries');
   await expect(page.getByText(/^Spending · Variable · £737\.84 a month: each account's median month, added together\. Typical range £650\.14 to £898\.40\.$/))
     .toBeVisible();
   await expect(page.locator('#screen .month-cells')).toHaveCount(2);
@@ -210,12 +210,12 @@ test('moving a row to another category removes it and puts focus on Transactions
 });
 
 test('a pressed month is not kept after Back', async () => {
-  await open('Living costs', 'Groceries');
+  await open('Regular spending', 'Groceries');
   const march = page.getByRole('group', { name: /^Bank A current: / }).getByRole('button', { name: /^Mar 2026/ });
   await march.click();
   await expect(march).toHaveAttribute('aria-pressed', 'true');
   await back().click();
-  await open('Living costs', 'Groceries');
+  await open('Regular spending', 'Groceries');
   const pressed = page.locator('#screen .month-cells button[aria-pressed="true"]');
   await expect(pressed).toHaveCount(0);
   // Nor after leaving through the nav.
@@ -223,13 +223,13 @@ test('a pressed month is not kept after Back', async () => {
   await expect(march).toHaveAttribute('aria-pressed', 'true');
   await openScreen(page, 'Buckets');
   await openScreen(page, 'Typical month');
-  await open('Living costs', 'Groceries');
+  await open('Regular spending', 'Groceries');
   await expect(pressed).toHaveCount(0);
   await back().click();
 });
 
 test('a bucket name filters the list and toggles off', async () => {
-  await open('Living costs', 'Subscriptions');
+  await open('Regular spending', 'Subscriptions');
   // Two accounts: the Account column is shown.
   await expect(bucketTable().getByRole('columnheader', { name: 'Account' })).toBeVisible();
   const all = await listRows().count();
@@ -266,16 +266,16 @@ test('Stopped lowers the figure here and on Typical month, and unticking restore
   await expectNoAxeViolations(page);
 
   await back().click();
-  await expect(row('Living costs', 'Subscriptions').getByRole('cell').nth(2)).toHaveText(lowered);
+  await expect(row('Regular spending', 'Subscriptions').getByRole('cell').nth(2)).toHaveText(lowered);
 
-  await open('Living costs', 'Subscriptions');
+  await open('Regular spending', 'Subscriptions');
   await stopped.uncheck();
   await expect.poll(async () => (await readStore(page, 'buckets')).find((b) => b.displayName === 'SPOTIFY')?.stoppedAfter)
     .toBeUndefined();
   await expect(explanationLine()).toContainText('Spending · Fixed · £89.97 a month');
   await expect(bucketRow('SPOTIFY')).not.toHaveClass(/stopped/);
   await back().click();
-  await expect(row('Living costs', 'Subscriptions').getByRole('cell').nth(2)).toHaveText('£89.97');
+  await expect(row('Regular spending', 'Subscriptions').getByRole('cell').nth(2)).toHaveText('£89.97');
 });
 
 test('Back returns focus to the category button', async () => {
@@ -289,7 +289,7 @@ test('leaving through the nav closes the category', async () => {
   await openScreen(page, 'Buckets');
   await openScreen(page, 'Typical month');
   await expect(viewHeading('Salary')).toHaveCount(0);
-  await expect(page.getByRole('table', { name: 'Living costs', exact: true })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Regular spending', exact: true })).toBeVisible();
   // The Typical month nav button itself also closes it.
   await open('Income', 'Salary');
   await openScreen(page, 'Typical month');
@@ -299,17 +299,17 @@ test('leaving through the nav closes the category', async () => {
 
 test('browser back closes the category, as Back does', async () => {
   const url = page.url();
-  await open('Living costs', 'Groceries');
+  await open('Regular spending', 'Groceries');
   const march = page.getByRole('group', { name: /^Bank A current: / }).getByRole('button', { name: /^Mar 2026/ });
   await march.click();
   await expect(march).toHaveAttribute('aria-pressed', 'true');
   await page.goBack();
   await expect(viewHeading('Groceries')).toHaveCount(0);
-  await expect(row('Living costs', 'Groceries').getByRole('button', { name: 'Groceries', exact: true })).toBeFocused();
+  await expect(row('Regular spending', 'Groceries').getByRole('button', { name: 'Groceries', exact: true })).toBeFocused();
   expect(page.url()).toBe(url);
   expect(await page.evaluate(() => history.state?.livingCostsSubview === true)).toBe(false);
   // Closed by browser back, the view still forgets the pressed month.
-  await open('Living costs', 'Groceries');
+  await open('Regular spending', 'Groceries');
   await expect(page.locator('#screen .month-cells button[aria-pressed="true"]')).toHaveCount(0);
   await back().click();
 });
@@ -350,7 +350,7 @@ async function focusRingOfFirstButton() {
 
 // One test per category, as a11y.spec.js does per screen: each runs two axe scans over up to
 // 200 transaction rows, and three in one test came within 0.2s of the 30s timeout on CI.
-for (const [tableName, name] of [['Living costs', 'Groceries'], ['Living costs', 'Subscriptions'], ['Income', 'Salary']]) {
+for (const [tableName, name] of [['Regular spending', 'Groceries'], ['Regular spending', 'Subscriptions'], ['Income', 'Salary']]) {
   test(`${name} view passes axe, has large targets and focus rings, and fits 320px`, async () => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await open(tableName, name);

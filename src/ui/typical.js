@@ -1,5 +1,5 @@
 // Typical month screen: the window, stale-account notices, the summary, the uncategorised line,
-// one table each for living costs, income, contributions and savings, and the one-offs list.
+// one table each for regular spending, income, contributions and savings, and the one-offs list.
 // Every figure comes from typicalMonth; this only lays it out. A category name opens that
 // category's view (category-view.js) in place of the tables.
 
@@ -124,7 +124,7 @@ export function render(root, app) {
     app.rerender();
   };
   const tables = [
-    rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen, onTick, cmp?.month),
+    rowsTable('typical-living', 'Regular spending', tm.spend, money, onOpen, onTick, cmp?.month),
     rowsTable('typical-income', 'Income', tm.income, money, onOpen, onTick, cmp?.month),
     rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen, onTick, cmp?.month),
     rowsTable('typical-savings', 'Savings', tm.saving, money, onOpen, onTick, cmp?.month),
@@ -137,7 +137,7 @@ export function render(root, app) {
 }
 
 /**
- * Give each column the width of its widest cell across the tables, so Living costs, Income and
+ * Give each column the width of its widest cell across the tables, so Regular spending, Income and
  * Contributions line up. Cells don't wrap, so the screen (in the document while it renders) can
  * measure them here. Widths are set through the CSSOM, which the CSP's style-src allows.
  * @param {Element[]} tables all with the same columns
@@ -241,12 +241,17 @@ function lastCovered(state, accountId) {
     .reduce((m, b) => (b.coversTo > m ? b.coversTo : m), '');
 }
 
+/** What "not accounted for" holds, shown under it. */
+const UNACCOUNTED_NOTE = 'typical month vs actual months, and money in accounts not tracked';
+
 /**
- * The summary card: Income, Living costs and Left over, then Savings when there are any, then Ticked as a second total of its own.
- * With contributions, Living costs is followed by "less contributions from others" and "your share".
- * Ticked is always there: the plain sum of the ticked rows shown in the tables, whichever table
- * they are in, with their names below; with nothing ticked, a dash and a hint. Comparing a month
- * turns the list into a table with the month and Change.
+ * The summary card: Income, Regular spending and Remaining, then Remaining's parts, then Ticked
+ * as a second total of its own. With contributions, Regular spending is followed by "less
+ * contributions from others" and "your share". Remaining's parts are always there: saved,
+ * one-offs, uncategorised and ignored, each a dash when it has no transactions, then "not
+ * accounted for" with a note. Ticked is always there: the plain sum of the ticked rows shown in
+ * the tables, whichever table they are in, with their names below; with nothing ticked, a dash
+ * and a hint. Comparing a month turns the list into a table with the month and Change.
  * @param {TypicalMonth} tm
  * @param {(minor: number) => string} money
  * @param {Set<string>} ticked
@@ -254,38 +259,57 @@ function lastCovered(state, accountId) {
  */
 function summaryList(tm, money, ticked) {
   const t = tm.totals;
-  const c = tm.compare;
-  /** @type {[string, number, number, string?][]} label, typical, the compared month, class */
-  const lines = [['Income', t.income, c?.totals.income ?? 0], ['Living costs', t.living, c?.totals.living ?? 0]];
+  const c = tm.compare?.totals;
+  /** @typedef {{label:string, typical:number|null, month:number|null, cls?:string, note?:string}} Line */
+  /** @type {Line[]} */
+  const lines = [{ label: 'Income', typical: t.income, month: c?.income ?? 0 },
+    { label: 'Regular spending', typical: t.living, month: c?.living ?? 0 }];
   if (tm.contribution.length > 0) {
-    lines.push(['less contributions from others', t.contributions, c?.totals.contributions ?? 0, 'sub'],
-      ['your share', t.share, c?.totals.share ?? 0, 'sub']);
+    lines.push({ label: 'less contributions from others', typical: t.contributions, month: c?.contributions ?? 0, cls: 'sub' },
+      { label: 'your share', typical: t.share, month: c?.share ?? 0, cls: 'sub' });
   }
-  lines.push(['Left over', t.leftOver, c?.totals.leftOver ?? 0, 'total']);
-  if (tm.saving.length > 0) lines.push(['Savings', t.savings, c?.totals.savings ?? 0, 'total']);
+  lines.push({ label: 'Remaining', typical: t.remaining, month: c?.remaining ?? 0, cls: 'rule' },
+    { label: 'saved', typical: t.saved, month: c?.saved ?? null, cls: 'sub' },
+    { label: 'one-offs', typical: t.oneOffs, month: c?.oneOffs ?? null, cls: 'sub' },
+    { label: 'uncategorised', typical: t.uncategorised, month: c?.uncategorised ?? null, cls: 'sub' },
+    { label: 'ignored', typical: t.ignored, month: c?.ignored ?? null, cls: 'sub' },
+    { label: 'not accounted for', typical: t.unaccounted, month: c?.unaccounted ?? 0, cls: 'sub', note: UNACCOUNTED_NOTE });
 
   const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution, ...tm.saving].filter((r) => ticked.has(r.categoryId));
   const any = tickedRows.length > 0;
   const tickedLabel = any ? `Ticked (${plural(tickedRows.length, 'category', 'categories')})` : 'Ticked';
   const tickedTypical = tickedRows.reduce((sum, r) => sum + r.perMonth, 0);
   const tickedMonth = tickedRows.reduce((sum, r) => sum + (r.month ?? 0), 0);
-  /** A dash for nothing ticked, read as "none". */
+  /** A dash, read as "none": nothing ticked, or a part with no transactions. */
   const none = () => [h('span', { 'aria-hidden': 'true' }, '—'), h('span', { class: 'visually-hidden' }, 'none')];
+  /** @param {number|null} minor */
+  const figure = (minor) => (minor === null ? none() : [money(minor)]);
+  /** @param {Line} line the label, with its note on a line of its own */
+  const label = (line) => (line.note ? [line.label, h('span', { class: 'note' }, line.note)] : [line.label]);
   const which = h('p', { class: 'ticked-which' },
     any ? tickedRows.map((r) => r.name).join(', ') : 'Tick categories below to add them up here.');
 
   /** @type {HTMLElement} */
   let body;
-  if (c) {
+  if (tm.compare) {
+    /**
+     * A part with no transactions in either counts as 0 against the other; with none in both, a dash.
+     * @param {number|null} typical @param {number|null} month
+     */
+    const change = (typical, month) => (typical === null && month === null
+      ? h('td', { class: 'num same' }, ...none())
+      : h('td', { class: changeClass((month ?? 0) - (typical ?? 0)) }, changeText((month ?? 0) - (typical ?? 0), money)));
     body = h('div', { class: 'scroll summary-scroll', tabindex: '0', role: 'region', 'aria-label': 'Summary per month' }, h('table', { class: 'summary-compare', 'aria-label': 'Summary per month' },
       h('thead', null, h('tr', null, h('td'), h('th', { scope: 'col', class: 'num' }, 'Typical'),
-        h('th', { scope: 'col', class: 'num' }, formatMonth(c.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
+        h('th', { scope: 'col', class: 'num' }, formatMonth(tm.compare.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
       h('tbody', null,
-        ...lines.map(([label, minor, month, cls]) => h('tr', { class: cls },
-          h('th', { scope: 'row' }, label),
-          h('td', { class: 'num' }, money(minor)),
-          h('td', { class: 'num' }, money(month)),
-          h('td', { class: changeClass(month - minor) }, changeText(month - minor, money)))),
+        // A note goes in a row of its own across the table, as the label column is too narrow for it.
+        ...lines.flatMap((line) => [h('tr', { class: line.cls },
+          h('th', { scope: 'row' }, line.label),
+          h('td', { class: 'num' }, ...figure(line.typical)),
+          h('td', { class: 'num' }, ...figure(line.month)),
+          change(line.typical, line.month)),
+        ...(line.note ? [h('tr', { class: `${line.cls} note-row` }, h('td', { colspan: '4' }, h('span', { class: 'note' }, line.note)))] : [])]),
         h('tr', { class: 'ticked' },
           h('th', { scope: 'row' }, tickedLabel),
           ...(any
@@ -294,7 +318,7 @@ function summaryList(tm, money, ticked) {
             : [h('td', { class: 'num same' }, ...none()), h('td', { class: 'num same' }, ...none()), h('td', { class: 'num same' }, ...none())])))));
   } else {
     body = h('dl', { class: 'summary', 'aria-label': 'Summary per month' },
-      ...lines.flatMap(([label, minor, , cls]) => [h('dt', { class: cls }, label), h('dd', { class: cls }, money(minor))]),
+      ...lines.flatMap((line) => [h('dt', { class: line.cls }, ...label(line)), h('dd', { class: line.cls }, ...figure(line.typical))]),
       h('dt', { class: 'ticked' }, tickedLabel),
       h('dd', { class: 'ticked' }, ...(any ? [money(tickedTypical)] : none())));
   }
@@ -390,7 +414,7 @@ function oneOffList(state, tm, money) {
   const names = new Map(state.categories.map((c) => [c.id, c.name]));
   return h('section', { 'aria-labelledby': 'typical-oneoffs' },
     h('h3', { id: 'typical-oneoffs' }, 'One-offs'),
-    help('Not included in living costs.'),
+    help('Not included in regular spending.'),
     h('ul', { class: 'plain-list', 'aria-labelledby': 'typical-oneoffs' }, ...tm.oneOffs.map((o) => h('li', null,
       `${formatDate(o.txn.date)} · `,
       h('span', { class: 'raw' }, o.txn.rawText),

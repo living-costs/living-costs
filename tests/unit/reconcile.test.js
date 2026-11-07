@@ -160,9 +160,40 @@ test('variable rows are pinned from expected.json', () => {
 
 test('totals are pinned', () => {
   // living = 90000 + 73784 + 15000 + 14750 + 14520 + 13300 + 8997 + 4720 + 4000 + 2899 + 1400
-  // income = 250000 + 10414; share = living − 55000; leftOver = income − share
+  // income = 250000 + 10414; share = living − 55000; remaining = income − share
   assert.equal(90000 + 73784 + 15000 + 14750 + 14520 + 13300 + 8997 + 4720 + 4000 + 2899 + 1400, 243370);
-  assert.deepEqual(tm.totals, { income: 260414, living: 243370, contributions: 55000, share: 188370, leftOver: 72044, savings: 0 });
+  const { saved, oneOffs, uncategorised, ignored, unaccounted, ...main } = tm.totals;
+  assert.deepEqual(main, { income: 260414, living: 243370, contributions: 55000, share: 188370, remaining: 72044 });
+  assert.equal(saved, null);
+  assert.equal(unaccounted, 72044 - (oneOffs ?? 0) - (uncategorised ?? 0) - (ignored ?? 0));
+});
+
+test("Remaining's parts match a plain sum of money out, each account over its own months", () => {
+  const window = analysisWindow(state, tuning);
+  const ctx = buildContext(state);
+  const kinds = new Map(state.categories.map((c) => [c.id, c]));
+  /** @type {Record<string, Map<string, number>>} part → account → money out */
+  const out = { oneOffs: new Map(), uncategorised: new Map(), ignored: new Map() };
+  for (const t of state.transactions) {
+    if (!window.accountMonths.get(t.accountId)?.has(monthOf(t.date))) continue;
+    const res = resolve(t, ctx);
+    if (res.source === 'transfer') continue;
+    for (const p of res.parts) {
+      const c = p.categoryId ? kinds.get(p.categoryId) : undefined;
+      const part = !c ? 'uncategorised' : c.kind === 'ignore' ? 'ignored'
+        : c.budgetType === 'oneoff' && c.kind !== 'transfer' ? 'oneOffs' : null;
+      if (part) out[part].set(t.accountId, (out[part].get(t.accountId) ?? 0) - p.amountMinor);
+    }
+  }
+  /** @param {Map<string, number>} m */
+  const perMonth = (m) => (m.size === 0 ? null : [...m].reduce((sum, [id, v]) =>
+    sum + Math.sign(v) * Math.round(Math.abs(v) / window.accountMonths.get(id).size), 0));
+  assert.equal(tm.totals.oneOffs, perMonth(out.oneOffs));
+  assert.equal(tm.totals.uncategorised, perMonth(out.uncategorised));
+  assert.equal(tm.totals.ignored, perMonth(out.ignored));
+  // The fixtures have one-offs and uncategorised rows, so neither part is empty.
+  assert.notEqual(tm.totals.oneOffs, null);
+  assert.notEqual(tm.totals.uncategorised, null);
 });
 
 test('totals add up from the rows', () => {
@@ -171,7 +202,7 @@ test('totals add up from the rows', () => {
   assert.equal(tm.totals.income, sum(tm.income));
   assert.equal(tm.totals.contributions, sum(tm.contribution));
   assert.equal(tm.totals.share, tm.totals.living - tm.totals.contributions);
-  assert.equal(tm.totals.leftOver, tm.totals.income - tm.totals.share);
+  assert.equal(tm.totals.remaining, tm.totals.income - tm.totals.share);
 });
 
 test('the categorise card monthly figure follows D1: Bank B buckets divide by its 3 months', () => {
