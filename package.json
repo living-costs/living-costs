@@ -11,6 +11,7 @@
     "banned": "node tools/check-banned.js",
     "e2e": "playwright test",
     "serve": "node tests/server.js",
+    "categories": "node tools/category-editor/server.js",
     "check": "npm run banned && npm test && npm run types && npm run e2e"
   },
   "devDependencies": {
