@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../src/changes.js';
-import { buildContext, resolve, categoryKindOf } from '../../src/resolve.js';
+import { buildContext, resolve, resolveUnpaired, categoryKindOf } from '../../src/resolve.js';
 
 const cat = (id, kind) => ({ id, name: id, kind, position: 0 });
 const txn = (fingerprint, amountMinor = -6069) => ({
@@ -80,4 +80,12 @@ test('categoryKindOf', () => {
   assert.equal(categoryKindOf({ amountMinor: 1, categoryId: 'other' }, ctx), 'income');
   assert.equal(categoryKindOf({ amountMinor: 1, categoryId: null }, ctx), null);
   assert.equal(categoryKindOf({ amountMinor: 1, categoryId: 'gone' }, ctx), null);
+});
+
+test('resolveUnpaired ignores the confirmed pair and returns the bucket resolution', () => {
+  const ctx = buildContext(build({ bucketCat: 'bucketcat', pair: 'confirmed' }));
+  assert.equal(resolve(txn('f1'), ctx).source, 'transfer');
+  const r = resolveUnpaired(txn('f1'), ctx);
+  assert.equal(r.source, 'bucket');
+  assert.equal(r.parts[0].categoryId, 'bucketcat');
 });

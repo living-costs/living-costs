@@ -31,10 +31,20 @@ export function buildContext(state) {
  * @returns {Resolution}
  */
 export function resolve(txn, ctx) {
-  const none = () => ({ source: /** @type {const} */ ('none'), parts: [{ amountMinor: txn.amountMinor, categoryId: null }] });
   if (ctx.paired.has(txn.fingerprint)) {
     return { source: 'transfer', parts: [{ amountMinor: txn.amountMinor, categoryId: null }] };
   }
+  return resolveUnpaired(txn, ctx);
+}
+
+/**
+ * `resolve` without the confirmed-pair check: what the transaction would count as on its own.
+ * @param {Transaction} txn
+ * @param {ResolveContext} ctx
+ * @returns {Resolution}
+ */
+export function resolveUnpaired(txn, ctx) {
+  const none = () => ({ source: /** @type {const} */ ('none'), parts: [{ amountMinor: txn.amountMinor, categoryId: null }] });
   const ov = ctx.overrides.get(txn.fingerprint);
   if (ov?.splits && ov.splits.length > 0) {
     return {
