@@ -386,3 +386,6 @@ tr.stopped { opacity: .75; }
 .site-footer { font-size: 0.875rem; color: var(--muted); overflow-wrap: anywhere; }
 .site-footer p { margin: 0.5rem 0; }
 .site-footer a { color: var(--accent); }
+
+/* The category suggested from the merchant name: a text label, so it never relies on colour alone. */
+.category-buttons .suggested { margin-left: 0.5rem; padding: 0 0.35rem; border: 1px solid var(--border); border-radius: 0.25rem; font-size: 0.8rem; font-style: italic; }

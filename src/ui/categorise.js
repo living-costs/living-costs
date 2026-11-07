@@ -21,6 +21,7 @@ import { formatDate, monthOf } from '../dates.js';
 import { whileSaving } from './saving.js';
 import { monthGrid } from './month-grid.js';
 import { renderTransactionList } from './transactions.js';
+import { suggestCategory } from '../suggest.js';
 import { focusKey, plural, valueOf, field, emptyDraft, categoryForm, categoryHint } from './form.js';
 
 /**
@@ -161,9 +162,16 @@ function card(app, bucket, counts) {
   /** @param {string} categoryId */
   const assign = (categoryId) => save(() => setBucketCategory(app.store.state, bucket.id, categoryId));
 
+  const suggested = suggestCategory(state, bucket);
+
   const el = h('section', {
     id: 'card', class: 'card', tabindex: '0', 'aria-labelledby': 'card-heading', 'data-focus-key': 'card',
     onKeydown: (/** @type {KeyboardEvent} */ e) => {
+      if (e.key === 'Enter' && e.target === el && suggested && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        assign(suggested.id);
+        return;
+      }
       if (!app.tuning.firstTenKeys || e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
       if (!/^[0-9]$/.test(e.key)) return;
@@ -184,7 +192,7 @@ function card(app, bucket, counts) {
     count && months ? eachMonth(app, bucket, count, months) : null,
     current ? h('p', null, `Category: ${current.name}`) : null,
     examples(all),
-    categoryGroup(app, cats, assign),
+    categoryGroup(app, cats, assign, suggested),
     ui.newOpen ? newCategoryForm(app, bucket, el) : null,
     related(app, bucket, counts, save),
     unusual(app, all, sortedCategories(state), save),
@@ -278,9 +286,10 @@ function examples(all) {
  * @param {App} app
  * @param {Category[]} cats
  * @param {(categoryId: string) => void} assign
+ * @param {Category|null} suggested the category suggested from the merchant name, marked on its button
  * @returns {HTMLElement}
  */
-function categoryGroup(app, cats, assign) {
+function categoryGroup(app, cats, assign, suggested) {
   return h('div', null,
     h('h4', { id: 'card-categories' }, 'Category'),
     h('div', { role: 'group', 'aria-labelledby': 'card-categories', class: 'category-buttons' },
@@ -290,7 +299,8 @@ function categoryGroup(app, cats, assign) {
           type: 'button', class: 'secondary', 'data-saves': true, 'data-focus-key': `cat-${c.id}`,
           'aria-keyshortcuts': key, title: categoryHint(c), 'aria-describedby': `cat-hint-${c.id}`,
           onClick: () => assign(c.id),
-        }, key ? h('span', { class: 'key' }, key) : null, key ? ' ' : null, c.name);
+        }, key ? h('span', { class: 'key' }, key) : null, key ? ' ' : null, c.name,
+          suggested && c.id === suggested.id ? h('span', { class: 'suggested' }, 'Suggested') : null);
       }),
       ...cats.map((c) => h('span', { class: 'visually-hidden', id: `cat-hint-${c.id}` }, categoryHint(c))),
       h('button', {

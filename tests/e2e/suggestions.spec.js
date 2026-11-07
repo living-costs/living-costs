@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  expectNoAxeViolations, trackCspViolations, importFiles, readStore, openScreen, navButton, setBucketCategory, FIXTURE_ACCOUNTS,
+  expectNoAxeViolations, trackCspViolations, importFiles, readStore, openScreen, navButton, setBucketCategory, FIXTURE_ACCOUNTS, skipToCard, cardHeading,
 } from './helpers.js';
 
 /** The row of a bucket, found by its select's name. */
@@ -78,3 +78,47 @@ test('accepting every suggestion clears the highlight', async ({ page }) => {
   await expect(nav).not.toHaveClass(/\battention\b/);
   await expectNoAxeViolations(page);
 });
+
+test('categorise card marks the suggested category', async ({ page }) => {
+  await openScreen(page, 'Categorise');
+  await skipToCard(page, 'TESCO STORES');
+  const groceries = page.locator('#card').getByRole('button', { name: /^\d* ?Groceries/ });
+  await expect(groceries).toHaveAccessibleName(/suggested/i);
+  await expect(groceries).toContainText('Suggested');
+  await expect(page.locator('#card button', { hasText: 'Suggested' })).toHaveCount(1);
+  await skipToCard(page, 'PARKING METER');
+  await expect(page.locator('#card button', { hasText: 'Suggested' })).toHaveCount(0);
+});
+
+test('Enter on the card accepts the suggestion', async ({ page }) => {
+  await openScreen(page, 'Categorise');
+  await skipToCard(page, 'TESCO STORES');
+  await page.locator('#card').focus();
+  await page.keyboard.press('Enter');
+  const groceries = (await readStore(page, 'categories')).find((c) => c.name === 'Groceries').id;
+  await expect.poll(() => categoryOf(page, 'TESCO STORES')).toBe(groceries);
+  await expect(cardHeading(page)).not.toHaveText('TESCO STORES');
+});
+
+test('Enter on a button keeps its own meaning', async ({ page }) => {
+  await openScreen(page, 'Categorise');
+  await skipToCard(page, 'AMAZON.CO.UK');
+  await page.locator('#card').getByRole('button', { name: /^\d* ?Shopping/ }).focus();
+  await page.keyboard.press('Enter');
+  const id = async (n) => (await readStore(page, 'categories')).find((c) => c.name === n).id;
+  await expect.poll(() => categoryOf(page, 'AMAZON.CO.UK')).toBe(await id('Shopping'));
+  await skipToCard(page, 'SPOTIFY');
+  await page.locator('#card').getByRole('button', { name: /^\d* ?Eating out/ }).focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => categoryOf(page, 'SPOTIFY')).toBe(await id('Eating out'));
+});
+
+for (const scheme of ['light', 'dark']) {
+  test(`suggested mark passes axe in ${scheme} theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await openScreen(page, 'Categorise');
+    await skipToCard(page, 'TESCO STORES');
+    await expect(page.locator('#card button', { hasText: 'Suggested' })).toHaveCount(1);
+    await expectNoAxeViolations(page);
+  });
+}
