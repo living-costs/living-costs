@@ -183,7 +183,7 @@ test('updateCategory validates the merged result', () => {
   assert.ok('error' in updateCategory(s, ins.id, { name: 'gifts' }));
   assert.ok('error' in updateCategory(s, ins.id, { name: ' ' }));
   assert.ok('error' in updateCategory(s, 'missing', { name: 'X' }));
-  const between = byName(s, 'Between my accounts');
+  const between = byName(s, 'Transferred to another account');
   assert.ok('error' in updateCategory(s, between.id, { budgetType: 'fixed' }));
   assert.ok('error' in updateCategory(s, between.id, { kind: 'spend' }), 'spend needs a budget type');
 
