@@ -93,10 +93,11 @@ function guide(app) {
       [KIND_LABELS.spend, 'Day-to-day living costs. Refunds reduce them.'],
       [KIND_LABELS.income, 'Salary and other earnings. Left over is income minus your share of living costs.'],
       [KIND_LABELS.contribution, 'Money someone else pays in towards shared costs. It reduces your share of living costs and is not income.'],
+      [KIND_LABELS.saving, 'Money set aside in savings, such as a standing order to a savings account. Shown as its own total, not a living cost. If you import the savings account, choose Savings as its kind on Accounts so transfers to it count.'],
       [KIND_LABELS.transfer, 'Money moving between your own accounts, and card repayments. Left out of your typical month.'],
       [KIND_LABELS.ignore, 'Anything else you do not want counted. Left out of your typical month, the same as Transfer.'],
     ]),
-    guidePanel('budget-types-heading', 'Budget types', 'Spend, Income and Contribution only', [
+    guidePanel('budget-types-heading', 'Budget types', 'Spend, Income, Contribution and Saving only', [
       [BUDGET_LABELS.fixed, 'Regular charges such as rent or subscriptions. Uses each charge\'s latest amount, as often as it was charged. Open the category on Typical month to mark a charge Stopped.'],
       [BUDGET_LABELS.variable, `Costs that change month to month, such as groceries. Uses the median month, with a typical range between percentiles ${lo} and ${hi}.`],
       [BUDGET_LABELS.annual, 'Irregular or yearly costs, such as insurance. Uses the yearly total divided by 12.'],

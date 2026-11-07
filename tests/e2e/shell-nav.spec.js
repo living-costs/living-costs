@@ -191,7 +191,7 @@ test('store writes IndexedDB first and keeps memory in step', async ({ page }) =
   expect(result.replaced.disk).toEqual(['only']);
   expect(result.replaced.overridesIsMap).toBe(true);
   expect(result.replaced.override).toBe('only');
-  const empty = { id: 'settings', schemaVersion: 2, offeredDefaultIds: [], helpDismissed: false };
+  const empty = { id: 'settings', schemaVersion: 3, offeredDefaultIds: [], helpDismissed: false };
   expect(result.replaced.settings).toEqual(empty);
   expect(result.replaced.memorySettings).toEqual(empty);
 });

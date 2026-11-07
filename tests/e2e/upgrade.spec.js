@@ -37,7 +37,7 @@ test('version 1 data upgrades silently on load', async ({ page }) => {
   await expect(subscriptionsPerMonth(page)).toHaveText(/** @type {string} */ (subscriptions));
 
   const [settings] = await readStore(page, 'settings');
-  expect(settings).toMatchObject({ schemaVersion: 2, lastBackupAt, helpDismissed: true });
+  expect(settings).toMatchObject({ schemaVersion: 3, lastBackupAt, helpDismissed: true });
   expect((await readStore(page, 'rules')).some((r) => 'normaliserVersion' in r)).toBe(false);
   expect(await readStore(page, 'transactions')).toHaveLength(transactions);
   expect(await page.evaluate(() => /** @type {any} */ (window).__csp)).toEqual([]);
@@ -52,7 +52,7 @@ test('data with no settings row is treated as version 1', async ({ page }) => {
   await expect(heading(page)).toHaveText('Help');
   expect(await readStore(page, 'transactions')).toHaveLength(transactions);
   const [settings] = await readStore(page, 'settings');
-  expect(settings).toMatchObject({ id: 'settings', schemaVersion: 2 });
+  expect(settings).toMatchObject({ id: 'settings', schemaVersion: 3 });
 });
 
 test('a current-version load does not rewrite the data', async ({ page }) => {
@@ -190,7 +190,7 @@ test('delete all data starts afresh', async ({ page }) => {
   await expect(heading(page)).toHaveText('Help');
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button').first()).toBeVisible();
   const [settings] = await readStore(page, 'settings');
-  expect(settings.schemaVersion).toBe(2);
+  expect(settings.schemaVersion).toBe(3);
   expect(await readStore(page, 'transactions')).toHaveLength(0);
   expect((await readStore(page, 'categories')).length).toBeGreaterThan(0);
 });

@@ -61,8 +61,8 @@ test('largest first', async ({ page }) => {
   await expect(navButton(page, 'Categorise')).toHaveAccessibleName('Categorise (at 0%)');
   const buttons = card(page).getByRole('group', { name: 'Category' }).getByRole('button');
   await expect(buttons.first()).toHaveText('1 Salary');
-  await expect(buttons.nth(9)).toHaveText('0 Takeaway');
-  await expect(buttons.nth(10)).toHaveText('Coffee shops');
+  await expect(buttons.nth(9)).toHaveText('0 Eating out');
+  await expect(buttons.nth(10)).toHaveText('Takeaway');
   await expect(buttons.last()).toHaveText('New category…');
 });
 

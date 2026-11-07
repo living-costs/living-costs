@@ -9,6 +9,7 @@ export default [
   { id: 'salary', name: 'Salary', kind: 'income', budgetType: 'fixed' },
   { id: 'other-income', name: 'Other income', kind: 'income', budgetType: 'variable' },
   { id: 'contributions', name: 'Contributions from others', kind: 'contribution', budgetType: 'fixed' },
+  { id: 'savings', name: 'Savings', kind: 'saving', budgetType: 'variable' },
   { id: 'housing', name: 'Housing (rent or mortgage)', kind: 'spend', budgetType: 'fixed' },
   { id: 'council-tax', name: 'Council tax', kind: 'spend', budgetType: 'fixed' },
   { id: 'utilities', name: 'Utilities', kind: 'spend', budgetType: 'fixed' },
