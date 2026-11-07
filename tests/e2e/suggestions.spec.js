@@ -31,13 +31,14 @@ test('nav count, Suggested column and Accept', async ({ page }) => {
   await expect(nav).toHaveClass(/\battention\b/);
 
   await openScreen(page, 'Buckets');
-  const headers = page.getByRole('columnheader');
-  await expect(headers.last()).toHaveText('Suggested');
+  await expect(page.getByRole('columnheader'))
+    .toHaveText(['Select', 'Name', 'Suggested', 'Total', 'Transactions', 'Category']);
   const tesco = rowOf(page, 'TESCO STORES');
-  const lastCell = (row) => row.getByRole('cell').last();
-  await expect(lastCell(tesco)).toContainText('Groceries');
+  // The name is a row header, so Suggested is the second cell after Select.
+  const suggestedCell = (row) => row.getByRole('cell').nth(1);
+  await expect(suggestedCell(tesco)).toContainText('Groceries');
   await expect(tesco.getByRole('button', { name: 'Accept Groceries for TESCO STORES' })).toBeVisible();
-  await expect(lastCell(rowOf(page, 'PARKING METER'))).toHaveText('');
+  await expect(suggestedCell(rowOf(page, 'PARKING METER'))).toHaveText('');
   await expectNoAxeViolations(page);
 
   await tesco.getByRole('button', { name: 'Accept Groceries for TESCO STORES' }).click();
@@ -46,7 +47,7 @@ test('nav count, Suggested column and Accept', async ({ page }) => {
   await expect(page.getByRole('combobox', { name: 'Category for TESCO STORES', exact: true })).toHaveValue(groceries);
   await expect(page.getByRole('combobox', { name: 'Category for TESCO STORES', exact: true })).toBeFocused();
   await expect(nav).toHaveAccessibleName('Buckets, 4 suggestions');
-  await expect(lastCell(rowOf(page, 'TESCO STORES'))).toHaveText('');
+  await expect(suggestedCell(rowOf(page, 'TESCO STORES'))).toHaveText('');
 
   await setBucketCategory(page, 'SPOTIFY', 'Entertainment');
   await expect(nav).toHaveAccessibleName('Buckets, 3 suggestions');
