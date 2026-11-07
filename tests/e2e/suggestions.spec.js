@@ -53,6 +53,18 @@ test('nav count, Suggested column and Accept', async ({ page }) => {
   await expect(nav).toHaveAccessibleName('Buckets, 3 suggestions');
 });
 
+test('Accept buttons line up after names of different lengths', async ({ page }) => {
+  await openScreen(page, 'Buckets');
+  const accepts = page.getByRole('table').getByRole('button', { name: /^Accept / });
+  await expect(accepts).toHaveCount(5);
+  const lefts = await accepts.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().left)));
+  expect(new Set(lefts).size).toBe(1);
+  // The chip still comes first.
+  const cell = rowOf(page, 'TESCO STORES').getByRole('cell').nth(1);
+  await expect(cell).toHaveText(/^Groceries\s*Accept$/);
+  if (process.env.SHOT_PATH) await page.getByRole('table').screenshot({ path: process.env.SHOT_PATH });
+});
+
 /** One of the Show buttons on Buckets: All, Uncategorised or Suggested. */
 const show = (page, name) => page.getByRole('group', { name: 'Show' }).getByRole('button', { name: new RegExp(`^${name}`) });
 
