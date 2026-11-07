@@ -278,8 +278,8 @@ function drawList(app, results, rows, cats, suggestions) {
   results.replaceChildren(h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-label': 'Buckets' },
     h('table', { class: 'buckets' },
       h('thead', null, h('tr', null,
-        h('th', { scope: 'col' }, 'Select'), header('name'), header('total'), header('count'),
-        h('th', { scope: 'col' }, 'Category'), h('th', { scope: 'col' }, 'Suggested'))),
+        h('th', { scope: 'col' }, 'Select'), header('name'), h('th', { scope: 'col' }, 'Suggested'),
+        header('total'), header('count'), h('th', { scope: 'col' }, 'Category'))),
       h('tbody', null, ...shown.map((r, i) => bucketRow(app, r, cats, shown, i, suggestions))))));
 }
 
@@ -339,9 +339,6 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
         focusKey('bucket-heading');
       },
     }, b.displayName)),
-    h('td', { class: 'num total' }, totalText(r)),
-    h('td', { class: 'num count' }, String(r.count)),
-    h('td', null, select),
     h('td', null, ...(suggestion ? [h('span', { class: 'suggested-chip' }, suggestion.name), ' ', h('button', {
       type: 'button', class: 'secondary', 'aria-label': `Accept ${suggestion.name} for ${b.displayName}`,
       'data-focus-key': `bucket-accept-${b.id}`, 'data-saves': true,
@@ -350,7 +347,10 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
         if (ui.show === 'all') focusKey(categoryKey(b.id));
         choose(suggestion.id);
       },
-    }, 'Accept')] : [])));
+    }, 'Accept')] : [])),
+    h('td', { class: 'num total' }, totalText(r)),
+    h('td', { class: 'num count' }, String(r.count)),
+    h('td', null, select));
 }
 
 /**
