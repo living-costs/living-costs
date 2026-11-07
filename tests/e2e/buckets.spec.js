@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations, importFiles, readStore, expectBackBesideHeading } from './helpers.js';
+import { expectNoAxeViolations, trackCspViolations, importFiles, readStore, expectBesideHeading } from './helpers.js';
 
 const BANK_A = { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' };
 const CARD = { new: { name: 'Credit card', kind: 'card' }, mapping: 'card' };
@@ -9,7 +9,8 @@ const screenHeading = (page) => page.locator('#screen h2');
 /** @param {import('@playwright/test').Page} page */
 const search = (page) => page.getByLabel('Search buckets');
 /** @param {import('@playwright/test').Page} page */
-const onlyUncategorised = (page) => page.getByLabel('Only uncategorised');
+/** One of the Show buttons: All, Uncategorised or Suggested (whose name ends with its count). */
+const show = (page, name) => page.getByRole('group', { name: 'Show' }).getByRole('button', { name: new RegExp(`^${name}`) });
 /** The name button of a bucket in the list. */
 const nameButton = (page, name) => page.getByRole('button', { name, exact: true });
 /** The list row of a bucket, found by its name button. */
@@ -83,15 +84,17 @@ test('filter and search', async ({ page }) => {
   await expect(nameButton(page, 'AMAZON.CO.UK')).toBeVisible();
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2);
 
-  // Only uncategorised hides categorised buckets.
+  // All is pressed by default. Show Uncategorised hides categorised buckets.
+  await expect(show(page, 'All')).toHaveAttribute('aria-pressed', 'true');
   await search(page).fill('');
   await category(page, 'MARKET STALL').selectOption({ label: 'Groceries' });
   await expect(category(page, 'MARKET STALL').locator('option:checked')).toHaveText('Groceries');
-  await onlyUncategorised(page).check();
+  await show(page, 'Uncategorised').click();
   await expect(nameButton(page, 'MARKET STALL')).toHaveCount(0);
   await expect(nameButton(page, 'FARM SHOP')).toBeVisible();
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(buckets.length);
-  await expect(onlyUncategorised(page)).toBeChecked();
+  await expect(show(page, 'Uncategorised')).toHaveAttribute('aria-pressed', 'true');
+  await expect(show(page, 'All')).toHaveAttribute('aria-pressed', 'false');
   await expectNoAxeViolations(page);
 
   // Categorising a row that the filter then hides moves focus to a neighbouring row's select.
@@ -105,7 +108,7 @@ test('filter and search', async ({ page }) => {
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Accounts' }).click();
   await openBuckets(page);
   await expect(search(page)).toHaveValue('stall');
-  await expect(onlyUncategorised(page)).toBeChecked();
+  await expect(show(page, 'Uncategorised')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('No buckets match.')).toBeVisible();
 });
 
@@ -213,7 +216,7 @@ test('merge', async ({ page }) => {
 test('drill in', async ({ page }) => {
   await nameButton(page, 'AMAZON.CO.UK').click();
   await expect(page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 })).toBeFocused();
-  await expectBackBesideHeading(page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 }),
+  await expectBesideHeading(page.getByRole('heading', { name: 'AMAZON.CO.UK', level: 3 }),
     page.getByRole('button', { name: 'Back to buckets' }));
   // The bucket is fixed, so there is no Bucket filter.
   await expect(page.getByLabel('Bucket', { exact: true })).toHaveCount(0);

@@ -190,7 +190,7 @@ The result is the bucket key. The normaliser is versioned, and buckets keep up t
 
 ### The categorise card (the main way of working)
 
-The card shows uncategorised buckets **one at a time, largest absolute total first**, so a salary bucket comes up as early as a big spending bucket (Claude's call). Progress at the top is by value: "£X of £Y categorised (Z%)", plus the count of buckets left. It counts debits and credits by absolute value over the typical-month window, excluding confirmed transfers. "Skip for now" and "Stop here" are always available.
+The card shows uncategorised buckets **one at a time, largest absolute total first**, so a salary bucket comes up as early as a big spending bucket (Claude's call). Progress at the top is by value: "£X of £Y categorised (Z%)", plus the count of buckets left. It counts debits and credits by absolute value over the typical-month window, excluding confirmed transfers. "Skip for now" and "Stop here" are always available, beside the bucket name.
 
 Each card shows:
 
@@ -204,7 +204,7 @@ Each card shows:
 
 ### All buckets
 
-A searchable, sortable list of every bucket, filterable to "uncategorised". This list also covers `CLAUDE.md`'s "simple list of uncategorised items".
+A searchable, sortable list of every bucket. Show narrows it to uncategorised buckets, or to those with a suggested category. This list also covers `CLAUDE.md`'s "simple list of uncategorised items".
 
 - **Uses:** working through the long tail, changing a category later, and merging buckets the card didn't link. For example, `AMAZON.CO.UK` and `AMZNMKTPLACE` share no word.
 - **Merging:** select buckets, choose "Merge selected…", then pick the name and category to keep. Merged keys and rules point to the surviving bucket. Overrides survive.
