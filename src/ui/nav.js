@@ -1,11 +1,12 @@
 // Top navigation: the three main screens as tabs, and the other six as two small labelled
-// groups. Transfers is highlighted with a count while suggestions remain, and Categorise shows
-// how much is categorised by value. Both labels are refreshed on every redraw (updateNav).
+// groups. Transfers and Buckets are highlighted with a count while suggestions remain, and
+// Categorise shows how much is categorised by value. All three labels are refreshed on every redraw (updateNav).
 
 /** @import {App, ScreenName} from '../main.js' */
 import { h, clear } from '../dom.js';
 import { suggestPairs } from '../transfers.js';
 import { categorisedPercent } from '../progress.js';
+import { bucketSuggestions } from '../suggest.js';
 import { renderThemePicker } from './theme.js';
 
 /** @typedef {{name: ScreenName, label: string}} NavScreen */
@@ -63,7 +64,7 @@ function themeGroup() {
 }
 
 /**
- * Mark the current screen, and refresh the Transfers count and the Categorise percent.
+ * Mark the current screen, and refresh the Transfers and Buckets counts and the Categorise percent.
  * @param {HTMLElement} root
  * @param {App} app
  * @returns {void}
@@ -72,17 +73,27 @@ export function updateNav(root, app) {
   markCurrent(root, app.session.screen);
   const { state } = app.store;
 
-  const transfers = extra(root, 'transfers');
-  const suggestions = suggestPairs(state, app.tuning).length;
-  transfers.button.classList.toggle('attention', suggestions > 0);
-  transfers.slot.replaceChildren(...(suggestions > 0 ? [' ', h('span', { class: 'count' }, String(suggestions))] : []));
-  // An explicit name, since hidden text in the button would add stray spaces to it.
-  if (suggestions > 0) transfers.button.setAttribute('aria-label', `Transfers, ${suggestions} ${suggestions === 1 ? 'suggestion' : 'suggestions'}`);
-  else transfers.button.removeAttribute('aria-label');
+  highlight(extra(root, 'transfers'), 'Transfers', suggestPairs(state, app.tuning).length);
+  highlight(extra(root, 'buckets'), 'Buckets', bucketSuggestions(state).size);
 
   const categorise = extra(root, 'categorise');
   const percent = categorisedPercent(state, app.tuning);
   categorise.slot.replaceChildren(...(percent === null ? [] : [' ', h('span', { class: 'pct' }, `(at ${percent}%)`)]));
+}
+
+/**
+ * Highlight a nav button with a count while it has suggestions, and name the count for assistive
+ * technology. An explicit name, since hidden text in the button would add stray spaces to it.
+ * @param {{button: HTMLElement, slot: HTMLElement}} target
+ * @param {string} label
+ * @param {number} n
+ * @returns {void}
+ */
+function highlight({ button, slot }, label, n) {
+  button.classList.toggle('attention', n > 0);
+  slot.replaceChildren(...(n > 0 ? [' ', h('span', { class: 'count' }, String(n))] : []));
+  if (n > 0) button.setAttribute('aria-label', `${label}, ${n} ${n === 1 ? 'suggestion' : 'suggestions'}`);
+  else button.removeAttribute('aria-label');
 }
 
 /**

@@ -20,6 +20,7 @@ import { analysisWindow } from '../coverage.js';
 import { formatMonth } from '../dates.js';
 import { whileSaving, queueSave } from './saving.js';
 import { field, focusKey, help, plural, valueOf, showModalWhenConnected } from './form.js';
+import { bucketSuggestions } from '../suggest.js';
 import { renderTransactionList } from './transactions.js';
 import { showing, back } from './subview.js';
 
@@ -108,7 +109,8 @@ export function render(root, app) {
       h('p', { id: 'buckets-window' }, `Totals and counts cover ${first === last ? first : `${first} to ${last}`}.`));
   }
   const results = h('div');
-  const update = () => drawList(app, results, rows, cats);
+  const suggestions = bucketSuggestions(state);
+  const update = () => drawList(app, results, rows, cats, suggestions);
   root.append(
     h('div', { role: 'search', class: 'row filters' },
       field('Search buckets', h('input', {
@@ -234,8 +236,9 @@ function mergeBar(app) {
  * @param {HTMLElement} results
  * @param {Row[]} rows
  * @param {Category[]} cats
+ * @param {Map<string, Category>} suggestions
  */
-function drawList(app, results, rows, cats) {
+function drawList(app, results, rows, cats, suggestions) {
   const shown = shownRows(app, rows);
   if (shown.length === 0) {
     results.replaceChildren(h('p', null, 'No buckets match.'));
@@ -256,8 +259,8 @@ function drawList(app, results, rows, cats) {
     h('table', { class: 'buckets' },
       h('thead', null, h('tr', null,
         h('th', { scope: 'col' }, 'Select'), header('name'), header('total'), header('count'),
-        h('th', { scope: 'col' }, 'Category'))),
-      h('tbody', null, ...shown.map((r, i) => bucketRow(app, r, cats, shown, i))))));
+        h('th', { scope: 'col' }, 'Category'), h('th', { scope: 'col' }, 'Suggested'))),
+      h('tbody', null, ...shown.map((r, i) => bucketRow(app, r, cats, shown, i, suggestions))))));
 }
 
 /**
@@ -266,34 +269,37 @@ function drawList(app, results, rows, cats) {
  * @param {Category[]} cats
  * @param {Row[]} shown the rows on screen, in order
  * @param {number} i this row's place in `shown`
+ * @param {Map<string, Category>} suggestions the suggested category for each bucket that has one
  * @returns {HTMLElement}
  */
-function bucketRow(app, r, cats, shown, i) {
+function bucketRow(app, r, cats, shown, i, suggestions) {
   const b = r.bucket;
   const current = cats.some((c) => c.id === b.categoryId) ? b.categoryId : '';
+  /** @param {string} value a category id, or '' for none */
+  const choose = (value) => {
+    // A row that the filter will hide hands focus to its neighbour before the redraw.
+    if (ui.onlyUncategorised && value !== '') {
+      const next = shown[i + 1] ?? shown[i - 1];
+      if (next) focusKey(categoryKey(next.bucket.id));
+    }
+    // Queued, not dropped, so a second quick change is saved too.
+    queueSave(async () => {
+      try {
+        await app.store.apply(setBucketCategory(app.store.state, b.id, value === '' ? undefined : value));
+      } catch (err) {
+        // Nothing was saved: redraw so the select shows what the bucket still has.
+        app.rerender();
+        throw err;
+      }
+    });
+  };
   const select = h('select', {
     'aria-label': `Category for ${b.displayName}`, 'data-focus-key': categoryKey(b.id),
-    onChange: (/** @type {Event} */ e) => {
-      const value = valueOf(e);
-      // A row that the filter will hide hands focus to its neighbour before the redraw.
-      if (ui.onlyUncategorised && value !== '') {
-        const next = shown[i + 1] ?? shown[i - 1];
-        if (next) focusKey(categoryKey(next.bucket.id));
-      }
-      // Queued, not dropped, so a second quick change is saved too.
-      queueSave(async () => {
-        try {
-          await app.store.apply(setBucketCategory(app.store.state, b.id, value === '' ? undefined : value));
-        } catch (err) {
-          // Nothing was saved: redraw so the select shows what the bucket still has.
-          app.rerender();
-          throw err;
-        }
-      });
-    },
+    onChange: (/** @type {Event} */ e) => choose(valueOf(e)),
   },
   ...cats.map((c) => h('option', { value: c.id, selected: c.id === current }, c.name)),
   h('option', { value: '', selected: current === '' }, '(none)'));
+  const suggestion = suggestions.get(b.id);
   return h('tr', null,
     h('td', null, h('input', {
       type: 'checkbox', class: 'select', checked: ui.selected.has(b.id), 'aria-label': `Select ${b.displayName}`,
@@ -314,7 +320,16 @@ function bucketRow(app, r, cats, shown, i) {
     }, b.displayName)),
     h('td', { class: 'num total' }, totalText(r)),
     h('td', { class: 'num count' }, String(r.count)),
-    h('td', null, select));
+    h('td', null, select),
+    h('td', null, ...(suggestion ? [suggestion.name, ' ', h('button', {
+      type: 'button', class: 'secondary', 'aria-label': `Accept ${suggestion.name} for ${b.displayName}`,
+      'data-focus-key': `bucket-accept-${b.id}`, 'data-saves': true,
+      onClick: () => {
+        // The row's own select keeps focus when it stays; with the filter on, choose() hands it on.
+        if (!ui.onlyUncategorised) focusKey(categoryKey(b.id));
+        choose(suggestion.id);
+      },
+    }, 'Accept')] : [])));
 }
 
 /**
