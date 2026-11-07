@@ -18,7 +18,7 @@ import { prepareFiles } from '../../src/import.js';
 /** A small backup that uses every field of every backed-up type, with two batches and three transactions. */
 const base = () => ({
   app: 'living-costs',
-  schemaVersion: 2,
+  schemaVersion: 3,
   exportedAt: '2026-11-04T10:00:00.000Z',
   accounts: [
     {
@@ -118,7 +118,7 @@ test('buildBackup holds the work and the transactions, and leaves out local sett
   ]);
   assert.equal(b.app, 'living-costs');
   assert.equal(b.schemaVersion, DATA_VERSION);
-  assert.equal(DATA_VERSION, 2);
+  assert.equal(DATA_VERSION, 3);
   assert.equal(b.exportedAt, NOW.toISOString());
   assert.ok(Array.isArray(b.overrides) && Array.isArray(b.transferPairs));
   assert.equal(b.transferPairs.length, s.transferPairs.size);
@@ -224,6 +224,16 @@ test('emptyState uses DATA_VERSION', () => {
   assert.equal(emptyState().settings.schemaVersion, DATA_VERSION);
 });
 
+test('a Savings account and a Saving category validate and round-trip unchanged', () => {
+  const b = /** @type {any} */ (base());
+  b.accounts.push({ id: 'a4', name: 'Pot', currency: 'GBP', kind: 'savings', repaymentBucketIds: [] });
+  b.categories.push({ id: 'c3', name: 'Rainy day', kind: 'saving', budgetType: 'variable', position: 2 });
+  const data = dataOf(b);
+  assert.deepEqual(data.accounts[3], b.accounts[3]);
+  assert.deepEqual(data.categories[2], b.categories[2]);
+  assert.deepEqual(dataOf(JSON.parse(JSON.stringify(b))).categories, data.categories);
+});
+
 test('a rule with a normaliserVersion still validates, and the field is dropped', () => {
   const b = /** @type {any} */ (base());
   b.rules[0].normaliserVersion = 1;
@@ -237,7 +247,7 @@ test('restoreChanges writes the backup, keeps helpDismissed, sets the schema ver
   const data = dataOf(base());
   const current = { ...emptyState().settings, helpDismissed: true, lastBackupAt: '2026-10-01T09:00:00.000Z', offeredDefaultIds: ['x'] };
   const c = restoreChanges(data, current);
-  assert.deepEqual(c.put?.settings, [{ id: 'settings', schemaVersion: 2, offeredDefaultIds: ['groceries', 'salary'], helpDismissed: true }]);
+  assert.deepEqual(c.put?.settings, [{ id: 'settings', schemaVersion: 3, offeredDefaultIds: ['groceries', 'salary'], helpDismissed: true }]);
   assert.deepEqual(c.put?.accounts, data.accounts);
   assert.deepEqual(c.put?.buckets, data.buckets);
   assert.deepEqual(c.put?.rules, data.rules);
@@ -275,7 +285,7 @@ test('anything that is not a backup object from this app is rejected without thr
 const NEWER = 'This backup is from a newer version of this app. Reload the page to get the latest version, then try again.';
 
 test('a newer schema version is refused', () => {
-  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 3 }), [NEWER]);
+  assert.deepEqual(errorsOf({ ...base(), schemaVersion: 4 }), [NEWER]);
   assert.deepEqual(errorsOf({ ...base(), schemaVersion: 99 }), [NEWER]);
 });
 
@@ -283,7 +293,7 @@ test('a version 1 backup is upgraded and restores', () => {
   const b = /** @type {any} */ ({ ...base(), schemaVersion: 1 });
   b.rules = [{ ...b.rules[0], normaliserVersion: 1 }];
   const data = dataOf(b);
-  assert.equal(data.schemaVersion, 2);
+  assert.equal(data.schemaVersion, 3);
   assert.equal('normaliserVersion' in data.rules[0], false);
 });
 
@@ -423,7 +433,7 @@ test('a step with rematchFrom rematches once, then validates again', () => {
   const r = validateBackup(b, { steps, normalise: newN });
   assert.deepEqual(r.ok ? [] : r.errors, []);
   const data = /** @type {any} */ (r).data;
-  assert.equal(data.schemaVersion, 2);
+  assert.equal(data.schemaVersion, DATA_VERSION);
   // Only visible if the chain and the rematch both ran: SHOP split into the two texts.
   assert.deepEqual(data.buckets[0].keys, ['SHOP 123', 'SHOP 456']);
   assert.equal(data.rules[0].pattern, 'SHOP 456');
@@ -453,7 +463,7 @@ test("a transfer pair whose key doesn't match its fingerprints is refused", () =
 test('enums, types and shapes are checked field by field', () => {
   const b = /** @type {any} */ (base());
   b.exportedAt = '04/11/2026';
-  b.accounts[0].kind = 'savings';
+  b.accounts[0].kind = 'current';
   b.accounts[0].currency = 'gbp';
   b.accounts[1].mapping.dateFormat = 'MM/DD/YYYY';
   b.accounts[1].mapping.amount = { single: 'Amount', debit: 'Out', credit: 'In', signFlipped: false };

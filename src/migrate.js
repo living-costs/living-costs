@@ -44,6 +44,19 @@ export const STEPS = [
       };
     },
   },
+  {
+    // A Transfer-kind category named Savings becomes a Variable Saving one.
+    to: 3,
+    run: (doc) => {
+      const categories = get(doc, 'categories');
+      if (!Array.isArray(categories)) return { ...doc };
+      return {
+        ...doc,
+        categories: categories.map((c) => (isObj(c) && c.kind === 'transfer' && typeof c.name === 'string'
+          && c.name.trim().toLowerCase() === 'savings' ? { ...c, kind: 'saving', budgetType: 'variable' } : c)),
+      };
+    },
+  },
 ];
 
 /**

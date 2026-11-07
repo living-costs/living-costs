@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import defaults from '../../src/default-categories.js';
 
-const KINDS = ['spend', 'income', 'contribution', 'transfer', 'ignore'];
+const KINDS = ['spend', 'income', 'contribution', 'saving', 'transfer', 'ignore'];
 const BUDGET_TYPES = ['fixed', 'variable', 'annual', 'oneoff'];
-const BUDGETED_KINDS = ['spend', 'income', 'contribution'];
+const BUDGETED_KINDS = ['spend', 'income', 'contribution', 'saving'];
 
 test('IDs are unique', () => {
   const ids = defaults.map((c) => c.id);
@@ -16,7 +16,7 @@ test('names are unique, case-insensitively', () => {
   assert.equal(new Set(names).size, names.length);
 });
 
-test('every kind is one of the five', () => {
+test('every kind is one of the six', () => {
   for (const c of defaults) assert.ok(KINDS.includes(c.kind), `${c.id}: ${c.kind}`);
 });
 

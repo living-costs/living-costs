@@ -25,6 +25,27 @@ const emptyRows = () => ({
   categories: [], overrides: [], transferPairs: [],
 });
 
+test('step to 3 turns a Transfer-kind "Savings" category into a Variable Saving one', () => {
+  const step = STEPS[1];
+  assert.equal(step.to, 3);
+  const input = { categories: [
+    { id: 'a', name: ' savings ', kind: 'transfer', position: 0 },
+    { id: 'b', name: 'Savings', kind: 'spend', budgetType: 'fixed', position: 1 },
+    { id: 'c', name: 'Savings pot', kind: 'transfer', position: 2 },
+    'odd', null,
+  ] };
+  const out = step.run(input);
+  assert.deepEqual(out.categories, [
+    { id: 'a', name: ' savings ', kind: 'saving', budgetType: 'variable', position: 0 },
+    { id: 'b', name: 'Savings', kind: 'spend', budgetType: 'fixed', position: 1 },
+    { id: 'c', name: 'Savings pot', kind: 'transfer', position: 2 },
+    'odd', null,
+  ]);
+  assert.equal(input.categories[0].kind, 'transfer'); // never mutates
+  assert.deepEqual(step.run({ categories: 'x' }), { categories: 'x' });
+  assert.deepEqual(step.run({}), {});
+});
+
 test('one step per version: STEPS[i].to is i + 2 and STEPS.length is DATA_VERSION - 1', () => {
   assert.equal(STEPS.length, DATA_VERSION - 1);
   STEPS.forEach((s, i) => assert.equal(s.to, i + 2));

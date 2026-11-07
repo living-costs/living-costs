@@ -129,7 +129,7 @@ const isIdList = (v) => Array.isArray(v) && v.every(isId);
 const oneOf = (list) => /** @type {(v: unknown) => v is T} */ (
   (v) => typeof v === 'string' && /** @type {readonly string[]} */ (list).includes(v));
 
-const isAccountKind = oneOf(/** @type {const} */ (['bank', 'card', 'placeholder']));
+const isAccountKind = oneOf(/** @type {const} */ (['bank', 'card', 'savings', 'placeholder']));
 const isCategoryKind = oneOf(KINDS);
 const isBudgetType = oneOf(BUDGET_TYPES);
 const isPeriod = oneOf(/** @type {const} */ (['week', 'month', 'year']));

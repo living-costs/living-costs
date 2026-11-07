@@ -13,7 +13,7 @@ import { whileSaving, isSaving } from './saving.js';
 import { cmp } from '../order.js';
 import { help, plural } from './form.js';
 
-const KIND_LABELS = { bank: 'Bank', card: 'Card', placeholder: 'Card (not imported)' };
+export const ACCOUNT_KIND_LABELS = { bank: 'Bank', card: 'Card', savings: 'Savings', placeholder: 'Card (not imported)' };
 
 /**
  * @param {HTMLElement} root
@@ -76,7 +76,7 @@ function accountList(app) {
 function accountCard(app, account, own) {
   const card = h('div', { class: 'card' },
     h('h4', null, account.name),
-    h('p', { class: 'muted' }, `${KIND_LABELS[account.kind]} · ${account.currency}`));
+    h('p', { class: 'muted' }, `${ACCOUNT_KIND_LABELS[account.kind]} · ${account.currency}`));
   if (own.length === 0) {
     card.append(h('p', null, 'No statements imported.'));
     return card;
