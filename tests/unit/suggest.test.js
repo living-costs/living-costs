@@ -49,6 +49,13 @@ test('matchKeys: glued words', () => {
   assert.equal(matchKeys(['WWW.JUST-EAT.CO.UK'], M), 'takeaway');
 });
 
+test('matchKeys: block entries', () => {
+  const B = [...M, { name: 'TESCO BANK', defaultId: null }, { name: 'SHE', defaultId: null }];
+  assert.equal(matchKeys(['TESCO BANK CREDIT CARD'], B), null, 'longer block wins');
+  assert.equal(matchKeys(['TESCO STORES'], B), 'groceries');
+  assert.equal(matchKeys(['SHE SHELL GARAGE'], B), 'fuel', 'shorter block does not suppress');
+});
+
 test('matchKeys: across keys', () => {
   assert.equal(matchKeys(['TESCO', 'SHELL'], M), null);
   assert.equal(matchKeys(['TESCO', 'M&S'], M), 'groceries');

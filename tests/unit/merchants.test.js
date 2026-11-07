@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import merchants from '../../src/merchants.js';
 import defaults from '../../src/default-categories.js';
-import { squash } from '../../src/suggest.js';
+import { squash, matchKeys } from '../../src/suggest.js';
 
 // Generic words, bank names and invented employers that must never be entries.
 const DENY = new Set([
@@ -15,9 +15,9 @@ const DENY = new Set([
   'BLUEFIN SOLUTIONS', 'PRIME HIRE LTD',
 ]);
 
-test('every defaultId is a spending default', () => {
+test('every defaultId is a spending default, or null for a block entry', () => {
   const spend = new Set(defaults.filter((c) => c.kind === 'spend').map((c) => c.id));
-  for (const m of merchants) assert.ok(spend.has(m.defaultId), `${m.name}: ${m.defaultId}`);
+  for (const m of merchants) assert.ok(m.defaultId === null || spend.has(m.defaultId), `${m.name}: ${m.defaultId}`);
 });
 
 test('every name squashes to something', () => {
@@ -39,4 +39,20 @@ test('no entry is a generic word, a bank or an invented employer', () => {
 
 test('the list has at least 400 entries', () => {
   assert.ok(merchants.length >= 400, `${merchants.length}`);
+});
+
+test('every entry matches itself, not shadowed into another category', () => {
+  for (const m of merchants) {
+    if (m.defaultId !== null) assert.equal(matchKeys([m.name], merchants), m.defaultId, m.name);
+  }
+});
+
+test('named guards and block entries', () => {
+  const cases = {
+    'TESCO PFS': 'fuel', 'UBER EATS': 'takeaway', 'SHELL ENERGY': 'utilities', 'TESCO BANK': null,
+    'COSTA DEL SOL HOTEL': null, 'COSTA COFFEE': 'coffee-shops', 'SSE ARENA WEMBLEY': null,
+    'EMIRATES STADIUM': null, 'CO-OP FUNERALCARE': null, 'TESCO INSURANCE': 'insurance',
+    'COOP BANK': null, 'CO-OP BANK': null, 'TESCO BANK INSURANCE': 'insurance',
+  };
+  for (const [key, want] of Object.entries(cases)) assert.equal(matchKeys([key], merchants), want, key);
 });

@@ -8,12 +8,17 @@
 // matches the same words glued together, so JUST EAT matches JUSTEAT. When several names match,
 // the longest wins; if the longest point at different categories, nothing is suggested.
 //
+// A block entry has defaultId null and means "never suggest": when it is among the longest
+// matches, nothing is suggested. Use it where a chain's name also names something that isn't
+// that kind of spending, such as TESCO BANK, which TESCO would otherwise match. A block entry
+// only wins when it is at least as long as the other matches.
+//
 // Leave out ordinary words, names that could be several kinds of business, and bank names.
 //
 // The starting list came from the merchant_name and label columns of the dataset in
 // EmmaExcel/merchant-categorizer on GitHub, with UK and international chains added.
 
-/** @type {{name: string, defaultId: string}[]} */
+/** @type {{name: string, defaultId: string | null}[]} */
 export default [
   // Groceries
   { name: 'ALDI', defaultId: 'groceries' },
@@ -58,8 +63,8 @@ export default [
   { name: 'CAFFE NERO', defaultId: 'coffee-shops' },
   { name: 'CAFE NERO', defaultId: 'coffee-shops' },
   { name: 'NERO', defaultId: 'coffee-shops' },
-  { name: 'COSTA', defaultId: 'coffee-shops' },
   { name: 'COSTA COFFEE', defaultId: 'coffee-shops' },
+  { name: 'COSTA EXPRESS', defaultId: 'coffee-shops' },
   { name: 'GREGGS', defaultId: 'coffee-shops' },
   { name: 'PRET', defaultId: 'coffee-shops' },
   { name: 'PRET A MANGER', defaultId: 'coffee-shops' },
@@ -205,8 +210,6 @@ export default [
   { name: 'ATS EUROMASTER', defaultId: 'car' },
   { name: 'EURO CAR PARTS', defaultId: 'car' },
   { name: 'AUTOGLASS', defaultId: 'car' },
-  { name: 'ARNOLD CLARK', defaultId: 'car' },
-  { name: 'MOTORPOINT', defaultId: 'car' },
   { name: 'MOTABILITY', defaultId: 'car' },
 
   // Fuel and vehicle charging
@@ -248,7 +251,8 @@ export default [
   { name: 'KLM', defaultId: 'holidays' },
   { name: 'AIR FRANCE', defaultId: 'holidays' },
   { name: 'LUFTHANSA', defaultId: 'holidays' },
-  { name: 'EMIRATES', defaultId: 'holidays' },
+  { name: 'EMIRATES AIRLINE', defaultId: 'holidays' },
+  { name: 'EMIRATES AIRLINES', defaultId: 'holidays' },
   { name: 'QATAR AIRWAYS', defaultId: 'holidays' },
   { name: 'TURKISH AIRLINES', defaultId: 'holidays' },
   { name: 'WIZZ AIR', defaultId: 'holidays' },
@@ -309,7 +313,8 @@ export default [
   { name: 'SCOTTISH POWER', defaultId: 'utilities' },
   { name: 'SEVERN TRENT', defaultId: 'utilities' },
   { name: 'SKY BROADBAND', defaultId: 'utilities' },
-  { name: 'SSE', defaultId: 'utilities' },
+  { name: 'SSE ENERGY', defaultId: 'utilities' },
+  { name: 'SOUTHERN ELECTRIC', defaultId: 'utilities' },
   { name: 'TALKTALK', defaultId: 'utilities' },
   { name: 'THAMES WATER', defaultId: 'utilities' },
   { name: 'UNITED UTILITIES', defaultId: 'utilities' },
@@ -374,13 +379,20 @@ export default [
   { name: 'MANYPETS', defaultId: 'insurance' },
   { name: 'SIMPLYHEALTH', defaultId: 'insurance' },
   { name: 'WESTFIELD HEALTH', defaultId: 'insurance' },
-  { name: 'ROYAL LONDON', defaultId: 'insurance' },
-  { name: 'SCOTTISH WIDOWS', defaultId: 'insurance' },
   { name: 'HOMESERVE', defaultId: 'insurance' },
   { name: 'DOMESTIC & GENERAL', defaultId: 'insurance' },
   { name: 'DOMESTIC GENERAL', defaultId: 'insurance' },
   { name: 'JOHN LEWIS INSURANCE', defaultId: 'insurance' },
   { name: 'CO-OP INSURANCE', defaultId: 'insurance' },
+  { name: 'COOP INSURANCE', defaultId: 'insurance' },
+  { name: 'TESCO INSURANCE', defaultId: 'insurance' },
+  { name: 'TESCO BANK INSURANCE', defaultId: 'insurance' },
+  { name: 'SAINSBURYS INSURANCE', defaultId: 'insurance' },
+  { name: 'SAINSBURYS BANK INSURANCE', defaultId: 'insurance' },
+  { name: 'M&S INSURANCE', defaultId: 'insurance' },
+  { name: 'M&S BANK INSURANCE', defaultId: 'insurance' },
+  { name: 'ASDA INSURANCE', defaultId: 'insurance' },
+  { name: 'ASDA MONEY INSURANCE', defaultId: 'insurance' },
   { name: 'STAYSURE', defaultId: 'insurance' },
 
   // Health
@@ -403,7 +415,6 @@ export default [
   { name: 'HEALTHSPAN', defaultId: 'health' },
   { name: 'NUFFIELD HEALTH', defaultId: 'health' },
   { name: 'SPIRE HEALTHCARE', defaultId: 'health' },
-  { name: 'ROYAL LONDON HOSPITAL', defaultId: 'health' },
   { name: 'PUREGYM', defaultId: 'health' },
   { name: 'THE GYM GROUP', defaultId: 'health' },
   { name: 'DAVID LLOYD CLUBS', defaultId: 'health' },
@@ -755,7 +766,6 @@ export default [
   { name: 'BABBEL', defaultId: 'education' },
   { name: 'EXPLORE LEARNING', defaultId: 'education' },
   { name: 'KUMON', defaultId: 'education' },
-  { name: 'STUDENT LOANS', defaultId: 'education' },
   { name: 'UCAS', defaultId: 'education' },
   { name: 'BRITISH COUNCIL', defaultId: 'education' },
   { name: 'PARENTPAY', defaultId: 'education' },
@@ -792,4 +802,33 @@ export default [
   { name: 'CASH MACHINE', defaultId: 'cash-withdrawals' },
   { name: 'NOTEMACHINE', defaultId: 'cash-withdrawals' },
   { name: 'CARDTRONICS', defaultId: 'cash-withdrawals' },
+
+  // Block entries: never suggest. Retailer banks, cards and finance, and other uses of a chain's name
+  { name: 'TESCO BANK', defaultId: null },
+  { name: 'TESCO CREDIT CARD', defaultId: null },
+  { name: 'TESCO CLUBCARD CREDIT CARD', defaultId: null },
+  { name: 'SAINSBURYS BANK', defaultId: null },
+  { name: 'SAINSBURYS CREDIT CARD', defaultId: null },
+  { name: 'M&S BANK', defaultId: null },
+  { name: 'M&S CREDIT CARD', defaultId: null },
+  { name: 'M&S FINANCIAL SERVICES', defaultId: null },
+  { name: 'MARKS & SPENCER FINANCIAL SERVICES', defaultId: null },
+  { name: 'CO-OP BANK', defaultId: null },
+  { name: 'CO-OP CREDIT CARD', defaultId: null },
+  { name: 'CO-OP FUNERALCARE', defaultId: null },
+  { name: 'COOP BANK', defaultId: null },
+  { name: 'COOP FUNERALCARE', defaultId: null },
+  { name: 'ASDA MONEY', defaultId: null },
+  { name: 'ASDA CREDIT CARD', defaultId: null },
+  { name: 'JOHN LEWIS FINANCIAL', defaultId: null },
+  { name: 'JOHN LEWIS FINANCE', defaultId: null },
+  { name: 'JOHN LEWIS PARTNERSHIP CARD', defaultId: null },
+  { name: 'ARGOS CARD', defaultId: null },
+  { name: 'ARGOS FINANCIAL SERVICES', defaultId: null },
+  { name: 'CURRYS FLEXPAY', defaultId: null },
+  { name: 'NEWDAY', defaultId: null },
+  { name: 'AMAZON PLATINUM', defaultId: null },
+  { name: 'AMAZON MASTERCARD', defaultId: null },
+  { name: 'AMAZON CREDIT CARD', defaultId: null },
+  { name: 'EMIRATES STADIUM', defaultId: null },
 ];

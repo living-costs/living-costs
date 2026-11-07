@@ -24,11 +24,17 @@ export function squash(text) {
   return out.join(' ');
 }
 
-/** @type {WeakMap<object[], {squashed: string, glued: string, defaultId: string}[]>} */
+/**
+ * A merchant entry. defaultId null is a block entry: when it is among the longest matches,
+ * nothing is suggested.
+ * @typedef {{name: string, defaultId: string | null}} Merchant
+ */
+
+/** @type {WeakMap<object[], {squashed: string, glued: string, defaultId: string | null}[]>} */
 const cache = new WeakMap();
 
 /**
- * @param {{name: string, defaultId: string}[]} merchants
+ * @param {Merchant[]} merchants
  */
 function prepared(merchants) {
   let list = cache.get(merchants);
@@ -44,16 +50,16 @@ function prepared(merchants) {
 }
 
 /**
- * The defaultId of the longest merchant name found in the bucket keys, or null for no match
- * or a tie between different categories.
+ * The defaultId of the longest merchant name found in the bucket keys, or null for no match,
+ * a tie between different categories, or a block entry among the longest matches.
  * @param {string[]} keys
- * @param {{name: string, defaultId: string}[]} merchants
+ * @param {Merchant[]} merchants
  * @returns {string | null}
  */
 export function matchKeys(keys, merchants) {
   const list = prepared(merchants);
   let best = 0;
-  /** @type {Set<string>} */
+  /** @type {Set<string | null>} */
   let ids = new Set();
   for (const key of keys) {
     const s = squash(key);
@@ -66,7 +72,7 @@ export function matchKeys(keys, merchants) {
       ids.add(m.defaultId);
     }
   }
-  return ids.size === 1 ? [...ids][0] : null;
+  return ids.size === 1 ? [...ids][0] ?? null : null;
 }
 
 /**
@@ -82,7 +88,7 @@ function uncategorised(state, bucket) {
  * @param {State} state
  * @param {Bucket} bucket
  * @param {number} total signed sum of the bucket's transactions
- * @param {{name: string, defaultId: string}[]} merchants
+ * @param {Merchant[]} merchants
  * @returns {Category | null}
  */
 function suggestFor(state, bucket, total, merchants) {
@@ -96,7 +102,7 @@ function suggestFor(state, bucket, total, merchants) {
  * The spending category to suggest for an uncategorised bucket whose net total is spending.
  * @param {State} state
  * @param {Bucket} bucket
- * @param {{name: string, defaultId: string}[]} [merchants]
+ * @param {Merchant[]} [merchants]
  * @returns {Category | null}
  */
 export function suggestCategory(state, bucket, merchants = MERCHANTS) {
@@ -108,7 +114,7 @@ export function suggestCategory(state, bucket, merchants = MERCHANTS) {
 /**
  * Suggestions for every bucket that has one, keyed by bucket id.
  * @param {State} state
- * @param {{name: string, defaultId: string}[]} [merchants]
+ * @param {Merchant[]} [merchants]
  * @returns {Map<string, Category>}
  */
 export function bucketSuggestions(state, merchants = MERCHANTS) {
