@@ -3,7 +3,7 @@
 /** @typedef {{headerSignature:string,dateColumn:string,dateFormat:'DD/MM/YYYY',descriptionColumn:string,
  *   typeColumn?:string,accountIdColumn?:string,
  *   amount:{single:string,signFlipped:boolean}|{debit:string,credit:string}}} Mapping */
-/** @typedef {{id:string,name:string,currency:string,kind:'bank'|'card'|'placeholder',mapping?:Mapping,
+/** @typedef {{id:string,name:string,currency:string,kind:'bank'|'card'|'savings'|'placeholder',mapping?:Mapping,
  *   identifier?:string,repaymentBucketIds:string[]}} Account */
 /** @typedef {{id:string,importId:string,accountId:string,fileName:string,fileHash:string,importedAt:string,
  *   rowCount:number,coversFrom:string,coversTo:string}} Batch */
@@ -12,7 +12,7 @@
 /** @typedef {{id:string,keys:string[],displayName:string,categoryId?:string,stoppedAfter?:string,exampleRawTexts:string[]}} Bucket */
 /** @typedef {{id:string,pattern:string,matchType:'keyAmount',amountMinor:number,
  *   expected:{count:number,period:'week'|'month'|'year'},bucketId:string}} Rule */
-/** @typedef {'spend'|'income'|'contribution'|'transfer'|'ignore'} CategoryKind */
+/** @typedef {'spend'|'income'|'contribution'|'saving'|'transfer'|'ignore'} CategoryKind */
 /** @typedef {'fixed'|'variable'|'annual'|'oneoff'} BudgetType */
 /** @typedef {{id:string,name:string,kind:CategoryKind,budgetType?:BudgetType,defaultId?:string,position:number}} Category */
 /** @typedef {{fingerprint:string,categoryId?:string,splits?:{amountMinor:number,categoryId:string}[],

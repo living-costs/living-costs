@@ -63,7 +63,7 @@ test.afterEach(async ({ page }) => {
 test('lists the defaults in order', async ({ page }) => {
   await openCategories(page);
   const list = await names(page);
-  expect(list).toHaveLength(34);
+  expect(list).toHaveLength(35);
   expect(list[0]).toBe('Salary');
   expect(list.at(-1)).toBe('Ignore');
   await expect(page.getByLabel('Kind for Insurance')).toHaveValue('spend');
@@ -76,9 +76,9 @@ test('lists the defaults in order', async ({ page }) => {
 test('explains each kind and budget type, with thresholds from tuning', async ({ page }) => {
   await openCategories(page);
   const kinds = page.getByRole('region', { name: 'Kinds' });
-  await expect(kinds.getByRole('term')).toHaveText(['Spend', 'Income', 'Contribution', 'Transfer', 'Ignore']);
+  await expect(kinds.getByRole('term')).toHaveText(['Spend', 'Income', 'Contribution', 'Saving', 'Transfer', 'Ignore']);
   const types = page.getByRole('region', { name: /^Budget types/ });
-  await expect(types.getByRole('heading')).toHaveAccessibleName('Budget types Spend, Income and Contribution only');
+  await expect(types.getByRole('heading')).toHaveAccessibleName('Budget types Spend, Income, Contribution and Saving only');
   await expect(types.getByRole('term')).toHaveText(['Fixed', 'Variable', 'Annual', 'One-off']);
   await expect(types.getByRole('definition').nth(0)).toContainText('mark a charge Stopped');
   await expect(types.getByRole('definition').nth(1)).toContainText('between percentiles 25 and 75');
@@ -131,7 +131,7 @@ test('create, retype and delete', async ({ page }) => {
   await expectNoAxeViolations(page);
   await page.getByRole('button', { name: 'Yes, delete' }).click();
   await expect(table(page).getByRole('rowheader', { name: 'Pets' })).toHaveCount(0);
-  expect(await names(page)).toHaveLength(34);
+  expect(await names(page)).toHaveLength(35);
   await expect(screenHeading(page)).toBeFocused();
   await expectNoAxeViolations(page);
 });
@@ -147,7 +147,7 @@ test('new category validation is shown inline', async ({ page }) => {
   await name.fill('gifts');
   await name.press('Enter');
   await expect(page.getByText('There is already a category called Gifts.')).toBeVisible();
-  expect(await names(page)).toHaveLength(34);
+  expect(await names(page)).toHaveLength(35);
 
   // Transfer and ignore have no budget type.
   await page.getByLabel('Kind', { exact: true }).selectOption({ label: 'Transfer' });
@@ -330,7 +330,7 @@ test('double-clicking Add category adds it once', async ({ page }) => {
   await page.getByRole('button', { name: 'Add category' }).dblclick();
   await expect(table(page).getByRole('rowheader').last()).toHaveText('Pets');
   expect((await readStore(page, 'categories')).filter((c) => c.name === 'Pets')).toHaveLength(1);
-  expect(await names(page)).toHaveLength(35);
+  expect(await names(page)).toHaveLength(36);
   // The second click is ignored, rather than submitting the cleared form.
   await expect(page.getByText('Enter a name.')).toHaveCount(0);
 });

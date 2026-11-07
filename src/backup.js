@@ -16,6 +16,7 @@ import { pairKey } from './transfers.js';
 import { KINDS, BUDGET_TYPES, isBudgeted } from './categories.js';
 import { currencyExponent } from './money.js';
 import { localDay } from './dates.js';
+import { ACCOUNT_ROW_PREFIX } from './savings.js';
 
 /** Validation stops listing problems after this many. */
 const MAX_ERRORS = 20;
@@ -129,7 +130,7 @@ const isIdList = (v) => Array.isArray(v) && v.every(isId);
 const oneOf = (list) => /** @type {(v: unknown) => v is T} */ (
   (v) => typeof v === 'string' && /** @type {readonly string[]} */ (list).includes(v));
 
-const isAccountKind = oneOf(/** @type {const} */ (['bank', 'card', 'placeholder']));
+const isAccountKind = oneOf(/** @type {const} */ (['bank', 'card', 'savings', 'placeholder']));
 const isCategoryKind = oneOf(KINDS);
 const isBudgetType = oneOf(BUDGET_TYPES);
 const isPeriod = oneOf(/** @type {const} */ (['week', 'month', 'year']));
@@ -328,7 +329,8 @@ function readCategory(o, label, p) {
   const budgetType = get(o, 'budgetType');
   const defaultId = get(o, 'defaultId');
   const position = get(o, 'position');
-  c.need(isId(id), 'ID');
+  // `account:` ids are the synthetic Typical month rows for savings accounts, so a category may not use one.
+  c.need(isId(id) && !id.startsWith(ACCOUNT_ROW_PREFIX), 'ID');
   c.need(isText(name) && name.trim() !== '', 'name');
   c.need(isCategoryKind(kind), 'kind');
   c.need(isInt(position) && position >= 0, 'position');

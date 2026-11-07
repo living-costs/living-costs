@@ -141,6 +141,12 @@ test('createCategory adds at the end with a trimmed name', () => {
   assert.equal('budgetType' in byName(s, 'Savings pot'), false);
 });
 
+test('createCategory accepts a saving category with a budget type', () => {
+  const s = seeded();
+  const r = createCategory(s, { name: 'S', kind: 'saving', budgetType: 'fixed' });
+  assert.ok(!('error' in r));
+});
+
 test('createCategory refuses bad input', () => {
   const s = seeded();
   const err = (input) => {
@@ -153,6 +159,7 @@ test('createCategory refuses bad input', () => {
   err({ name: 'Pets', kind: 'spend' });
   err({ name: 'Pets', kind: 'income' });
   err({ name: 'Pets', kind: 'contribution' });
+  err({ name: 'Pets', kind: 'saving' });
   err({ name: 'Pets', kind: 'transfer', budgetType: 'fixed' });
   err({ name: 'Pets', kind: 'ignore', budgetType: 'variable' });
   err({ name: 'Pets', kind: 'nonsense', budgetType: 'fixed' });

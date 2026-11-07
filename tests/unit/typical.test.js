@@ -8,7 +8,7 @@ import { typicalMonth, median, percentile, unusualFlags, categoryDetail, settleC
 const YEAR = monthRange('2025-11', '2026-10');
 
 let seq = 0;
-/** @param {string} id @param {'bank'|'card'|'placeholder'} [kind] @param {string} [currency] */
+/** @param {string} id @param {'bank'|'card'|'savings'|'placeholder'} [kind] @param {string} [currency] */
 const acct = (id, kind = 'bank', currency = 'GBP') => ({ id, name: id, currency, kind, repaymentBucketIds: [] });
 /** @param {string} accountId @param {string} from @param {string} to */
 const batch = (accountId, from, to) => ({
@@ -37,7 +37,7 @@ function build({ accounts = [acct('A')], batches = [yearBatch('A')], categories 
 }
 
 /** @param {any} tm @param {string} id */
-const row = (tm, id) => [...tm.spend, ...tm.income, ...tm.contribution].find((r) => r.categoryId === id);
+const row = (tm, id) => [...tm.spend, ...tm.income, ...tm.contribution, ...(tm.saving ?? [])].find((r) => r.categoryId === id);
 
 test('median and nearest-rank percentiles use integers only', () => {
   assert.equal(median([3, 1, 2]), 2);
@@ -81,7 +81,7 @@ test('D1: an account covering only the last 3 months is divided by its own 3 mon
   }), tuning);
   assert.equal(row(tm, 'contrib').perMonth, 55000); // not 13750
   assert.equal(tm.contribution.length, 1);
-  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 55000, share: 35000, leftOver: 215000 });
+  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 55000, share: 35000, leftOver: 215000, savings: 0 });
 });
 
 test('variable: median month with the variableRange percentiles as the range', () => {
@@ -601,8 +601,8 @@ test('a category only in the compared month gets a month-only row; annual does n
   });
   assert.equal(row(tm, 'holiday'), undefined);
   assert.equal(row(tm, 'rent').monthOnly, undefined);
-  assert.deepEqual(tm.compare?.totals, { income: 0, living: 90000, contributions: 55000, share: 35000, leftOver: -35000 });
-  assert.deepEqual(tm.totals, { income: 0, living: 90000, contributions: 0, share: 90000, leftOver: -90000 });
+  assert.deepEqual(tm.compare?.totals, { income: 0, living: 90000, contributions: 55000, share: 35000, leftOver: -35000, savings: 0 });
+  assert.deepEqual(tm.totals, { income: 0, living: 90000, contributions: 0, share: 90000, leftOver: -90000, savings: 0 });
 });
 
 test('compare.missing lists window accounts that do not cover the month', () => {
@@ -675,7 +675,7 @@ test('month columns reconcile with the compare totals', () => {
   assert.equal(sumMonth(tm.contribution), t.contributions);
   assert.equal(t.share, t.living - t.contributions);
   assert.equal(t.leftOver, t.income - t.share);
-  assert.deepEqual(t, { income: 250000, living: 102000, contributions: 55000, share: 47000, leftOver: 203000 });
+  assert.deepEqual(t, { income: 250000, living: 102000, contributions: 55000, share: 47000, leftOver: 203000, savings: 0 });
   assert.ok([...tm.spend, ...tm.income, ...tm.contribution].every((r) => typeof r.month === 'number'));
 });
 
@@ -699,4 +699,219 @@ test('categoryDetail with a range matches the row typicalMonth gives', () => {
   assert.deepEqual(d?.row, row(tm, 'groceries'));
   assert.deepEqual(d?.months, monthRange('2025-11', '2026-06'));
   assert.deepEqual(categoryDetail(seasonal, tuning, 'groceries')?.months, YEAR);
+});
+
+/**
+ * A confirmed pair: `amountMinor` leaves `from` and arrives in `to` the next day.
+ * @param {string} from @param {string} to @param {string} date @param {number} amountMinor
+ * @param {string} [fromBucket] @param {string} [toBucket]
+ */
+function pair(from, to, date, amountMinor, fromBucket = 'xfer', toBucket = 'xfer') {
+  const out = txn(from, date, -amountMinor, fromBucket);
+  const into = txn(to, addDays(date, 1), amountMinor, toBucket);
+  const [a, b] = [out.fingerprint, into.fingerprint].sort();
+  return { out, into, txns: [out, into], link: { key: `${a}\n${b}`, fingerprintA: a, fingerprintB: b, status: 'confirmed' } };
+}
+/** @param {ReturnType<typeof pair>[]} pairs */
+const paired = (pairs) => ({ transactions: pairs.flatMap((p) => p.txns), transferPairs: pairs.map((p) => p.link) });
+/** @param {any[]} rows @param {(r:any)=>number} figure */
+const sumOf = (rows, figure) => rows.reduce((acc, r) => acc + figure(r), 0);
+const savingsAccounts = { accounts: [acct('A'), acct('S', 'savings')], batches: [yearBatch('A'), yearBatch('S')] };
+
+const everyday = {
+  categories: [cat('salary', 'income', 'fixed'), cat('rent', 'spend', 'fixed'), cat('contrib', 'contribution', 'fixed')],
+  buckets: [bucket('emp', 'salary'), bucket('lettings', 'rent'), bucket('other', 'contrib')],
+  transactions: [
+    ...monthly('A', YEAR, '25', 250000, 'emp'),
+    ...monthly('A', YEAR, '01', -90000, 'lettings'),
+    ...monthly('A', YEAR, '05', 30000, 'other'),
+  ],
+};
+
+test('saving: a monthly -20000 to a Saving category is a 20000 saving and changes no other total', () => {
+  const without = /** @type {any} */ (typicalMonth(build(everyday), tuning));
+  const tm = /** @type {any} */ (typicalMonth(build({
+    categories: [...everyday.categories, cat('sav', 'saving', 'variable')],
+    buckets: [...everyday.buckets, bucket('isa', 'sav')],
+    transactions: [...everyday.transactions, ...monthly('A', YEAR, '02', -20000, 'isa')],
+  }), tuning));
+  assert.equal(row(tm, 'sav').perMonth, 20000);
+  assert.deepEqual(tm.saving.map((/** @type {any} */ r) => r.categoryId), ['sav']);
+  assert.equal(tm.totals.savings, 20000);
+  assert.equal(without.totals.savings, 0);
+  assert.deepEqual(without.saving, []);
+  const { savings: _with, ...rest } = tm.totals;
+  const { savings: _without, ...before } = without.totals;
+  assert.deepEqual(rest, before);
+  assert.deepEqual(rest, { income: 250000, living: 90000, contributions: 30000, share: 60000, leftOver: 190000 });
+  assert.deepEqual(tm.uncategorised, without.uncategorised);
+});
+
+test('saving is net: a withdrawal bucket in a Variable Saving category reduces it', () => {
+  const months = monthRange('2026-01', '2026-04');
+  const tm = /** @type {any} */ (typicalMonth(build({
+    batches: [batch('A', '2026-01-01', '2026-04-30')],
+    categories: [cat('sav', 'saving', 'variable')],
+    buckets: [bucket('isa', 'sav'), bucket('back', 'sav')],
+    transactions: [...monthly('A', months, '02', -20000, 'isa'), txn('A', '2026-03-20', 5000, 'back')],
+  }), tuning));
+  // Months 20000, 20000, 15000, 20000: median 20000; the 25th percentile is the lowest, 15000.
+  assert.equal(row(tm, 'sav').perMonth, 20000);
+  assert.deepEqual(row(tm, 'sav').range, [15000, 20000]);
+});
+
+test('a Fixed Saving category ignores a withdrawal-only bucket', () => {
+  const tm = /** @type {any} */ (typicalMonth(build({
+    categories: [cat('sav', 'saving', 'fixed')],
+    buckets: [bucket('isa', 'sav'), bucket('back', 'sav')],
+    transactions: [...monthly('A', YEAR, '02', -20000, 'isa'), txn('A', '2026-03-20', 5000, 'back')],
+  }), tuning, { range: null, compare: '2026-03' }));
+  assert.equal(row(tm, 'sav').perMonth, 20000);
+  assert.equal(tm.totals.savings, 20000);
+  // It does reduce that month's figure when comparing.
+  assert.equal(row(tm, 'sav').month, 15000);
+});
+
+test('a confirmed pair bank → savings counts once, on the bank side, in an account row', () => {
+  const pairs = YEAR.map((m) => pair('A', 'S', `${m}-10`, 10000));
+  const state = build({ ...savingsAccounts, buckets: [bucket('xfer')], ...paired(pairs) });
+  const tm = /** @type {any} */ (typicalMonth(state, tuning));
+  assert.deepEqual(tm.saving.map((/** @type {any} */ r) => [r.categoryId, r.name, r.perMonth, r.accountId]), [['account:S', 'S', 10000, 'S']]);
+  assert.equal(row(tm, 'account:S').budgetType, 'variable');
+  assert.deepEqual(row(tm, 'account:S').range, [10000, 10000]);
+  assert.equal(tm.totals.savings, 10000);
+  assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
+  assert.equal(tm.totals.living, 0);
+  assert.equal(tm.totals.income, 0);
+});
+
+test('a pair takes the bank side\'s Saving category', () => {
+  const tm = /** @type {any} */ (typicalMonth(build({
+    ...savingsAccounts,
+    categories: [cat('sav', 'saving', 'variable')],
+    buckets: [bucket('tosav', 'sav'), bucket('xfer')],
+    ...paired(YEAR.map((m) => pair('A', 'S', `${m}-10`, 10000, 'tosav'))),
+  }), tuning));
+  assert.deepEqual(tm.saving.map((/** @type {any} */ r) => [r.categoryId, r.perMonth, r.accountId]), [['sav', 10000, undefined]]);
+  assert.ok(!('accountId' in row(tm, 'sav')));
+  assert.equal(tm.totals.savings, 10000);
+});
+
+test('a withdrawal pair savings → bank counts negative', () => {
+  const tm = /** @type {any} */ (typicalMonth(build({
+    ...savingsAccounts,
+    categories: [cat('sav', 'saving', 'annual')],
+    buckets: [bucket('xfer'), bucket('fromsav', 'sav')],
+    ...paired([pair('S', 'A', '2026-06-10', 12000, 'xfer', 'fromsav'), pair('S', 'A', '2026-03-10', 30000)]),
+  }), tuning, { range: null, compare: '2026-03' }));
+  // The categorised one lands in its Annual Saving category; the other in the account row.
+  assert.equal(row(tm, 'sav').perYear, -12000);
+  assert.equal(row(tm, 'account:S').month, -30000);
+  assert.equal(tm.compare.totals.savings, -30000 + row(tm, 'sav').perMonth);
+  assert.equal(tm.compare.totals.living, 0);
+  assert.equal(tm.compare.totals.income, 0);
+});
+
+test('a withdrawal pair in a month the bank side does not cover counts nothing', () => {
+  const tm = /** @type {any} */ (typicalMonth(build({
+    accounts: savingsAccounts.accounts,
+    batches: [batch('A', '2025-11-01', '2026-06-15'), yearBatch('S')],
+    categories: [cat('sav', 'saving', 'annual')],
+    buckets: [bucket('xfer'), bucket('fromsav', 'sav')],
+    ...paired([pair('S', 'A', '2026-06-08', 30000, 'xfer', 'fromsav')]),
+  }), tuning));
+  assert.ok(tm.months.includes('2026-06'));
+  assert.deepEqual(tm.saving, []);
+  assert.equal(tm.totals.savings, 0);
+  assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
+});
+
+test('an unpaired Saving-category deposit inside a Savings account counts nothing', () => {
+  const state = build({
+    ...savingsAccounts,
+    categories: [cat('sav', 'saving', 'variable'), cat('pot', 'saving', 'variable')],
+    buckets: [bucket('dep', 'sav'), bucket('dd', 'sav'), bucket('interest', 'pot')],
+    transactions: [
+      ...monthly('S', YEAR, '10', 10000, 'dep'), ...monthly('A', YEAR, '02', -5000, 'dd'),
+      ...monthly('S', YEAR, '28', 300, 'interest'),
+    ],
+  });
+  const tm = /** @type {any} */ (typicalMonth(state, tuning));
+  assert.deepEqual(tm.saving.map((/** @type {any} */ r) => [r.categoryId, r.perMonth]), [['sav', 5000]]);
+  assert.equal(tm.totals.savings, 5000);
+  assert.deepEqual(tm.uncategorised, { spending: 0, income: 0 });
+  assert.equal(categoryDetail(state, tuning, 'pot'), null);
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'sav'));
+  assert.deepEqual(d.accounts.map((/** @type {any} */ a) => a.accountId), ['A']);
+});
+
+test('changing S from savings to bank makes its pairs plain transfers again', () => {
+  const p = paired(YEAR.map((m) => pair('A', 'S', `${m}-10`, 10000)));
+  const banks = /** @type {any} */ (typicalMonth(build({
+    accounts: [acct('A'), acct('S')], batches: savingsAccounts.batches, buckets: [bucket('xfer')], ...p,
+  }), tuning));
+  assert.deepEqual(banks.saving, []);
+  assert.equal(banks.totals.savings, 0);
+  assert.deepEqual(banks.uncategorised, { spending: 0, income: 0 });
+  // Both sides in Savings accounts: a plain transfer too.
+  const both = /** @type {any} */ (typicalMonth(build({
+    accounts: [acct('A', 'savings'), acct('S', 'savings')], batches: savingsAccounts.batches, buckets: [bucket('xfer')], ...p,
+  }), tuning));
+  assert.deepEqual(both.saving, []);
+  assert.equal(both.totals.savings, 0);
+});
+
+test('Savings rows sum to totals.savings, typical and compared month', () => {
+  const p = paired([...YEAR.map((m) => pair('A', 'S', `${m}-10`, 10000)), pair('A', 'T', '2026-10-12', 7000)]);
+  const tm = /** @type {any} */ (typicalMonth(build({
+    accounts: [...savingsAccounts.accounts, acct('T', 'savings')],
+    batches: [...savingsAccounts.batches, yearBatch('T')],
+    categories: [...everyday.categories, cat('sav', 'saving', 'variable'), cat('pot', 'saving', 'fixed'), cat('big', 'saving', 'oneoff')],
+    buckets: [...everyday.buckets, bucket('isa', 'sav'), bucket('pension', 'pot'), bucket('lump', 'big'), bucket('xfer')],
+    transactions: [
+      ...everyday.transactions,
+      ...monthly('A', YEAR.slice(0, 8), '02', -20000, 'isa'),
+      ...monthly('A', YEAR.slice(8), '02', -25000, 'isa'),
+      ...monthly('A', YEAR, '03', -15000, 'pension'),
+      txn('A', '2026-01-15', -100000, 'lump'),
+      ...p.transactions,
+    ],
+    transferPairs: p.transferPairs,
+  }), tuning, { range: { from: '2025-11', to: '2026-06' }, compare: '2026-10' }));
+  assert.equal(tm.totals.savings, sumOf(tm.saving, (r) => r.perMonth));
+  assert.equal(tm.compare.totals.savings, sumOf(tm.saving, (r) => r.month));
+  assert.ok(tm.saving.every((/** @type {any} */ r) => typeof r.month === 'number'));
+  // T has a pair only in the compared month: a month-only account row.
+  assert.deepEqual(row(tm, 'account:T'), {
+    categoryId: 'account:T', name: 'T', budgetType: 'variable', perMonth: 0, perYear: 0, month: 7000, monthOnly: true, accountId: 'T',
+  });
+  assert.equal(row(tm, 'sav').month, 25000);
+  assert.equal(tm.compare.totals.savings, 25000 + 15000 + 10000 + 7000);
+  assert.equal(tm.totals.savings, 20000 + 15000 + 10000);
+  // The one-off sits in oneOffs, outside the Savings total.
+  assert.deepEqual(tm.oneOffs.map((/** @type {any} */ o) => [o.categoryId, o.amountMinor]), [['big', 100000]]);
+  assert.deepEqual(tm.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, leftOver: 190000, savings: 45000 });
+  assert.deepEqual(tm.compare.totals, { income: 250000, living: 90000, contributions: 30000, share: 60000, leftOver: 190000, savings: 57000 });
+});
+
+test('categoryDetail for a Saving category matches its row, pairs included; an account: id gives null', () => {
+  const toSav = YEAR.map((m) => pair('A', 'S', `${m}-10`, 10000, 'tosav'));
+  const plain = YEAR.map((m) => pair('A', 'S', `${m}-20`, 4000));
+  const extra = monthly('A', YEAR, '02', -2000, 'tosav');
+  const state = build({
+    ...savingsAccounts,
+    categories: [cat('sav', 'saving', 'variable')],
+    buckets: [bucket('tosav', 'sav'), bucket('xfer')],
+    transactions: [...paired([...toSav, ...plain]).transactions, ...extra],
+    transferPairs: paired([...toSav, ...plain]).transferPairs,
+  });
+  const tm = /** @type {any} */ (typicalMonth(state, tuning));
+  const d = /** @type {any} */ (categoryDetail(state, tuning, 'sav'));
+  assert.deepEqual(d.row, row(tm, 'sav'));
+  assert.equal(d.row.perMonth, 12000);
+  assert.deepEqual([...d.transactionIds].sort(), [...toSav.map((p) => p.out.id), ...extra.map((t) => t.id)].sort());
+  assert.equal(sumOf([...d.partMinor.values()], (v) => -v), 12000 * 12);
+  assert.deepEqual(d.accounts.map((/** @type {any} */ a) => a.accountId), ['A']);
+  assert.ok(row(tm, 'account:S'));
+  assert.equal(categoryDetail(state, tuning, 'account:S'), null);
 });

@@ -72,6 +72,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Default categories from the owner-editable `src/default-categories.js`. New entries are offered once to existing users, and their choices are never overwritten
 - Monthly budget view
 - Typical month: choose the window's first and last month, and compare one month against it
+- Savings: a Saving category kind and a Savings account kind, shown as a separate total on Typical month
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions
@@ -96,7 +97,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Every transaction records its import batch ID.
 
 ```
-Account        { id, name, currency, kind: bank | card | placeholder, mappingId?, repaymentBucketIds[] }
+Account        { id, name, currency, kind: bank | card | savings | placeholder, mappingId?, repaymentBucketIds[] }
 Mapping        { id, headerSignature, dateColumn, dateFormat, descriptionColumn, typeColumn?,
                  accountIdColumn?,
                  amount: { single: column, signFlipped: bool } | { debit: column, credit: column } }
@@ -106,7 +107,7 @@ Transaction    { id, fingerprint, accountId, batchId, date, amountMinor, currenc
 Bucket         { id, key, displayName, categoryId?, categorySource, exampleRawTexts[], stoppedAfter? }
 Rule           { id, pattern, matchType, amountMinor?, expected?: { count, period: week | month | year },
                  bucketId }
-Category       { id, name, kind: spend | income | contribution | transfer | ignore, budgetType?, defaultId? }
+Category       { id, name, kind: spend | income | contribution | saving | transfer | ignore, budgetType?, defaultId? }
 Override       { fingerprint, categoryId? , splits?: [{ amountMinor, categoryId }], unusualDismissed? }
 TransferPair   { fingerprintA, fingerprintB, status: confirmed | rejected }
 Settings       { offeredDefaultIds[], lastBackupAt?, schemaVersion }   // schemaVersion is the one data version, shared with backups
@@ -135,6 +136,7 @@ All windows and thresholds live in the owner-editable `src/tuning.js`. Code neve
 - Automatic suggestions never overwrite a user's choice.
 - Repayments to a card whose statements aren't imported count as spending in a '*Card* (not itemised)' category, until that card's statements are imported and the repayments are confirmed as transfer pairs.
 - Money another person pays into an account you track goes in a `contribution` category. It reduces your share of living costs and isn't income.
+- Money moved into savings, by a Saving category or a confirmed transfer into a Savings account, is saving: net of withdrawals, never living costs or income.
 
 ### Budget
 

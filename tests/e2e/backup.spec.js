@@ -69,7 +69,7 @@ test('download fallback', async ({ page }, testInfo) => {
   const file = testInfo.outputPath(download.suggestedFilename());
   await download.saveAs(file);
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  expect(saved).toMatchObject({ app: 'living-costs', schemaVersion: 2, accounts: [], overrides: [], transferPairs: [] });
+  expect(saved).toMatchObject({ app: 'living-costs', schemaVersion: 3, accounts: [], overrides: [], transferPairs: [] });
   expect(saved.categories.length).toBeGreaterThan(0);
   expect(Array.isArray(saved.transactions)).toBe(true);
   expect(Array.isArray(saved.batches)).toBe(true);
@@ -111,7 +111,7 @@ test('picker path', async ({ page }) => {
   });
   expect(w.closed).toBe(true);
   await expect(page.getByRole('status')).toHaveText('Backup saved.');
-  expect(JSON.parse(w.saved).schemaVersion).toBe(2);
+  expect(JSON.parse(w.saved).schemaVersion).toBe(3);
   expect(w.options.suggestedName).toBe(`living-costs-backup-${iso}.json`);
   expect(w.options.types).toEqual([{ description: 'Living Costs backup', accept: { 'application/json': ['.json'] } }]);
   expect(downloads).toBe(0);
@@ -199,7 +199,7 @@ test('restore replaces', async ({ browser, baseURL }, testInfo) => {
   const [settings] = await readStore(page, 'settings');
   expect(settings.lastBackupAt).toBeUndefined();
   expect(settings.helpDismissed).toBe(false);
-  expect(settings.schemaVersion).toBe(2);
+  expect(settings.schemaVersion).toBe(3);
 
   // Everything is there without importing anything.
   await openScreen(page, 'Typical month');
@@ -234,7 +234,7 @@ test('restoring a version 1 backup upgrades it', async ({ browser, baseURL }, te
   await restoreInput(page).setInputFiles(file);
   await expect(page.getByRole('status').filter({ hasText: 'Backup restored.' })).toBeVisible();
   const [settings] = await readStore(page, 'settings');
-  expect(settings.schemaVersion).toBe(2);
+  expect(settings.schemaVersion).toBe(3);
   await openScreen(page, 'Typical month');
   await expect(subscriptionsPerMonth(page)).toHaveText('£89.97');
   await second.close();
@@ -405,7 +405,7 @@ test('delete loaded data: accepting leaves exactly a first visit', async ({ page
     expect(categories.map((c) => c.name)).toEqual(defaults.map((d) => d.name));
     expect(categories.map((c) => c.defaultId)).toEqual(defaults.map((d) => d.id));
     expect(after.settings).toEqual([{
-      id: 'settings', schemaVersion: 2, offeredDefaultIds: defaults.map((d) => d.id), helpDismissed: false,
+      id: 'settings', schemaVersion: 3, offeredDefaultIds: defaults.map((d) => d.id), helpDismissed: false,
     }]);
   };
   await expectFirstVisit();

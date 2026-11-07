@@ -1,5 +1,5 @@
 // Typical month screen: the window, stale-account notices, the summary, the uncategorised line,
-// one table each for living costs, income and contributions, and the one-offs list.
+// one table each for living costs, income, contributions and savings, and the one-offs list.
 // Every figure comes from typicalMonth; this only lays it out. A category name opens that
 // category's view (category-view.js) in place of the tables.
 
@@ -127,6 +127,7 @@ export function render(root, app) {
     rowsTable('typical-living', 'Living costs', tm.spend, money, onOpen, onTick, cmp?.month),
     rowsTable('typical-income', 'Income', tm.income, money, onOpen, onTick, cmp?.month),
     rowsTable('typical-contributions', 'Contributions', tm.contribution, money, onOpen, onTick, cmp?.month),
+    rowsTable('typical-savings', 'Savings', tm.saving, money, onOpen, onTick, cmp?.month),
   ];
   for (const part of tables) if (part) root.append(part);
   alignColumns([...root.querySelectorAll('table.typical')]);
@@ -241,7 +242,7 @@ function lastCovered(state, accountId) {
 }
 
 /**
- * The summary card: Income, Living costs and Left over, then Ticked as a second total of its own.
+ * The summary card: Income, Living costs and Left over, then Savings when there are any, then Ticked as a second total of its own.
  * With contributions, Living costs is followed by "less contributions from others" and "your share".
  * Ticked is always there: the plain sum of the ticked rows shown in the tables, whichever table
  * they are in, with their names below; with nothing ticked, a dash and a hint. Comparing a month
@@ -261,8 +262,9 @@ function summaryList(tm, money, ticked) {
       ['your share', t.share, c?.totals.share ?? 0, 'sub']);
   }
   lines.push(['Left over', t.leftOver, c?.totals.leftOver ?? 0, 'total']);
+  if (tm.saving.length > 0) lines.push(['Savings', t.savings, c?.totals.savings ?? 0, 'total']);
 
-  const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution].filter((r) => ticked.has(r.categoryId));
+  const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution, ...tm.saving].filter((r) => ticked.has(r.categoryId));
   const any = tickedRows.length > 0;
   const tickedLabel = any ? `Ticked (${plural(tickedRows.length, 'category', 'categories')})` : 'Ticked';
   const tickedTypical = tickedRows.reduce((sum, r) => sum + r.perMonth, 0);
@@ -348,7 +350,7 @@ function rowsTable(id, title, rows, money, onOpen, onTick, month) {
             'data-focus-key': tickKey(r.categoryId),
             onChange: (/** @type {Event} */ e) => onTick(r.categoryId, /** @type {HTMLInputElement} */ (e.target).checked),
           })),
-          h('th', { scope: 'row' }, r.monthOnly ? r.name : h('button', {
+          h('th', { scope: 'row' }, r.monthOnly || r.accountId ? r.name : h('button', {
             type: 'button', class: 'secondary name', 'data-focus-key': openKey(r.categoryId),
             onClick: () => onOpen(r.categoryId),
           }, r.name)),

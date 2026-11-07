@@ -10,15 +10,15 @@ import { cmp, compareNames } from './order.js';
 /** @typedef {{error:string}} Invalid */
 
 /** @type {CategoryKind[]} */
-export const KINDS = ['spend', 'income', 'contribution', 'transfer', 'ignore'];
+export const KINDS = ['spend', 'income', 'contribution', 'saving', 'transfer', 'ignore'];
 /** @type {BudgetType[]} */
 export const BUDGET_TYPES = ['fixed', 'variable', 'annual', 'oneoff'];
 
 /**
- * Spend, income and contribution need a budget type; transfer and ignore have none.
+ * Spend, income, contribution and saving need a budget type; transfer and ignore have none.
  * @param {CategoryKind} kind
  */
-export const isBudgeted = (kind) => kind === 'spend' || kind === 'income' || kind === 'contribution';
+export const isBudgeted = (kind) => kind === 'spend' || kind === 'income' || kind === 'contribution' || kind === 'saving';
 
 /** @param {string} name */
 const fold = (name) => name.trim().toLowerCase();

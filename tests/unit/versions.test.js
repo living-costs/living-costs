@@ -13,7 +13,7 @@ const backupFile = (name) => fileURLToPath(new URL(`../fixtures/backups/${name}`
 const versions = Array.from({ length: DATA_VERSION - 1 }, (_, i) => i + 2);
 
 // Output of the normaliser and fingerprints over the synthetic fixtures, at this data version.
-const PINNED = { dataVersion: 2, sha256: 'd86cbb0e3914e0a927ceacf342ecb09ffeda55f276755fdf32993709f74d2c14' };
+const PINNED = { dataVersion: 3, sha256: 'd86cbb0e3914e0a927ceacf342ecb09ffeda55f276755fdf32993709f74d2c14' };
 
 test('a frozen backup and its expected facts exist for every version from 2 to DATA_VERSION', () => {
   for (const v of versions) {
