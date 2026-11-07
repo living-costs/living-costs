@@ -187,7 +187,14 @@ function card(app, bucket, counts) {
   const months = count ? bucketMonths(state, app.tuning, count) : undefined;
   /** @type {(HTMLElement|null)[]} */
   const children = [
-    h('h3', { id: 'card-heading' }, bucket.displayName),
+    h('div', { class: 'view-heading' },
+      h('h3', { id: 'card-heading' }, bucket.displayName),
+      h('div', { class: 'heading-actions' },
+        h('button', {
+          type: 'button', class: 'secondary', 'data-focus-key': 'skip',
+          onClick: () => { app.session.skipped.add(bucket.id); app.rerender(); },
+        }, 'Skip for now'),
+        h('button', { type: 'button', class: 'secondary', onClick: () => app.navigate('typical') }, 'Stop here'))),
     h('p', { id: 'card-summary' }, summaryText(count, months)),
     count && months ? eachMonth(app, bucket, count, months) : null,
     current ? h('p', null, `Category: ${current.name}`) : null,
@@ -198,12 +205,6 @@ function card(app, bucket, counts) {
     unusual(app, all, sortedCategories(state), save),
     repeating(app, bucket, all, save),
     flagged(app, all, save),
-    h('div', { class: 'actions' },
-      h('button', {
-        type: 'button', class: 'secondary', 'data-focus-key': 'skip',
-        onClick: () => { app.session.skipped.add(bucket.id); app.rerender(); },
-      }, 'Skip for now'),
-      h('button', { type: 'button', class: 'secondary', onClick: () => app.navigate('typical') }, 'Stop here')),
   ];
   for (const child of children) if (child) el.append(child);
   return el;

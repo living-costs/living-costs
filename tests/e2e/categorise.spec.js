@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading, readStore, navButton,
+  expectNoAxeViolations, trackCspViolations, importFiles, skipToCard, cardHeading, readStore, navButton, expectBesideHeading,
 } from './helpers.js';
 
 const BANK_A = { new: { name: 'Bank A current', kind: 'bank' }, mapping: 'bankA' };
@@ -144,6 +144,13 @@ test('busy guard: a second click while saving is ignored', async ({ page }) => {
 
 test('category buttons, Skip for now and Stop here', async ({ page }) => {
   await openCategorise(page);
+  // Both sit on the bucket name's line, Skip for now first, and nowhere else.
+  const skip = page.getByRole('button', { name: 'Skip for now' });
+  const stop = page.getByRole('button', { name: 'Stop here' });
+  await expectBesideHeading(cardHeading(page), skip);
+  await expectBesideHeading(cardHeading(page), stop);
+  const [sb, tb] = [await skip.boundingBox(), await stop.boundingBox()];
+  expect(tb?.x).toBeGreaterThan((sb?.x ?? 0) + (sb?.width ?? 0));
   await page.getByRole('button', { name: 'Skip for now' }).click();
   await expect(cardHeading(page)).toHaveText('ACME LETTINGS');
   await card(page).getByRole('button', { name: /Housing/ }).click();

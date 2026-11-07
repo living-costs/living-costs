@@ -52,9 +52,12 @@ test('nav count, Suggested column and Accept', async ({ page }) => {
   await expect(nav).toHaveAccessibleName('Buckets, 3 suggestions');
 });
 
+/** One of the Show buttons on Buckets: All, Uncategorised or Suggested. */
+const show = (page, name) => page.getByRole('group', { name: 'Show' }).getByRole('button', { name: new RegExp(`^${name}`) });
+
 test('quick double Accept with the filter on', async ({ page }) => {
   await openScreen(page, 'Buckets');
-  await page.getByLabel('Only uncategorised').check();
+  await show(page, 'Uncategorised').click();
   await page.getByRole('button', { name: 'Accept Shopping for AMAZON.CO.UK' }).click();
   await page.getByRole('button', { name: 'Accept Transport for TRAINLINE' }).click();
   const shopping = (await readStore(page, 'categories')).find((c) => c.name === 'Shopping').id;
@@ -64,6 +67,42 @@ test('quick double Accept with the filter on', async ({ page }) => {
   const focused = page.locator(':focus');
   await expect(focused).toHaveAttribute('aria-label', /^Category for /);
   await expect(navButton(page, 'Buckets')).toHaveAccessibleName('Buckets, 3 suggestions');
+});
+
+test('Show Suggested lists only buckets with a suggestion', async ({ page }) => {
+  await openScreen(page, 'Buckets');
+  await expect(show(page, 'Suggested')).toHaveAccessibleName('Suggested, 5 suggestions');
+  await expect(show(page, 'Suggested')).not.toHaveClass(/\battention\b/);
+  await show(page, 'Suggested').click();
+  await expect(show(page, 'Suggested')).toHaveAttribute('aria-pressed', 'true');
+  const accepts = page.getByRole('table').getByRole('button', { name: /^Accept / });
+  // One header row plus the five suggested buckets, each with its Accept.
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(6);
+  await expect(accepts).toHaveCount(5);
+  // The suggested category is marked in the table.
+  await expect(rowOf(page, 'TESCO STORES').locator('.suggested-chip')).toHaveText('Groceries');
+  await expectNoAxeViolations(page);
+
+  // Accepting hides the row and hands focus to a neighbour; the count drops.
+  await page.getByRole('button', { name: 'Accept Groceries for TESCO STORES' }).click();
+  await expect(rowOf(page, 'TESCO STORES')).toHaveCount(0);
+  await expect(page.locator(':focus')).toHaveAttribute('aria-label', /^Category for /);
+  await expect(show(page, 'Suggested')).toHaveAccessibleName('Suggested, 4 suggestions');
+
+  // A bucket categorised another way leaves the list too.
+  await setBucketCategory(page, 'SPOTIFY', 'Entertainment');
+  await openScreen(page, 'Buckets');
+  await expect(show(page, 'Suggested')).toHaveAttribute('aria-pressed', 'true');
+  await expect(accepts).toHaveCount(3);
+
+  // With none left, Suggested stays pressed, without a count.
+  for (const [cat, name] of [['Groceries', 'SAINSBURYS S/MKT'], ['Shopping', 'AMAZON.CO.UK'], ['Transport', 'TRAINLINE']]) {
+    await page.getByRole('button', { name: `Accept ${cat} for ${name}` }).click();
+    await expect.poll(() => categoryOf(page, name)).toBeTruthy();
+  }
+  await expect(page.getByText('No buckets match.')).toBeVisible();
+  await expect(show(page, 'Suggested')).toHaveAccessibleName('Suggested');
+  await expect(show(page, 'Suggested')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('accepting every suggestion clears the highlight', async ({ page }) => {

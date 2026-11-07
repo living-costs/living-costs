@@ -3,7 +3,7 @@
 /** @import {Page, BrowserContext} from '@playwright/test' */
 import { test, expect } from '@playwright/test';
 import {
-  expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, readStore, expectBackBesideHeading,
+  expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, readStore, expectBesideHeading,
 } from './helpers.js';
 
 test.describe.configure({ mode: 'serial' });
@@ -85,7 +85,7 @@ test('Salary opens from Typical month with the Fixed explanation', async () => {
 });
 
 test('Back to Typical month sits beside the category name, and only there', async () => {
-  await expectBackBesideHeading(viewHeading('Salary'), back());
+  await expectBesideHeading(viewHeading('Salary'), back());
 });
 
 test('the bucket lines add up to the figure', async () => {

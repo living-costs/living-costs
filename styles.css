@@ -161,6 +161,7 @@ h3 { margin: 1rem 0 0.25rem; font-size: 1.1rem; }
    gap between them. On a narrow window the button wraps under the name. */
 .view-heading { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2rem; row-gap: 0.5rem; margin: 1rem 0 0.25rem; }
 .view-heading h3 { margin: 0; }
+.view-heading .heading-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
 
@@ -275,6 +276,10 @@ dialog h3 { margin-top: 0; }
 /* Buckets */
 /* Matches a sibling field's label line plus its gap, so the toggle lines up with the inputs. */
 .field.toggle { padding-top: calc(1.5em + 0.375rem); }
+/* Buckets' Show: a label like a field's, above the joined buttons the nav groups use. */
+.show-filter > span { display: block; font-weight: 600; margin-bottom: 0.375rem; }
+/* On a screen, not the nav, so the usual 32px target. */
+.show-filter .nav-row button { min-height: 32px; }
 .field.toggle > label.choice { font-weight: normal; }
 table.buckets td, table.buckets th { vertical-align: middle; }
 table.buckets input.select { width: 1.5rem; height: 1.5rem; min-height: 0; margin: 0; }
@@ -387,5 +392,8 @@ tr.stopped { opacity: .75; }
 .site-footer p { margin: 0.5rem 0; }
 .site-footer a { color: var(--accent); }
 
-/* The category suggested from the merchant name: a text label, so it never relies on colour alone. */
-.category-buttons .suggested { margin-left: 0.5rem; padding: 0 0.35rem; border: 1px solid var(--border); border-radius: 0.25rem; font-size: 0.8rem; font-style: italic; }
+/* The category suggested from the merchant name, on the Categorise card and in the Buckets table:
+   the nav's attention yellow, and on the card a text label too, so it never relies on colour alone.
+   The extra pixel underneath lifts the word to the middle of the yellow. */
+.category-buttons .suggested { margin-left: 0.5rem; padding: 0 0.35rem 1px; border: 1px solid var(--attention-text); border-radius: 0.25rem; font-size: 0.8rem; font-weight: bold; background: var(--attention-bg); color: var(--attention-text); }
+.suggested-chip { padding: 0 0.35rem 1px; border-radius: 0.25rem; background: var(--attention-bg); color: var(--attention-text); }

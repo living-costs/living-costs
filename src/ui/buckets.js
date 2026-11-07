@@ -1,6 +1,6 @@
 // Buckets screen: every bucket with its total and count over the analysis window, a category
-// select per row, search, an Only uncategorised filter, sorting, merging and drill-in to the
-// bucket's transactions.
+// select per row, search, a Show filter (All, Uncategorised, or Suggested: only buckets with a
+// suggested category), sorting, merging and drill-in to the bucket's transactions.
 //
 // Totals cover every counted transaction, transfers included, since this is the raw list. A
 // bucket whose counted rows use more than one currency shows "Several currencies" instead of a
@@ -26,6 +26,7 @@ import { showing, back } from './subview.js';
 
 /** @typedef {'total'|'name'|'count'} SortKey */
 /** @typedef {'ascending'|'descending'} SortDir */
+/** @typedef {'all'|'uncategorised'|'suggested'} Show */
 /** @typedef {{survivorId: string, categoryId: string}} MergeDraft */
 /**
  * One row: the bucket, how many counted transactions it has, and the one currency they use
@@ -40,6 +41,8 @@ import { showing, back } from './subview.js';
 const FIRST_DIR = { total: 'descending', name: 'ascending', count: 'descending' };
 /** @type {Record<SortKey, string>} */
 const SORT_LABELS = { name: 'Name', total: 'Total', count: 'Transactions' };
+/** @type {[Show, string][]} */
+const SHOW_LABELS = [['all', 'All'], ['uncategorised', 'Uncategorised'], ['suggested', 'Suggested']];
 
 /**
  * Screen state that is not saved. It survives redraws and leaving the screen, except the open
@@ -47,7 +50,8 @@ const SORT_LABELS = { name: 'Name', total: 'Total', count: 'Transactions' };
  */
 const ui = {
   query: '',
-  onlyUncategorised: false,
+  /** @type {Show} A suggestion exists only while a bucket is uncategorised, so each narrows the last. */
+  show: 'all',
   /** @type {SortKey} */
   sortKey: 'total',
   /** @type {SortDir} */
@@ -117,19 +121,32 @@ export function render(root, app) {
         type: 'search', class: 'search', value: ui.query, autocomplete: 'off', 'data-focus-key': 'buckets-search',
         onInput: (/** @type {Event} */ e) => { ui.query = valueOf(e); update(); },
       }), { hint: 'Matches the name or any of its texts.' }),
-      h('div', { class: 'field toggle' }, h('label', { class: 'choice' },
-        h('input', {
-          type: 'checkbox', checked: ui.onlyUncategorised, 'data-focus-key': 'buckets-uncategorised',
-          onChange: (/** @type {Event} */ e) => {
-            ui.onlyUncategorised = /** @type {HTMLInputElement} */ (e.target).checked;
-            update();
-          },
-        }),
-        'Only uncategorised'))),
+      showFilter(app, suggestions.size)),
     mergeBar(app),
     results);
   update();
   if (ui.merge) appendMergeDialog(root, app, ui.merge, rows, cats);
+}
+
+/**
+ * Show: All, Uncategorised or Suggested, as pressed buttons. Suggested carries the number of
+ * suggestions, as the nav's Buckets button does.
+ * @param {App} app
+ * @param {number} n buckets with a suggestion
+ * @returns {HTMLElement}
+ */
+function showFilter(app, n) {
+  return h('div', { class: 'field show-filter', role: 'group', 'aria-labelledby': 'buckets-show' },
+    h('span', { id: 'buckets-show' }, 'Show'),
+    h('div', { class: 'nav-row' }, ...SHOW_LABELS.map(([value, label]) => {
+      const count = value === 'suggested' && n > 0;
+      return h('button', {
+        type: 'button', 'aria-pressed': ui.show === value ? 'true' : 'false', 'data-focus-key': `buckets-show-${value}`,
+        // An explicit name, since hidden text in the button would add stray spaces to it.
+        'aria-label': count ? `${label}, ${plural(n, 'suggestion', 'suggestions')}` : null,
+        onClick: () => { ui.show = value; app.rerender(); },
+      }, label, ...(count ? [' ', h('span', { class: 'count' }, String(n))] : []));
+    })));
 }
 
 /**
@@ -191,9 +208,10 @@ const isCategorised = (app, b) => b.categoryId !== undefined && app.store.state.
  * By Total, buckets with several currencies come last in either direction, by name.
  * @param {App} app
  * @param {Row[]} rows
+ * @param {Map<string, Category>} suggestions
  * @returns {Row[]}
  */
-function shownRows(app, rows) {
+function shownRows(app, rows, suggestions) {
   const q = ui.query.trim().toLowerCase();
   const matches = (/** @type {Bucket} */ b) => q === ''
     || b.displayName.toLowerCase().includes(q) || b.keys.some((k) => k.toLowerCase().includes(q));
@@ -211,7 +229,9 @@ function shownRows(app, rows) {
     ? Number(a.mixed) - Number(b.mixed)
     : sign * compare[ui.sortKey](a, b));
   return rows
-    .filter((r) => matches(r.bucket) && !(ui.onlyUncategorised && isCategorised(app, r.bucket)))
+    .filter((r) => matches(r.bucket)
+      && !(ui.show === 'uncategorised' && isCategorised(app, r.bucket))
+      && !(ui.show === 'suggested' && !suggestions.has(r.bucket.id)))
     .sort((a, b) => order(a, b) || byName(a, b));
 }
 
@@ -239,7 +259,7 @@ function mergeBar(app) {
  * @param {Map<string, Category>} suggestions
  */
 function drawList(app, results, rows, cats, suggestions) {
-  const shown = shownRows(app, rows);
+  const shown = shownRows(app, rows, suggestions);
   if (shown.length === 0) {
     results.replaceChildren(h('p', null, 'No buckets match.'));
     return;
@@ -277,8 +297,9 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
   const current = cats.some((c) => c.id === b.categoryId) ? b.categoryId : '';
   /** @param {string} value a category id, or '' for none */
   const choose = (value) => {
-    // A row that the filter will hide hands focus to its neighbour before the redraw.
-    if (ui.onlyUncategorised && value !== '') {
+    // A row that the filter will hide hands focus to its neighbour before the redraw. Under
+    // Suggested, any category hides it, since only uncategorised buckets have a suggestion.
+    if (ui.show !== 'all' && value !== '') {
       const next = shown[i + 1] ?? shown[i - 1];
       if (next) focusKey(categoryKey(next.bucket.id));
     }
@@ -321,12 +342,12 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
     h('td', { class: 'num total' }, totalText(r)),
     h('td', { class: 'num count' }, String(r.count)),
     h('td', null, select),
-    h('td', null, ...(suggestion ? [suggestion.name, ' ', h('button', {
+    h('td', null, ...(suggestion ? [h('span', { class: 'suggested-chip' }, suggestion.name), ' ', h('button', {
       type: 'button', class: 'secondary', 'aria-label': `Accept ${suggestion.name} for ${b.displayName}`,
       'data-focus-key': `bucket-accept-${b.id}`, 'data-saves': true,
       onClick: () => {
         // The row's own select keeps focus when it stays; with the filter on, choose() hands it on.
-        if (!ui.onlyUncategorised) focusKey(categoryKey(b.id));
+        if (ui.show === 'all') focusKey(categoryKey(b.id));
         choose(suggestion.id);
       },
     }, 'Accept')] : [])));
