@@ -259,7 +259,7 @@ Categories can be created, renamed, deleted (with reassignment) and retyped on a
 - **Later runs:** IDs missing from `offeredDefaultIds` are offered once in a notice, "New suggested categories: …", with Add and Dismiss. Either choice records them as offered.
 - **Edits to the file:** renames or type changes in the file never touch an existing user's category. Removing an entry from the file does nothing to existing categories.
 
-**Starting list (Claude's call), which the owner can edit:**
+**Starting list, which the owner can edit.** The first 25 were Claude's call. On 2026-11-07 the owner added Coffee shops, Fuel and Hobbies, and approved Shopping, Charity, Bank fees, Cash withdrawals, Income tax and Education, after a comparison with a public synthetic UK transaction dataset. The first ten categories get the number keys on the Categorise card, so rarely used entries go after Big one-offs.
 
 | Kind | Name | Budget type |
 |---|---|---|
@@ -273,18 +273,27 @@ Categories can be created, renamed, deleted (with reassignment) and retyped on a
 | Spend | Groceries | Variable |
 | Spend | Eating out | Variable |
 | Spend | Takeaway | Variable |
+| Spend | Coffee shops | Variable |
 | Spend | Transport | Variable |
 | Spend | Car | Fixed |
+| Spend | Fuel | Variable |
 | Spend | Subscriptions | Fixed |
 | Spend | Health | Variable |
 | Spend | Personal care | Variable |
 | Spend | Clothing | Annual |
 | Spend | Entertainment | Variable |
+| Spend | Hobbies | Variable |
 | Spend | Gifts | Annual |
 | Spend | Holidays | Annual |
 | Spend | Household maintenance | Annual |
 | Spend | Joint household | Fixed |
 | Spend | Big one-offs | One-off |
+| Spend | Shopping | Variable |
+| Spend | Charity | Variable |
+| Spend | Bank fees | Variable |
+| Spend | Cash withdrawals | Variable |
+| Spend | Income tax | Annual |
+| Spend | Education | Annual |
 | Transfer | Between my accounts | (none) |
 | Transfer | Card repayments | (none) |
 | Ignore | Ignore | (none) |

@@ -63,7 +63,7 @@ test.afterEach(async ({ page }) => {
 test('lists the defaults in order', async ({ page }) => {
   await openCategories(page);
   const list = await names(page);
-  expect(list).toHaveLength(25);
+  expect(list).toHaveLength(34);
   expect(list[0]).toBe('Salary');
   expect(list.at(-1)).toBe('Ignore');
   await expect(page.getByLabel('Kind for Insurance')).toHaveValue('spend');
@@ -131,7 +131,7 @@ test('create, retype and delete', async ({ page }) => {
   await expectNoAxeViolations(page);
   await page.getByRole('button', { name: 'Yes, delete' }).click();
   await expect(table(page).getByRole('rowheader', { name: 'Pets' })).toHaveCount(0);
-  expect(await names(page)).toHaveLength(25);
+  expect(await names(page)).toHaveLength(34);
   await expect(screenHeading(page)).toBeFocused();
   await expectNoAxeViolations(page);
 });
@@ -147,7 +147,7 @@ test('new category validation is shown inline', async ({ page }) => {
   await name.fill('gifts');
   await name.press('Enter');
   await expect(page.getByText('There is already a category called Gifts.')).toBeVisible();
-  expect(await names(page)).toHaveLength(25);
+  expect(await names(page)).toHaveLength(34);
 
   // Transfer and ignore have no budget type.
   await page.getByLabel('Kind', { exact: true }).selectOption({ label: 'Transfer' });
@@ -262,19 +262,19 @@ test('reflows at 320px', async ({ page }) => {
 test('new suggested categories can be added', async ({ page }) => {
   await withExtraDefaults(page, [
     { id: 'pets', name: 'Pets', kind: 'spend', budgetType: 'variable' },
-    { id: 'charity', name: 'Charity', kind: 'spend', budgetType: 'fixed' },
+    { id: 'garden', name: 'Garden', kind: 'spend', budgetType: 'fixed' },
   ]);
   await page.reload();
   const notice = page.locator('#notices');
-  await expect(notice).toContainText('New suggested categories: Pets, Charity');
+  await expect(notice).toContainText('New suggested categories: Pets, Garden');
   await expectNoAxeViolations(page);
   await notice.getByRole('button', { name: 'Add' }).click();
   await expect(notice).not.toContainText('New suggested categories');
   await expect(screenHeading(page)).toBeFocused();
 
   await openCategories(page);
-  expect((await names(page)).slice(-2)).toEqual(['Pets', 'Charity']);
-  await expect(page.getByLabel('Budget type for Charity')).toHaveValue('fixed');
+  expect((await names(page)).slice(-2)).toEqual(['Pets', 'Garden']);
+  await expect(page.getByLabel('Budget type for Garden')).toHaveValue('fixed');
 
   await page.reload();
   await expect(screenHeading(page)).toBeVisible();
@@ -307,21 +307,21 @@ test('new suggested categories can be dismissed, keeping other notices', async (
 test('double-clicking Add on the suggestions adds each category once', async ({ page }) => {
   await withExtraDefaults(page, [
     { id: 'pets', name: 'Pets', kind: 'spend', budgetType: 'variable' },
-    { id: 'charity', name: 'Charity', kind: 'spend', budgetType: 'fixed' },
+    { id: 'garden', name: 'Garden', kind: 'spend', budgetType: 'fixed' },
   ]);
   await page.reload();
   const notice = page.locator('#notices');
-  await expect(notice).toContainText('New suggested categories: Pets, Charity');
+  await expect(notice).toContainText('New suggested categories: Pets, Garden');
   await notice.getByRole('button', { name: 'Add' }).dblclick();
   await expect(notice).not.toContainText('New suggested categories');
 
   await openCategories(page);
   const list = await names(page);
   expect(list.filter((n) => n === 'Pets')).toHaveLength(1);
-  expect(list.filter((n) => n === 'Charity')).toHaveLength(1);
+  expect(list.filter((n) => n === 'Garden')).toHaveLength(1);
   const stored = (await readStore(page, 'categories')).map((c) => c.name);
   expect(stored.filter((n) => n === 'Pets')).toHaveLength(1);
-  expect(stored.filter((n) => n === 'Charity')).toHaveLength(1);
+  expect(stored.filter((n) => n === 'Garden')).toHaveLength(1);
 });
 
 test('double-clicking Add category adds it once', async ({ page }) => {
@@ -330,7 +330,7 @@ test('double-clicking Add category adds it once', async ({ page }) => {
   await page.getByRole('button', { name: 'Add category' }).dblclick();
   await expect(table(page).getByRole('rowheader').last()).toHaveText('Pets');
   expect((await readStore(page, 'categories')).filter((c) => c.name === 'Pets')).toHaveLength(1);
-  expect(await names(page)).toHaveLength(26);
+  expect(await names(page)).toHaveLength(35);
   // The second click is ignored, rather than submitting the cleared form.
   await expect(page.getByText('Enter a name.')).toHaveCount(0);
 });
