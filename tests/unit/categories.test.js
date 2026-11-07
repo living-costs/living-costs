@@ -15,16 +15,17 @@ function seeded(list = defaults) {
   return s;
 }
 const byName = (s, name) => s.categories.find((c) => c.name === name);
+const n = defaults.length;
 const extra = { id: 'pets', name: 'Pets', kind: 'spend', budgetType: 'variable' };
 
 test('seeding gives every default once, with ids, defaultIds, positions and offered ids', () => {
   const s = seeded();
-  assert.equal(s.categories.length, 25);
-  assert.equal(s.settings.offeredDefaultIds.length, 25);
+  assert.equal(s.categories.length, n);
+  assert.equal(s.settings.offeredDefaultIds.length, n);
   assert.deepEqual(s.settings.offeredDefaultIds, defaults.map((d) => d.id));
   assert.deepEqual(s.categories.map((c) => c.defaultId), defaults.map((d) => d.id));
-  assert.deepEqual(s.categories.map((c) => c.position), [...Array(25).keys()]);
-  assert.equal(new Set(s.categories.map((c) => c.id)).size, 25);
+  assert.deepEqual(s.categories.map((c) => c.position), [...Array(n).keys()]);
+  assert.equal(new Set(s.categories.map((c) => c.id)).size, n);
   assert.ok(s.categories.every((c) => !defaults.some((d) => d.id === c.id)), 'ids are fresh, not default ids');
   assert.deepEqual(byName(s, 'Insurance'), { ...byName(s, 'Insurance'), kind: 'spend', budgetType: 'annual' });
   assert.equal('budgetType' in byName(s, 'Ignore'), false);
@@ -65,7 +66,7 @@ test('first-run changes are the seeding a first visit gets, from an empty state'
   assert.equal(s.settings.helpDismissed, false);
 });
 
-test('a 26th default is pending; dismissing records it and adds nothing', () => {
+test('one more default is pending; dismissing records it and adds nothing', () => {
   const s = seeded();
   assert.deepEqual(pendingDefaults(defaults, s.settings), []);
   const more = [...defaults, extra];
@@ -73,8 +74,8 @@ test('a 26th default is pending; dismissing records it and adds nothing', () => 
   const changes = dismissDefaults(s, ['pets']);
   assert.equal(changes.put?.categories, undefined);
   applyToState(s, changes);
-  assert.equal(s.categories.length, 25);
-  assert.equal(s.settings.offeredDefaultIds.length, 26);
+  assert.equal(s.categories.length, n);
+  assert.equal(s.settings.offeredDefaultIds.length, n + 1);
   assert.deepEqual(pendingDefaults(more, s.settings), []);
 });
 
@@ -92,21 +93,21 @@ test('accepting a default adds it after the last position and records it', () =>
   assert.equal(pets.defaultId, 'pets');
   assert.equal(pets.kind, 'spend');
   assert.equal(pets.budgetType, 'variable');
-  assert.equal(pets.position, 25);
+  assert.equal(pets.position, n);
   assert.notEqual(pets.id, 'pets');
   assert.ok(s.settings.offeredDefaultIds.includes('pets'));
-  assert.equal(s.settings.offeredDefaultIds.length, 26);
+  assert.equal(s.settings.offeredDefaultIds.length, n + 1);
 });
 
 test('accepting skips a default whose name exists, ignoring case, but still records it', () => {
   const s = seeded();
   const clash = { id: 'gifts-2', name: 'GIFTS', kind: 'spend', budgetType: 'annual' };
   applyToState(s, acceptDefaults(s, ['gifts-2', 'pets'], [...defaults, clash, extra]));
-  assert.equal(s.categories.length, 26);
+  assert.equal(s.categories.length, n + 1);
   assert.equal(s.categories.filter((c) => c.name.toLowerCase() === 'gifts').length, 1);
   assert.ok(s.settings.offeredDefaultIds.includes('gifts-2'));
   assert.ok(s.settings.offeredDefaultIds.includes('pets'));
-  assert.equal(byName(s, 'Pets').position, 25);
+  assert.equal(byName(s, 'Pets').position, n);
 });
 
 test('a renamed or retyped default in the file does not change the user\'s category', () => {
@@ -130,13 +131,13 @@ test('createCategory adds at the end with a trimmed name', () => {
   assert.ok(!('error' in changes));
   applyToState(s, changes);
   const pets = byName(s, 'Pets');
-  assert.equal(pets.position, 25);
+  assert.equal(pets.position, n);
   assert.equal(pets.defaultId, undefined);
   assert.equal(orderedCategories(s).at(-1).name, 'Pets');
   const t = createCategory(s, { name: 'Savings pot', kind: 'transfer' });
   assert.ok(!('error' in t));
   applyToState(s, t);
-  assert.equal(byName(s, 'Savings pot').position, 26);
+  assert.equal(byName(s, 'Savings pot').position, n + 1);
   assert.equal('budgetType' in byName(s, 'Savings pot'), false);
 });
 

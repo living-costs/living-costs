@@ -30,7 +30,7 @@ test('budgetType is valid for budgeted kinds and absent for transfer and ignore'
   }
 });
 
-test('has the 25-row starting list, first entry Salary', () => {
-  assert.equal(defaults.length, 25);
+test('has the 34-row starting list, first entry Salary', () => {
+  assert.equal(defaults.length, 34);
   assert.deepEqual(defaults[0], { id: 'salary', name: 'Salary', kind: 'income', budgetType: 'fixed' });
 });
