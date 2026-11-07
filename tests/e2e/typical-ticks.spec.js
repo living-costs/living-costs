@@ -1,4 +1,4 @@
-// Typical month: tick boxes beside the categories, the Ticked line in the summary, and columns
+// Typical month: tick boxes beside the categories, the Ticked total in the summary, and columns
 // that line up across Living costs, Income and Contributions. Against the full fixture state.
 // One page is set up once and shared, in order, by every test here.
 /** @import {Page, BrowserContext} from '@playwright/test' */
@@ -20,6 +20,10 @@ const minor = (/** @type {string} */ s) => Math.round(Number(s.replace(/[^0-9.]/
 
 /** A table by its name (its section heading). */
 const table = (name) => page.getByRole('table', { name, exact: true });
+
+/** The names of the ticked categories, or the hint, under the summary. */
+const which = () => page.locator('.summary-panel .ticked-which');
+const HINT = 'Tick categories below to add them up here.';
 
 /** One category's tick box. */
 const tick = (category) => page.getByRole('checkbox', { name: `Tick ${category}`, exact: true });
@@ -44,9 +48,11 @@ test.afterAll(async () => {
   await context.close();
 });
 
-test('nothing ticked: no Ticked line', async () => {
+test('nothing ticked: the Ticked line shows a dash, read as none, and a hint', async () => {
   await expect(tick('Groceries')).not.toBeChecked();
-  expect((await summaryLines()).at(-1)).toBe('Left over: £720.44');
+  expect((await summaryLines()).slice(-2)).toEqual(['Left over: £720.44', 'Ticked: —none']);
+  await expect(page.locator('dl.summary dd.ticked span[aria-hidden="true"]')).toHaveText('—');
+  await expect(which()).toHaveText(HINT);
 });
 
 test('ticking adds a Ticked line under Left over and keeps focus', async () => {
@@ -57,11 +63,14 @@ test('ticking adds a Ticked line under Left over and keeps focus', async () => {
   expect((await summaryLines()).slice(-2)).toEqual(['Left over: £720.44', 'Ticked (1 category): £737.84']);
   await tick('Housing (rent or mortgage)').check();
   expect((await summaryLines()).at(-1)).toBe('Ticked (2 categories): £1,637.84'); // £900.00 + £737.84
+  // In table order, largest first.
+  await expect(which()).toHaveText('Housing (rent or mortgage), Groceries');
 });
 
 test('ticks in other tables add to the same line', async () => {
   await tick('Salary').check();
   expect((await summaryLines()).at(-1)).toBe('Ticked (3 categories): £4,137.84'); // + £2,500.00
+  await expect(which()).toHaveText('Housing (rent or mortgage), Groceries, Salary');
   await tick('Salary').uncheck();
   expect((await summaryLines()).at(-1)).toBe('Ticked (2 categories): £1,637.84');
 });
@@ -112,6 +121,7 @@ test('comparing a month: the Ticked row has the month and Change too, and column
   const diff = 55000 + minor(groceries[3]) - minor(groceries[2]);
   expect(change).toBe(diff === 0 ? 'same' : `${gbp(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'}`);
   await expect(summary.getByRole('rowheader').last()).toHaveText('Ticked (3 categories)');
+  await expect(which()).toHaveText('Housing (rent or mortgage), Groceries, Contributions from others');
   const lefts = await columnLefts();
   expect(lefts).toHaveLength(3);
   expect(lefts[0]).toHaveLength(7);
@@ -137,5 +147,6 @@ test('ticks survive the nav and clear on reload', async () => {
   expect((await summaryLines()).at(-1)).toBe('Ticked (3 categories): £2,187.84'); // £900.00 + £737.84 + £550.00
   await page.reload();
   await expect(tick('Groceries')).not.toBeChecked();
-  expect((await summaryLines()).at(-1)).toBe('Left over: £720.44');
+  expect((await summaryLines()).at(-1)).toBe('Ticked: —none');
+  await expect(which()).toHaveText(HINT);
 });
