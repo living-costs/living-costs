@@ -5,6 +5,7 @@ import { emptyState, applyToState } from '../../src/changes.js';
 import { assignBuckets } from '../../src/buckets.js';
 import { seedDefaults, updateCategory, deleteCategory } from '../../src/categories.js';
 import defaults from '../../src/default-categories.js';
+import { fixtureState } from './helpers/fixture-state.js';
 
 const M = [
   { name: 'SAINSBURYS', defaultId: 'groceries' }, { name: 'AMAZON', defaultId: 'shopping' },
@@ -114,4 +115,17 @@ test('bucketSuggestions: one entry per suggestible bucket, keyed by bucket id', 
   const map = bucketSuggestions(s, M);
   assert.equal(map.size, 1);
   assert.equal(map.get(bucket.id)?.id, groceries.id);
+});
+
+test('bucketSuggestions: the synthetic fixtures with the real list', async () => {
+  assert.equal(bucketSuggestions(await fixtureState()).size, 0, 'categorised buckets get none');
+  const state = await fixtureState();
+  for (const b of state.buckets) delete b.categoryId;
+  const got = Object.fromEntries([...bucketSuggestions(state)].map(([id, c]) => [
+    state.buckets.find((/** @type {any} */ b) => b.id === id).displayName, c.name,
+  ]));
+  assert.deepEqual(got, {
+    'TESCO STORES': 'Groceries', 'SAINSBURYS S/MKT': 'Groceries', 'AMAZON.CO.UK': 'Shopping',
+    SPOTIFY: 'Subscriptions', TRAINLINE: 'Transport',
+  });
 });
