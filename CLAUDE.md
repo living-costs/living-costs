@@ -12,7 +12,7 @@ The approved design is `docs/superpowers/specs/2026-11-04-living-costs-design.md
 - Do not install software with brew, npm, or anything else. Explain why it is needed and ask the owner to install it.
 - Dev-only tooling is allowed and never ships: Playwright with `@axe-core/playwright`, `node:test`, and `tsc --checkJs --noEmit`. The owner runs `npm install`. Claude never does. Installs use `npm ci --ignore-scripts` from a committed lockfile.
 - Any suggested library or application must be actively maintained, or clearly flagged if not.
-- Real statements live in `fixtures/` (gitignored). Claude may read them locally with the owner's consent, to learn formats. Nothing from them (rows, names, merchants, amounts, account numbers or filenames) goes into code, tests, docs or commits. Committed test fixtures in `tests/fixtures/` are synthetic. Never request or commit backups.
+- Real statements live in `fixtures/` (gitignored). Claude may read them locally with the owner's consent, to learn formats. Nothing sourced from them (rows, names, merchants, amounts, account numbers or filenames) goes into code, tests, docs or commits. A merchant name from another source is fine, even if it also appears in a statement. Committed test fixtures in `tests/fixtures/` are synthetic. Never request or commit backups.
 - A PR that changes `DATA_VERSION` reminds the owner, at the end of its description, to tag the merge commit `data-vN` on `main`.
 
 ## Privacy and security rules
@@ -78,13 +78,14 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions
 - Upgrade stored data and older backups silently. If an upgrade fails, offer to save a copy or delete and start afresh
 - A simple list of uncategorised items for later updates
+- Category suggestions for spending buckets, from a bundled list of merchant names (`src/merchants.js`). They are shown on the categorise card and the Buckets screen, and only applied when accepted.
 
 ### Out of scope for now
 
 - Encryption, passkeys, 1Password integration, and recovery keys
 - Multi-device handling and sync
 - PDF import, OCR, and ML
-- Fuzzy matching, and scheduled or rotating backups
+- Edit-distance or typo-tolerant matching, and scheduled or rotating backups
 - Recurring-charge alerts
 
 ## Design decisions

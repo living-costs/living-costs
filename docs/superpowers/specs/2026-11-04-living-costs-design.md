@@ -248,6 +248,10 @@ For masked text such as `PAYPAL PAYMENT`:
 
 This check is deliberately narrow: it only runs at import, and only for amount rules. General recurring-charge alerts stay out of scope.
 
+### Suggestions
+
+Uncategorised spending buckets can show a suggested category, taken from a bundled list of merchant names in `src/merchants.js`. A suggestion is only applied when the user accepts it; see `2026-11-07-merchant-suggestions-design.md` for the design.
+
 ### Categories and defaults
 
 Categories can be created, renamed, deleted (with reassignment) and retyped on a Categories screen. The kind and budget type can be changed at any time, and the typical month recalculates.

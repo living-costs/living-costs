@@ -44,6 +44,8 @@ export default [
 
 `defaultId` is the `id` of an entry in `src/default-categories.js` whose `kind` is `spend`.
 
+(Decided during the build.) An entry may have `defaultId: null`, a block entry that stops suggestions for a name. This is for names such as retailer banks and cards (for example a supermarket's bank), whose names contain a grocery or shop brand. When the longest matches include a block entry, there is no suggestion.
+
 ### Source
 
 1. **The owner's dataset.** The `merchant_name` and `label` columns of `synthetic_uk_transactions.csv` from the GitHub repository EmmaExcel/merchant-categorizer. The repository has no licence file. The owner has checked with the author that using it is fine. The builder may download it, once, as `raw.githubusercontent.com/EmmaExcel/merchant-categorizer/main/data/raw/synthetic_uk_transactions.csv`, into the scratchpad. It has 2,400 rows, 234 distinct merchant names and exactly the 21 labels in the table below, and each merchant has exactly one label. Only those two columns are taken, and the rest of the data is discarded. The CSV itself is not committed. A one-line comment in `src/merchants.js` credits the source by name. It must contain no URL, because `npm run banned` fails on `https://`.
@@ -104,7 +106,7 @@ The matcher works on the bucket's keys (`Bucket.keys`), each one the output of `
    - Every other non-alphanumeric run becomes one space.
 2. **Whole words.** A merchant matches when its squashed words appear consecutively, as whole words, in the squashed key. `BA` matches `BA LONDON`, but not `BARCLAYS`.
 3. **Glued words.** A merchant of two or more words also matches when its words joined without spaces equal one whole word of the key. For example, `JUST EAT` matches `JUSTEAT`.
-4. **Longest wins.** When several merchants match, the one with the longest squashed name wins, so `AMAZON PRIME` beats `AMAZON`. If the longest matches point at different categories, there is no suggestion.
+4. **Longest wins.** When several merchants match, the one with the longest squashed name wins, so `AMAZON PRIME` beats `AMAZON`. If the longest matches point at different categories, there is no suggestion. (Decided during the build.) A block entry (`defaultId: null`) among the longest matches also gives no suggestion.
 5. **Money out only.** A suggestion is offered only when the bucket's signed total over all its transactions is negative.
 6. **The user's category.** The suggestion is the user's category whose `defaultId` equals the entry's `defaultId`. If the user has deleted that category, there is no suggestion. If the user has changed its kind away from `spend`, there is also no suggestion.
 7. **Uncategorised only.** A bucket gets a suggestion only when the rest of the app treats it as uncategorised. That includes a bucket whose `categoryId` points at a deleted category, as in the existing code.
