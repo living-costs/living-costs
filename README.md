@@ -68,6 +68,7 @@ npm ci --ignore-scripts
 npx playwright install chromium
 npm run check    # banned-pattern scan, unit tests, type check, browser tests
 npm run serve    # http://localhost:4173/
+npm run categories   # Categories Editor for src/default-categories.js, http://localhost:4180/
 ```
 
 `CLAUDE.md` holds the project rules, including the privacy and security rules every change must follow. Test fixtures in `tests/fixtures/` are made up. Never commit real statements or backups.

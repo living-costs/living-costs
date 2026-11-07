@@ -60,9 +60,9 @@ test('largest first', async ({ page }) => {
   await expect(progressLine(page)).toHaveText(/^£0\.00 of £[\d,]+\.\d\d categorised \(0%\) · \d+ buckets left$/);
   await expect(navButton(page, 'Categorise')).toHaveAccessibleName('Categorise (at 0%)');
   const buttons = card(page).getByRole('group', { name: 'Category' }).getByRole('button');
-  await expect(buttons.first()).toHaveText('1 Salary');
-  await expect(buttons.nth(9)).toHaveText('0 Eating out');
-  await expect(buttons.nth(10)).toHaveText('Takeaway');
+  await expect(buttons.first()).toHaveText('1 Coffee shops');
+  await expect(buttons.nth(9)).toHaveText('0 Holidays');
+  await expect(buttons.nth(10)).toHaveText('Subscriptions');
   await expect(buttons.last()).toHaveText('New category…');
 });
 
@@ -80,7 +80,7 @@ test('number key assigns', async ({ page }) => {
   await expect(navButton(page, 'Categorise')).toHaveAccessibleName(`Categorise (at ${percent(after)}%)`);
   const salary = (await readStore(page, 'buckets')).find((b) => b.displayName === SALARY);
   const categories = await readStore(page, 'categories');
-  expect(categories.find((c) => c.id === salary.categoryId)?.name).toBe('Salary');
+  expect(categories.find((c) => c.id === salary.categoryId)?.name).toBe('Coffee shops');
 });
 
 test('focus stays in the card after a number key', async ({ page }) => {
@@ -112,7 +112,7 @@ test('keys inactive outside card', async ({ page }) => {
   await openCategorise(page);
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Categorise' }).focus();
   await page.keyboard.press('1');
-  expect(await pressTwoOnCard(page)).toBe('Other income');
+  expect(await pressTwoOnCard(page)).toBe('Groceries');
 });
 
 test('keys typed in a select inside the card do nothing', async ({ page }) => {
@@ -122,13 +122,13 @@ test('keys typed in a select inside the card do nothing', async ({ page }) => {
   await kind.focus();
   await page.keyboard.press('1');
   await expect(kind).toBeFocused();
-  expect(await pressTwoOnCard(page)).toBe('Other income');
+  expect(await pressTwoOnCard(page)).toBe('Groceries');
 });
 
 test('busy guard: a second click while saving is ignored', async ({ page }) => {
   await openCategorise(page);
   // Two clicks in one task, so the second always lands while the first save is in flight.
-  await card(page).getByRole('button', { name: '1 Salary' }).evaluate((b) => { b.click(); b.click(); });
+  await card(page).getByRole('button', { name: '1 Coffee shops' }).evaluate((b) => { b.click(); b.click(); });
   await expect(cardHeading(page)).toHaveText('ACME LETTINGS');
   expect((await readStore(page, 'buckets')).filter((b) => b.categoryId).map((b) => b.displayName)).toEqual([SALARY]);
 
