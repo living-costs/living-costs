@@ -19,7 +19,7 @@ import { parseDate, formatDate, formatLocalDate, formatMonth, monthStart, monthE
 /** @typedef {'pick'|'account'|'mismatch'|'mapping'|'problems'|'period'|'review'|'summary'} Step */
 /** @typedef {'dateColumn'|'descriptionColumn'|'typeColumn'|'accountIdColumn'|'amountColumn'|'debitColumn'|'creditColumn'} ColumnKey */
 /**
- * @typedef {{name:string, kind:'bank'|'card', currency:string, amountStyle:'single'|'split',
+ * @typedef {{name:string, kind:'bank'|'card'|'savings', currency:string, amountStyle:'single'|'split',
  *   signFlipped:boolean} & Record<ColumnKey,string>} MappingForm
  */
 /** @typedef {{from:string, to:string, fromError?:string, toError?:string}} PeriodInput */
@@ -262,7 +262,7 @@ function onAccountContinue(app) {
   if (!account) return;
   flow.account = account;
   if (account.kind === 'placeholder' || !account.mapping) {
-    flow.form = { ...blankForm(), name: account.name, currency: account.currency, kind: account.kind === 'card' ? 'card' : 'bank' };
+    flow.form = { ...blankForm(), name: account.name, currency: account.currency, kind: account.kind === 'card' || account.kind === 'savings' ? account.kind : 'bank' };
     flow.formErrors = [];
     go(app, 'mapping');
     return;
@@ -409,10 +409,14 @@ function renderMapping(root, app) {
     })),
     isPlaceholder ? null : field('Kind', h('select', {
       'data-focus-key': 'map-kind',
-      onChange: (/** @type {Event} */ e) => { f.kind = /** @type {HTMLSelectElement} */ (e.target).value === 'card' ? 'card' : 'bank'; },
+      onChange: (/** @type {Event} */ e) => {
+        const v = /** @type {HTMLSelectElement} */ (e.target).value;
+        f.kind = v === 'card' || v === 'savings' ? v : 'bank';
+      },
     },
     h('option', { value: 'bank', selected: f.kind === 'bank' }, 'Bank'),
-    h('option', { value: 'card', selected: f.kind === 'card' }, 'Card'))),
+    h('option', { value: 'card', selected: f.kind === 'card' }, 'Card'),
+    h('option', { value: 'savings', selected: f.kind === 'savings' }, 'Savings'))),
     field('Currency', h('input', {
       type: 'text', value: f.currency, autocomplete: 'off', maxlength: '3', class: 'short', 'data-focus-key': 'map-currency',
       onInput: (/** @type {Event} */ e) => {

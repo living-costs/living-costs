@@ -69,6 +69,7 @@ test('imports Bank A with a new mapping', async ({ page }) => {
 
   await expect(stepHeading(page, 'Set up columns')).toBeVisible();
   await expect(page.getByLabel('Currency')).toHaveValue('GBP');
+  await expect(page.getByLabel('Kind', { exact: true }).locator('option')).toHaveText(['Bank', 'Card', 'Savings']);
   await expect(page.getByLabel('Date column').locator('option')).toContainText([
     'Transaction Date', 'Transaction Type', 'Sort Code', 'Account Number',
     'Transaction Description', 'Debit Amount', 'Credit Amount', 'Balance',

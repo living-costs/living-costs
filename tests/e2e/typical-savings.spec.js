@@ -79,3 +79,18 @@ test('comparing a month adds a Savings line with the month and Change', async ()
 test('axe passes and there are no CSP violations', async () => {
   await expectNoAxeViolations(page);
 });
+
+test('the Kind select on Accounts sets an account to Savings', async () => {
+  const accounts = await readStore(page, 'accounts');
+  await writeStore(page, 'accounts', accounts.map((a) => (a.name === 'Bank A savings' ? { ...a, kind: 'bank' } : a)));
+  await page.reload();
+  await openScreen(page, 'Accounts');
+  const kind = page.getByLabel('Kind for Bank A savings', { exact: true });
+  await expect(kind.locator('option')).toHaveText(['Bank', 'Card', 'Savings']);
+  await kind.selectOption({ label: 'Savings' });
+  await expect.poll(async () => (await readStore(page, 'accounts')).find((a) => a.name === 'Bank A savings')?.kind).toBe('savings');
+  await expect(page.getByText('Savings · GBP')).toBeVisible();
+  await expectNoAxeViolations(page);
+  await openScreen(page, 'Typical month');
+  await expect(table('Savings')).toBeVisible();
+});

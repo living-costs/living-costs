@@ -11,7 +11,8 @@ import { formatDate, formatMonth } from '../dates.js';
 import { renderImport, importActive } from './import.js';
 import { whileSaving, isSaving } from './saving.js';
 import { cmp } from '../order.js';
-import { help, plural } from './form.js';
+import { help, plural, field, valueOf } from './form.js';
+import { setAccountKind } from '../accounts.js';
 
 export const ACCOUNT_KIND_LABELS = { bank: 'Bank', card: 'Card', savings: 'Savings', placeholder: 'Card (not imported)' };
 
@@ -77,6 +78,16 @@ function accountCard(app, account, own) {
   const card = h('div', { class: 'card' },
     h('h4', null, account.name),
     h('p', { class: 'muted' }, `${ACCOUNT_KIND_LABELS[account.kind]} · ${account.currency}`));
+  if (account.kind !== 'placeholder') {
+    const kinds = /** @type {const} */ (['bank', 'card', 'savings']);
+    card.append(field(`Kind for ${account.name}`, h('select', {
+      'data-focus-key': `kind-${account.id}`, 'data-saves': true,
+      onChange: (/** @type {Event} */ e) => {
+        const kind = kinds.find((k) => k === valueOf(e));
+        if (kind) whileSaving(card, () => app.store.apply(setAccountKind(app.store.state, account.id, kind)));
+      },
+    }, ...kinds.map((k) => h('option', { value: k, selected: account.kind === k }, ACCOUNT_KIND_LABELS[k])))));
+  }
   if (own.length === 0) {
     card.append(h('p', null, 'No statements imported.'));
     return card;
