@@ -2,7 +2,7 @@
 // UI. One page is set up once and shared, in order, by every test here.
 /** @import {Page, BrowserContext} from '@playwright/test' */
 import { test, expect } from '@playwright/test';
-import { expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen } from './helpers.js';
+import { expectNoAxeViolations, trackCspViolations, setupFixtureApp, openScreen, setBucketCategory } from './helpers.js';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -54,6 +54,20 @@ test('Uncategorised shows only uncategorised rows; a kind narrows the Bucket opt
   await expect(bucketSelect().locator('option', { hasText: 'TESCO STORES' })).toHaveCount(0);
 });
 
+test('By kind: Ignore lists a bucket set to Ignore', async () => {
+  await openScreen(page, 'Buckets');
+  await setBucketCategory(page, 'GAMESHOP', 'Ignore');
+  await openScreen(page, 'Transactions');
+  await categorySelect().selectOption({ label: 'By kind: Ignore' });
+  await expect(rows().first()).toBeVisible();
+  await expect(bucketSelect().locator('option', { hasText: 'GAMESHOP' })).toHaveCount(1);
+  await expect(rows().first()).toContainText('GAMESHOP');
+  await openScreen(page, 'Buckets');
+  await setBucketCategory(page, 'GAMESHOP', 'Entertainment');
+  await openScreen(page, 'Transactions');
+  await categorySelect().selectOption({ label: 'All categories' });
+});
+
 test('a bucket that falls out of the chosen group is cleared', async () => {
   await categorySelect().selectOption({ label: 'All categories' });
   await bucketSelect().selectOption({ label: 'TESCO STORES' });
@@ -65,6 +79,10 @@ test('a bucket that falls out of the chosen group is cleared', async () => {
 test('the choice survives leaving the screen', async () => {
   await categorySelect().selectOption({ label: 'Groceries' });
   await expect(categorySelect().locator('option:checked')).toHaveText('Groceries');
+  await expect(rows().first()).toBeVisible();
+  for (const select of await rows().getByRole('combobox', { name: /^Counts as for / }).all()) {
+    await expect(select.locator('option:checked')).toHaveText(/Groceries/);
+  }
   await openScreen(page, 'Buckets');
   await openScreen(page, 'Transactions');
   await expect(categorySelect().locator('option:checked')).toHaveText('Groceries');
@@ -82,4 +100,19 @@ test('an opened bucket and an opened view have no Category select', async () => 
   await page.locator('#screen dl.summary').getByRole('button', { name: 'uncategorised', exact: true }).click();
   await expect(page.getByLabel('Search transactions')).toBeVisible();
   await expect(categorySelect()).toHaveCount(0);
+});
+
+test('a Counts as change that removes the row leaves focus on a neighbour row', async () => {
+  await openScreen(page, 'Transactions');
+  await categorySelect().selectOption({ label: 'Uncategorised' });
+  await expect(rows().first()).toBeVisible();
+  const selects = () => rows().getByRole('combobox', { name: /^Counts as for / });
+  const before = await selects().count();
+  expect(before).toBeGreaterThan(1);
+  const second = await selects().nth(1).getAttribute('aria-label');
+  await selects().first().focus();
+  await selects().first().selectOption({ label: 'Gifts' });
+  await expect(selects()).toHaveCount(before - 1);
+  await expect(page.getByLabel(second ?? '', { exact: true })).toBeFocused();
+  await categorySelect().selectOption({ label: 'All categories' });
 });

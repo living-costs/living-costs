@@ -11,9 +11,9 @@ import { sortedCategories } from '../categories.js';
 import { formatMoney } from '../money.js';
 import { cmp, compareNames } from '../order.js';
 import { formatDate } from '../dates.js';
-import { field, valueOf } from './form.js';
+import { field, valueOf, focusKey, keyed } from './form.js';
 import { categoryFilterField } from './category-filter.js';
-import { isValidFilter, transactionMatcher } from '../category-filter.js';
+import { isValidFilter, transactionMatcher, categoryMatcher } from '../category-filter.js';
 import { countsAsCell, appendSplitDialog } from './counts-as.js';
 
 /** @typedef {{query: string, category: string, bucketId: string, from: string, to: string}} View */
@@ -147,13 +147,30 @@ function drawResults(app, results, countEl, v, fixed, prefix, only) {
   const ctx = buildContext(state);
   const cats = sortedCategories(state);
   const accounts = new Map(state.accounts.map((a) => [a.id, a.name]));
-  /** @param {Transaction} t */
-  const row = (t) => h('tr', null,
+  const category = !fixed && !only ? v.category : '';
+  const matches = category ? categoryMatcher(state, category) : null;
+  /**
+   * Before a change that the Category filter will hide, move focus to a neighbour row's Counts as
+   * (or, with none, to the Category select), so the redraw keeps it.
+   * @param {Transaction} t
+   * @param {number} i
+   * @param {string|undefined} categoryId
+   */
+  const leaving = (t, i, categoryId) => {
+    if (!matches || matches(categoryId)) return;
+    const near = [...shown.slice(i + 1), ...shown.slice(0, i).reverse()].map((n) => `${prefix}-counts-${n.id}`).find((k) => keyed(k));
+    focusKey(near ?? `${prefix}-category`);
+  };
+  /**
+   * @param {Transaction} t
+   * @param {number} i
+   */
+  const row = (t, i) => h('tr', null,
     h('td', null, formatDate(t.date)),
     h('td', null, accounts.get(t.accountId) ?? ''),
     h('td', null, h('span', { class: 'raw' }, t.rawText)),
     h('td', { class: 'num' }, formatMoney(t.amountMinor, t.currency)),
-    h('td', null, countsAsCell(app, t, ctx, cats, prefix),
+    h('td', null, countsAsCell(app, t, ctx, cats, prefix, (id) => leaving(t, i, id)),
       only?.partMinor.has(t.id) && resolve(t, ctx).source === 'split'
         ? h('span', { class: 'muted' }, `${formatMoney(only.partMinor.get(t.id) ?? 0, t.currency)} of this counts as ${only.categoryName}`)
         : null));
