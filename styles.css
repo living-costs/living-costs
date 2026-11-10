@@ -314,8 +314,6 @@ dl.summary dt.sub { padding-left: 1rem; }
 dl.summary .rule, dl.summary .ticked { margin-top: 0.25rem; padding-top: 0.4rem; }
 dl.summary .rule { border-top: 2px solid var(--text); }
 dl.summary .ticked { margin-top: 1.25rem; border-top: 2px dashed var(--accent); color: var(--accent); }
-/* The note under "not accounted for": its own line, wrapping within the label column. */
-:is(dl.summary, table.summary-compare) .note { display: block; width: 0; min-width: 100%; font-size: 0.8rem; font-style: italic; }
 /* A narrow window: less padding, so the list fits a 320px screen unscrolled. */
 @media (max-width: 30rem) {
   .summary-panel { padding: 0.5rem 0.75rem 0.75rem; }
@@ -344,8 +342,7 @@ table.summary-compare td.num { font-weight: normal; }
 table.summary-compare thead th { font-size: 0.85rem; color: var(--muted); }
 table.summary-compare th[scope=row] { padding-left: 0; }
 table.summary-compare tr.sub :is(th, td) { font-weight: normal; font-size: 1rem; color: var(--muted); }
-table.summary-compare tr.sub th, table.summary-compare tr.note-row td { padding-left: 1rem; }
-table.summary-compare tr.note-row td { padding-top: 0; }
+table.summary-compare tr.sub th { padding-left: 1rem; }
 /* Baseline, so each figure lines up with the first line of its label. */
 table.summary-compare :is(th, td) { vertical-align: baseline; }
 table.summary-compare tr:is(.rule, .ticked) :is(th, td) { padding-top: 0.4rem; }

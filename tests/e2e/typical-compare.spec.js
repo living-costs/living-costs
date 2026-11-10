@@ -119,7 +119,7 @@ test('the month and Change columns reconcile with the summary', async () => {
   // Remaining's parts: a part with no transactions is a dash in each column; not accounted for is
   // Remaining less the parts, typical and month.
   await expect(summaryCells('ignored')).toHaveText(['—none', '—none', '—none']);
-  await expect(summary.locator('tr.note-row')).toHaveText('typical month vs actual months, and money in accounts not tracked');
+  await expect(page.locator('.summary-panel + p.help')).toHaveText('not accounted for: typical month vs actual months, and money in accounts not tracked');
   for (const col of [0, 1]) {
     /** @param {string} line */
     const cell = async (line) => parseMinor(/** @type {string} */ (await summaryCells(line).nth(col).textContent()));

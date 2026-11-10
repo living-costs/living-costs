@@ -129,7 +129,7 @@ export function render(root, app) {
     app.rerender();
     focusKey('explore-heading');
   };
-  root.append(summaryList(tm, money, ui.ticked, onOpenPart));
+  root.append(summaryList(tm, money, ui.ticked, onOpenPart), help(UNACCOUNTED_HELP));
 
   const { spending, income } = tm.uncategorised;
   if (spending !== 0 || income !== 0) {
@@ -269,15 +269,15 @@ function lastCovered(state, accountId) {
     .reduce((m, b) => (b.coversTo > m ? b.coversTo : m), '');
 }
 
-/** What "not accounted for" holds, shown under it. */
-const UNACCOUNTED_NOTE = 'typical month vs actual months, and money in accounts not tracked';
+/** What "not accounted for" holds, shown as help below the summary card. */
+const UNACCOUNTED_HELP = 'not accounted for: typical month vs actual months, and money in accounts not tracked';
 
 /**
  * The summary card: Income, Regular spending and Remaining, then Remaining's parts, then Ticked
  * as a second total of its own. With contributions, Regular spending is followed by "less
  * contributions from others" and "your share". Remaining's parts are always there: saved,
  * one-offs, uncategorised and ignored, each a dash when it has no transactions, then "not
- * accounted for" with a note. Ticked is always there: the plain sum of the ticked rows shown in
+ * accounted for", explained by help below the card. Ticked is always there: the plain sum of the ticked rows shown in
  * the tables, whichever table they are in, with their names below; with nothing ticked, a dash
  * and a hint. Comparing a month turns the list into a table with the month and Change.
  * @param {TypicalMonth} tm
@@ -289,7 +289,7 @@ const UNACCOUNTED_NOTE = 'typical month vs actual months, and money in accounts 
 function summaryList(tm, money, ticked, onOpenPart) {
   const t = tm.totals;
   const c = tm.compare?.totals;
-  /** @typedef {{label:string, typical:number|null, month:number|null, cls?:string, note?:string, part?:PartName}} Line */
+  /** @typedef {{label:string, typical:number|null, month:number|null, cls?:string, part?:PartName}} Line */
   /** @type {Line[]} */
   const lines = [{ label: 'Income', typical: t.income, month: c?.income ?? 0 },
     { label: 'Regular spending', typical: t.living, month: c?.living ?? 0 }];
@@ -302,7 +302,7 @@ function summaryList(tm, money, ticked, onOpenPart) {
     { label: 'one-offs', part: 'oneOffs', typical: t.oneOffs, month: c?.oneOffs ?? null, cls: 'sub' },
     { label: 'uncategorised', part: 'uncategorised', typical: t.uncategorised, month: c?.uncategorised ?? null, cls: 'sub' },
     { label: 'ignored', part: 'ignored', typical: t.ignored, month: c?.ignored ?? null, cls: 'sub' },
-    { label: 'not accounted for', typical: t.unaccounted, month: c?.unaccounted ?? 0, cls: 'sub', note: UNACCOUNTED_NOTE });
+    { label: 'not accounted for', typical: t.unaccounted, month: c?.unaccounted ?? 0, cls: 'sub' });
 
   const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution, ...tm.saving].filter((r) => ticked.has(r.categoryId));
   const any = tickedRows.length > 0;
@@ -320,8 +320,6 @@ function summaryList(tm, money, ticked, onOpenPart) {
       ? h('button', { type: 'button', class: 'secondary name', 'data-focus-key': `typical-part-${part}`, onClick: () => onOpenPart(part) }, line.label)
       : line.label;
   };
-  /** @param {Line} line the label, with its note on a line of its own */
-  const label = (line) => (line.note ? [name(line), h('span', { class: 'note' }, line.note)] : [name(line)]);
   const which = h('p', { class: 'ticked-which' },
     any ? tickedRows.map((r) => r.name).join(', ') : 'Tick categories below to add them up here.');
 
@@ -339,13 +337,11 @@ function summaryList(tm, money, ticked, onOpenPart) {
       h('thead', null, h('tr', null, h('td'), h('th', { scope: 'col', class: 'num' }, 'Typical'),
         h('th', { scope: 'col', class: 'num' }, formatMonth(tm.compare.month)), h('th', { scope: 'col', class: 'num' }, 'Change'))),
       h('tbody', null,
-        // A note goes in a row of its own across the table, as the label column is too narrow for it.
-        ...lines.flatMap((line) => [h('tr', { class: line.cls },
+        ...lines.map((line) => h('tr', { class: line.cls },
           h('th', { scope: 'row' }, name(line)),
           h('td', { class: 'num' }, ...figure(line.typical)),
           h('td', { class: 'num' }, ...figure(line.month)),
-          change(line.typical, line.month)),
-        ...(line.note ? [h('tr', { class: `${line.cls} note-row` }, h('td', { colspan: '4' }, h('span', { class: 'note' }, line.note)))] : [])]),
+          change(line.typical, line.month))),
         h('tr', { class: 'ticked' },
           h('th', { scope: 'row' }, tickedLabel),
           ...(any
@@ -354,7 +350,7 @@ function summaryList(tm, money, ticked, onOpenPart) {
             : [h('td', { class: 'num same' }, ...none()), h('td', { class: 'num same' }, ...none()), h('td', { class: 'num same' }, ...none())])))));
   } else {
     body = h('dl', { class: 'summary', 'aria-label': 'Summary per month' },
-      ...lines.flatMap((line) => [h('dt', { class: line.cls }, ...label(line)), h('dd', { class: line.cls }, ...figure(line.typical))]),
+      ...lines.flatMap((line) => [h('dt', { class: line.cls }, name(line)), h('dd', { class: line.cls }, ...figure(line.typical))]),
       h('dt', { class: 'ticked' }, tickedLabel),
       h('dd', { class: 'ticked' }, ...(any ? [money(tickedTypical)] : none())));
   }
