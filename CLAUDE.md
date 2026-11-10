@@ -82,6 +82,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - A simple list of uncategorised items for later updates
 - Open any category from the Categories screen to see its month totals, buckets and transactions
 - Category suggestions for spending buckets, from a bundled list of merchant names (`src/merchants.js`). They are shown on the categorise card and the Buckets screen, and only applied when accepted.
+- A Category filter on Transactions and Buckets: by category, kind or budget type, and Uncategorised on Transactions.
 
 ### Out of scope for now
 

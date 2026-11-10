@@ -12,9 +12,11 @@ import { formatMoney } from '../money.js';
 import { cmp, compareNames } from '../order.js';
 import { formatDate } from '../dates.js';
 import { field, valueOf } from './form.js';
+import { categoryFilterField } from './category-filter.js';
+import { isValidFilter, transactionMatcher } from '../category-filter.js';
 import { countsAsCell, appendSplitDialog } from './counts-as.js';
 
-/** @typedef {{query: string, bucketId: string, from: string, to: string}} View */
+/** @typedef {{query: string, category: string, bucketId: string, from: string, to: string}} View */
 
 /**
  * Each list's search and filters, keyed by its fixed bucket (or 'all'). They survive redraws
@@ -36,7 +38,7 @@ const views = new Map();
  * @returns {View}
  */
 export function listView(key) {
-  const v = views.get(key) ?? { query: '', bucketId: '', from: '', to: '' };
+  const v = views.get(key) ?? { query: '', category: '', bucketId: '', from: '', to: '' };
   views.set(key, v);
   return v;
 }
@@ -80,6 +82,12 @@ export function renderTransactionList(root, app, filters) {
   const fixed = filters.bucketId;
   const only = filters.only;
   const v = listView(only ? only.key : fixed ? `bucket:${fixed}` : 'all');
+  const filtered = !fixed && !only;
+  if (filtered && !isValidFilter(state, v.category)) v.category = '';
+  // The Bucket options are the buckets with a transaction in the chosen category group.
+  const inGroup = filtered && v.category ? transactionMatcher(state, v.category) : null;
+  const groupBucketIds = inGroup ? new Set(state.transactions.filter(inGroup).map((t) => t.bucketId)) : null;
+  if (groupBucketIds && v.bucketId && !groupBucketIds.has(v.bucketId)) v.bucketId = '';
   if (v.bucketId && (!state.buckets.some((b) => b.id === v.bucketId) || (only && !only.bucketIds.includes(v.bucketId)))) v.bucketId = '';
   const p = only ? `txns-${only.key}` : fixed ? `txns-${fixed}` : 'txns';
 
@@ -92,12 +100,16 @@ export function renderTransactionList(root, app, filters) {
    */
   const set = (key) => (e) => { v[key] = valueOf(e); update(); };
 
-  const buckets = state.buckets.filter((b) => !only || only.bucketIds.includes(b.id)).sort((a, b) => compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
+  const buckets = state.buckets.filter((b) => (!only || only.bucketIds.includes(b.id)) && (!groupBucketIds || groupBucketIds.has(b.id))).sort((a, b) => compareNames(a.displayName, b.displayName) || cmp(a.id, b.id));
   root.append(
     h('div', { role: 'search', class: 'row filters' },
       field('Search transactions', h('input', {
         type: 'search', class: 'search', value: v.query, autocomplete: 'off', 'data-focus-key': `${p}-search`, onInput: set('query'),
       }), { hint: 'Text, an amount such as 60.69, or a date such as 24/09.' }),
+      filtered ? categoryFilterField(state, {
+        value: v.category, uncategorised: true, focusKey: `${p}-category`,
+        onChange: (value) => { v.category = value; app.rerender(); },
+      }) : null,
       fixed ? null : field('Bucket', h('select', { 'data-focus-key': `${p}-bucket`, onChange: set('bucketId') },
         h('option', { value: '', selected: v.bucketId === '' }, 'All buckets'),
         ...buckets.map((b) => h('option', { value: b.id, selected: b.id === v.bucketId }, b.displayName)))),
@@ -125,6 +137,7 @@ function drawResults(app, results, countEl, v, fixed, prefix, only) {
     { bucketId: fixed ?? (v.bucketId || undefined), from: v.from || undefined, to: v.to || undefined },
     { matchDays: app.tuning.transactionMatchDays });
   if (only) found = found.filter((t) => only.ids.has(t.id));
+  else if (!fixed && v.category) found = found.filter(transactionMatcher(state, v.category));
   const shown = found.slice(0, app.tuning.transactionsShown);
   countEl.textContent = `Showing ${shown.length} of ${found.length}.`;
   if (shown.length === 0) {
