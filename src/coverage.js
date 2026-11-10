@@ -67,7 +67,7 @@ export function accountMonthStatus(intervals, month) {
  * @param {{coverageGapDays:number}} tuning
  * @returns {Map<string, Interval[]>}
  */
-function intervalsByAccount(state, tuning) {
+export function intervalsByAccount(state, tuning) {
   return new Map(state.accounts.map((a) => [
     a.id, coverageIntervals(state.batches.filter((b) => b.accountId === a.id), tuning.coverageGapDays),
   ]));
