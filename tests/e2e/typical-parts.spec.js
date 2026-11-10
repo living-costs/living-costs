@@ -100,13 +100,16 @@ test('ignored opens after a bucket is set to Ignore', async () => {
   await expect(summary()).toContainText(`That is ${figure} a month on Typical month`);
   const bucket = bucketTable().getByRole('button', { name: 'GAMESHOP', exact: true });
   await expect(bucket).toBeVisible();
-  const all = await listRows().count();
-  const cell = page.locator('#screen .month-cells button:not([disabled])').first();
+  // GAMESHOP is one transaction a month, so ignored holds many rows and one month holds one.
+  expect(await listRows().count()).toBeGreaterThan(1);
+  const cell = monthButton('Jan 2026');
   await cell.click();
   await expect(cell).toHaveAttribute('aria-pressed', 'true');
+  await expect(listRows()).toHaveCount(1);
+  await expect(listRows().first()).toContainText('/01/2026');
   await bucket.click();
   await expect(bucket).toHaveAttribute('aria-pressed', 'true');
-  expect(await listRows().count()).toBeLessThanOrEqual(all);
+  await expect(listRows()).toHaveCount(1);
   await back().click();
 });
 
@@ -140,4 +143,34 @@ test('changing the window, opening and Back keep the window', async () => {
   await back().click();
   await expect(page.locator('#typical-window')).toHaveText(window ?? '');
   await expect(from.locator('option:checked')).toHaveText(chosen);
+});
+
+test('comparing a month: one-offs still opens, with the same figure; Back works', async () => {
+  await page.getByLabel('Compare with').selectOption('2026-10');
+  await expect(partButton('one-offs')).toBeVisible();
+  const typicalCell = page.locator('#screen table.summary-compare tbody tr')
+    .filter({ has: page.getByRole('button', { name: 'one-offs', exact: true }) }).getByRole('cell').first();
+  const figure = (await typicalCell.innerText()).trim();
+  expect(figure).toMatch(/^£/);
+  await open('one-offs', 'One-offs');
+  await expect(summary()).toContainText(`That is ${figure} a month on Typical month`);
+  await back().click();
+  await expect(partButton('one-offs')).toBeFocused();
+  await page.getByLabel('Compare with').selectOption('');
+  await expect(page.getByLabel('Compare with').locator('option:checked')).toHaveText('No month');
+});
+
+test('leaving and returning shows the card; reopening a part has no filters', async () => {
+  await open('one-offs', 'One-offs');
+  await bucketTable().getByRole('button', { name: 'BIG BOILER CO', exact: true }).click();
+  await openScreen(page, 'Buckets');
+  await openScreen(page, 'Typical month');
+  await expect(viewHeading('One-offs')).toHaveCount(0);
+  await expect(partButton('one-offs')).toBeVisible();
+  await open('one-offs', 'One-offs');
+  await expect(bucketTable().getByRole('button', { name: 'BIG BOILER CO', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  const total = await listRows().count();
+  await bucketTable().getByRole('button', { name: 'BIG BOILER CO', exact: true }).click();
+  expect(await listRows().count()).toBeLessThanOrEqual(total);
+  await back().click();
 });

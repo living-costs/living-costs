@@ -1,7 +1,8 @@
 // Typical month screen: the window, stale-account notices, the summary, the uncategorised line,
 // one table each for regular spending, income, contributions and savings, and the one-offs list.
 // Every figure comes from typicalMonth; this only lays it out. A category name opens that
-// category's view (category-view.js) in place of the tables.
+// category's view (category-view.js) in place of the tables, and one-offs, uncategorised and
+// ignored on the summary open their buckets and transactions (part-view.js).
 
 /** @import {App} from '../main.js' */
 /** @import {Row, TypicalMonth, PartName} from '../typical.js' */
@@ -313,9 +314,12 @@ function summaryList(tm, money, ticked, onOpenPart) {
   /** @param {number|null} minor */
   const figure = (minor) => (minor === null ? none() : [money(minor)]);
   /** @param {Line} line the label, a button when it opens a part */
-  const name = (line) => (line.part && line.typical !== null
-    ? h('button', { type: 'button', class: 'secondary name', 'data-focus-key': `typical-part-${line.part}`, onClick: () => onOpenPart(/** @type {any} */ (line.part)) }, line.label)
-    : line.label);
+  const name = (line) => {
+    const { part } = line;
+    return part && line.typical !== null
+      ? h('button', { type: 'button', class: 'secondary name', 'data-focus-key': `typical-part-${part}`, onClick: () => onOpenPart(part) }, line.label)
+      : line.label;
+  };
   /** @param {Line} line the label, with its note on a line of its own */
   const label = (line) => (line.note ? [name(line), h('span', { class: 'note' }, line.note)] : [name(line)]);
   const which = h('p', { class: 'ticked-which' },
