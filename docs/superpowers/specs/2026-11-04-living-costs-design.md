@@ -337,7 +337,7 @@ A month is complete when at least one non-placeholder account covers the whole o
   - **one-offs:** One-off categories, net of one-off income
   - **uncategorised:** uncategorised spending minus uncategorised income
   - **ignored:** Ignore-kind categories
-  - **not accounted for:** Remaining minus the four parts above, with the note "typical month vs actual months, and money in accounts not tracked". It can be negative.
+  - **not accounted for:** Remaining minus the four parts above. It can be negative. Help text below the card explains it: "not accounted for: typical month vs actual months, and money in accounts not tracked". (Owner's decision, 2026-11-10: a note inside the card made it look cluttered.)
 
   A part with no transactions shows a dash, read as "none", not £0.00. One-offs, uncategorised and ignored follow D1: each account's total over its own months, added up. When comparing a month, each part shows that month's figure and the change. A part with no transactions in either counts as 0 against the other, and with none in both, every column shows a dash. Transfers are in no part. A transfer to an account that isn't tracked counts under "ignored" only when it's in an Ignore category. Otherwise it falls into "not accounted for". The owner checks by eye that "not accounted for" isn't large, and there's no warning. (Owner's decision, 2026-11-07. It replaces the separate Savings line, which counted saving outside Left over.)
 - **Main table:** one row per spend category, largest first, with:

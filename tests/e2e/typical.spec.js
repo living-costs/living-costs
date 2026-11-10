@@ -82,9 +82,10 @@ test('Remaining is broken down into its parts, a dash for a part with no transac
   // per month. Not accounted for: £720.44 − £200.00 − £2.75.
   expect(lines.slice(lines.indexOf('Remaining: £720.44'))).toEqual([
     'Remaining: £720.44', 'saved: —none', 'one-offs: £200.00', 'uncategorised: £2.75', 'ignored: —none',
-    'not accounted fortypical month vs actual months, and money in accounts not tracked: £517.69', 'Ticked: —none',
+    'not accounted for: £517.69', 'Ticked: —none',
   ]);
-  await expect(page.locator('dl.summary dt .note')).toHaveText('typical month vs actual months, and money in accounts not tracked');
+  // What "not accounted for" holds is help below the card, not a note in it.
+  await expect(page.locator('.summary-panel + p.help')).toHaveText('not accounted for: typical month vs actual months, and money in accounts not tracked');
   // Remaining and Ticked are the size of Regular spending, not larger.
   const size = (/** @type {string} */ label) => page.locator('dl.summary dt').filter({ hasText: new RegExp(`^${label}$`) })
     .evaluate((dt) => getComputedStyle(dt).fontSize);
