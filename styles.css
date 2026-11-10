@@ -99,7 +99,7 @@ nav button:focus-visible { z-index: 2; }
 
 .nav-group { display: flex; flex-direction: column; gap: 2px; }
 .nav-group-label { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.nav-row { display: inline-flex; }
+.nav-row { display: inline-flex; flex-wrap: wrap; row-gap: 2px; }
 /* Smaller than the 32px used elsewhere: a documented exception, at least 24px (WCAG 2.2 AA). */
 .nav-row button {
   min-height: 30px;
@@ -110,10 +110,12 @@ nav button:focus-visible { z-index: 2; }
   background: var(--surface);
   color: var(--accent);
 }
-.nav-row button + button { border-left: 0; }
+/* Overlap rather than drop the shared border, so a button that wraps to a new line keeps its left edge. */
+.nav-row button + button { margin-left: -1px; }
 .nav-row button:first-child { border-radius: 6px 0 0 6px; }
 .nav-row button:last-child { border-radius: 0 6px 6px 0; }
-/* A narrow window: less padding, so the four-button Explore row fits a 320px screen. */
+/* A narrow window: less padding, so the four-button Explore row fits a 320px screen on a Mac.
+   With wider fonts (Linux, larger text) the row wraps instead. */
 @media (max-width: 30rem) {
   .nav-row button { padding-inline: 0.35rem; }
 }

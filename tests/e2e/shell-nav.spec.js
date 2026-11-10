@@ -96,6 +96,19 @@ test('reflows at 320px without horizontal scroll', async ({ page }) => {
   expect(await overflow()).toBeLessThanOrEqual(0);
 });
 
+// Linux CI has wider fonts than macOS, so a nav row that just fits on a Mac overflowed there.
+// A wide font must wrap the rows rather than scroll the page. (Not the bare `monospace`
+// generic: Chrome would also shrink the root font size, and so the rem-sized buttons.)
+test('reflows at 320px with a wide font', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.evaluate(() => {
+    document.documentElement.style.fontFamily = 'Menlo, "DejaVu Sans Mono", "Courier New", monospace';
+  });
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )).toBeLessThanOrEqual(0);
+});
+
 test('defaults are seeded once', async ({ page }) => {
   const count = () => page.evaluate(() => new Promise((resolve, reject) => {
     const req = indexedDB.open('living-costs');
