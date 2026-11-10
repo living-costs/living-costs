@@ -385,6 +385,7 @@ export default [
   { name: 'DOMESTIC GENERAL', defaultId: 'insurance' },
   { name: 'JOHN LEWIS INSURANCE', defaultId: 'insurance' },
   { name: 'CO-OP INSURANCE', defaultId: 'insurance' },
+  { name: 'TRAVEL INS', defaultId: 'insurance' },
   { name: 'COOP INSURANCE', defaultId: 'insurance' },
   { name: 'TESCO INSURANCE', defaultId: 'insurance' },
   { name: 'TESCO BANK INSURANCE', defaultId: 'insurance' },
