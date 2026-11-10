@@ -43,7 +43,7 @@ export default [
   { id: 'education', name: 'Education', kind: 'spend', budgetType: 'annual' },
   { id: 'between-accounts', name: 'Transferred to another account', kind: 'transfer' },
   { id: 'card-repayments', name: 'Credit Card repayments', kind: 'transfer' },
+  { id: 'work-expenses', name: 'Work expenses', kind: 'transfer' },
   { id: 'ignore', name: 'Ignore', kind: 'ignore' },
-  { id: 'work-expenses', name: 'Work expenses', kind: 'ignore' },
   { id: 'unknown', name: 'Unknown', kind: 'ignore' },
 ];
