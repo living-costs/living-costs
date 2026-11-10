@@ -3,7 +3,7 @@ import { expectNoAxeViolations, trackCspViolations } from './helpers.js';
 
 const NAV_NAMES = [
   'Help', 'Typical month', 'Categorise', 'Buckets', 'Transactions',
-  'Transfers', 'Accounts', 'Categories', 'Backup',
+  'Transfers', 'Categories', 'Accounts', 'Backup',
 ];
 
 /** @param {import('@playwright/test').Page} page */
@@ -50,9 +50,9 @@ test('nav has every screen', async ({ page }) => {
   await expect(nav(page).getByRole('button')).toHaveText([...NAV_NAMES, 'Auto', 'Light', 'Dark']);
   // With nothing imported, no button carries a count or a percent.
   for (const [i, name] of NAV_NAMES.entries()) await expect(nav(page).getByRole('button').nth(i)).toHaveAccessibleName(name);
-  await expect(nav(page).getByRole('group', { name: 'Review' }).getByRole('button')).toHaveText(['Buckets', 'Transactions', 'Transfers']);
+  await expect(nav(page).getByRole('group', { name: 'Explore' }).getByRole('button')).toHaveText(['Buckets', 'Transactions', 'Transfers', 'Categories']);
   await expect(nav(page).getByRole('group', { name: 'Theme' }).getByRole('button')).toHaveText(['Auto', 'Light', 'Dark']);
-  await expect(nav(page).getByRole('group', { name: 'Set up' }).getByRole('button')).toHaveText(['Accounts', 'Categories', 'Backup']);
+  await expect(nav(page).getByRole('group', { name: 'Set up' }).getByRole('button')).toHaveText(['Accounts', 'Backup']);
   // Start away from Help so every click, Help included, is a real navigation.
   for (const name of [...NAV_NAMES.slice(1), 'Help']) {
     const button = nav(page).getByRole('button', { name, exact: true });
@@ -94,6 +94,19 @@ test('reflows at 320px without horizontal scroll', async ({ page }) => {
   await expectNoAxeViolations(page);
   await nav(page).getByRole('button', { name: 'Typical month' }).click();
   expect(await overflow()).toBeLessThanOrEqual(0);
+});
+
+// Linux CI has wider fonts than macOS, so a nav row that just fits on a Mac overflowed there.
+// A wide font must wrap the rows rather than scroll the page. (Not the bare `monospace`
+// generic: Chrome would also shrink the root font size, and so the rem-sized buttons.)
+test('reflows at 320px with a wide font', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.evaluate(() => {
+    document.documentElement.style.fontFamily = 'Menlo, "DejaVu Sans Mono", "Courier New", monospace';
+  });
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )).toBeLessThanOrEqual(0);
 });
 
 test('defaults are seeded once', async ({ page }) => {

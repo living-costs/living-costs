@@ -226,7 +226,7 @@ function cardsSection(app) {
   const section = h('section', { 'aria-labelledby': 'cards-heading' },
     h('h3', { id: 'cards-heading', tabindex: '-1', 'data-focus-key': 'cards-heading' }, "Cards you don't import"),
     help(`If you repay a card whose statements you don't import, its repayments count as spending in a "(not itemised)" category. `
-      + 'Import its statements into it later, and confirm the repayments as transfers, to see what you spent instead.'));
+      + 'You can still import its statements later and confirm the new transactions as transfers.'));
   const buckets = new Map(state.buckets.map((b) => [b.id, b]));
   const placeholders = state.accounts.filter((a) => a.kind === 'placeholder');
   if (placeholders.length === 0) {

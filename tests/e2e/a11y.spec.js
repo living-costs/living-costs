@@ -34,7 +34,7 @@ test.afterAll(async () => {
 
 /**
  * Visible controls shorter than 32px, described for the failure message. The documented
- * exception: the small nav buttons (Review and Set up) need only 24px, the WCAG 2.2 AA minimum.
+ * exception: the small nav buttons (Explore and Set up) need only 24px, the WCAG 2.2 AA minimum.
  * @param {Page} p
  */
 const shortTargets = (p) => p.evaluate(() => {
