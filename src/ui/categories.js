@@ -1,16 +1,20 @@
 // Categories screen: a table of categories (kind and budget type change in place), inline rename,
-// delete with reassignment when the category is in use, and a New category form.
+// delete with reassignment when the category is in use, and a New category form. A category with
+// something in it opens by its name into the explorer (category-explorer.js) in place of the table.
 
 /** @import {App} from '../main.js' */
 /** @import {Category, CategoryKind, BudgetType, Changes} from '../types.js' */
 import { h } from '../dom.js';
 import { whileSaving } from './saving.js';
 import {
-  KIND_LABELS, BUDGET_LABELS, focusKey, plural, valueOf, field, help, options, emptyDraft, categoryForm,
+  KIND_LABELS, BUDGET_LABELS, focusKey, keyed, plural, valueOf, field, help, options, emptyDraft, categoryForm,
 } from './form.js';
 import {
   isBudgeted, updateCategory, deleteCategory, orderedCategories, sortedCategories, categoryUseCount,
 } from '../categories.js';
+import { openableCategoryIds } from '../explore.js';
+import { renderCategoryExplorer, reset as resetExplorer, openKey } from './category-explorer.js';
+import { showing, back } from './subview.js';
 
 /**
  * Screen state that is not saved: the new-category draft, the row being renamed or deleted,
@@ -28,7 +32,18 @@ const ui = {
   deleteTarget: '',
   deleteError: '',
   rowError: '',
+  /** @type {string|null} the category open in the explorer */
+  openId: null,
 };
+
+/**
+ * Entering the screen from the nav shows the table, not a category opened earlier. Redraws after
+ * a store change do not call this, so they stay in the category.
+ */
+export function reset() {
+  ui.openId = null;
+  resetExplorer();
+}
 
 /**
  * Save valid changes, or show the error above the table.
@@ -51,6 +66,22 @@ function commit(app, result) {
  * @returns {void}
  */
 export function render(root, app) {
+  const openId = ui.openId;
+  if (openId && app.store.state.categories.some((c) => c.id === openId)) {
+    root.append(h('h2', { tabindex: '-1' }, 'Categories'));
+    // Browser back closes the view too, so closing resets it here, not only in its Back button.
+    showing(() => {
+      ui.openId = null;
+      resetExplorer();
+      app.rerender();
+      // The category may have nothing left in it, then the heading is the place to land.
+      if (keyed(openKey(openId))) focusKey(openKey(openId));
+      else root.querySelector('h2')?.focus();
+    });
+    renderCategoryExplorer(root, app, openId, back);
+    return;
+  }
+  if (openId) reset();
   const list = orderedCategories(app.store.state);
   if (ui.renameId && !list.some((c) => c.id === ui.renameId)) ui.renameId = null;
   if (ui.deleteId && !list.some((c) => c.id === ui.deleteId)) ui.deleteId = null;
@@ -88,7 +119,7 @@ function guidePanel(id, title, qualifier, rows) {
 function guide(app) {
   const { variableRange: [lo, hi] } = app.tuning;
   return h('div', { class: 'help-group' },
-    help('Kind decides how a category counts. Budget type decides how it shows in your typical month.'),
+    help('Kind decides how a category counts. Budget type decides how it shows in your typical month. Open a category to see what is in it.'),
     h('div', { class: 'guides' }, guidePanel('kinds-heading', 'Kinds', null, [
       [KIND_LABELS.spend, 'Day-to-day spending, part of Regular spending. Refunds reduce it.'],
       [KIND_LABELS.income, 'Salary and other earnings. Remaining is income minus your share of regular spending.'],
@@ -111,6 +142,7 @@ function guide(app) {
  * @returns {HTMLElement}
  */
 function table(app, list) {
+  const openable = openableCategoryIds(app.store.state);
   return h('section', { 'aria-labelledby': 'categories-heading' },
     h('h3', { id: 'categories-heading' }, 'Your categories'),
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': 'categories-heading' },
@@ -118,15 +150,16 @@ function table(app, list) {
         h('thead', null, h('tr', null,
           h('th', { scope: 'col' }, 'Name'), h('th', { scope: 'col' }, 'Kind'),
           h('th', { scope: 'col' }, 'Budget type'), h('th', { scope: 'col' }, 'Actions'))),
-        h('tbody', null, ...list.map((c) => row(app, c))))));
+        h('tbody', null, ...list.map((c) => row(app, c, openable.has(c.id)))))));
 }
 
 /**
  * @param {App} app
  * @param {Category} c
+ * @param {boolean} openable something counts as the category, so its name opens it
  * @returns {HTMLElement}
  */
-function row(app, c) {
+function row(app, c, openable) {
   const kind = h('select', {
     'aria-label': `Kind for ${c.name}`, 'data-focus-key': `kind-${c.id}`,
     onChange: (/** @type {Event} */ e) => {
@@ -144,7 +177,14 @@ function row(app, c) {
   }, ...options(BUDGET_LABELS, c.budgetType)) : h('span', { class: 'muted' }, 'None');
 
   return h('tr', null,
-    h('th', { scope: 'row' }, ui.renameId === c.id ? renameForm(app, c) : c.name),
+    h('th', { scope: 'row' }, ui.renameId === c.id ? renameForm(app, c) : openable ? h('button', {
+      type: 'button', class: 'secondary name', 'data-focus-key': openKey(c.id),
+      onClick: () => {
+        Object.assign(ui, { openId: c.id, renameId: null, deleteId: null });
+        app.rerender();
+        focusKey('explore-heading');
+      },
+    }, c.name) : c.name),
     h('td', null, kind),
     h('td', null, budget),
     h('td', null, h('div', { class: 'row-actions' },

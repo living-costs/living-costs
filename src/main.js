@@ -48,6 +48,7 @@ const SCREENS = {
 const RESETS = {
   typical: typical.reset,
   buckets: buckets.reset,
+  categories: categories.reset,
   transfers: transfers.reset,
   backup: backup.reset,
 };
