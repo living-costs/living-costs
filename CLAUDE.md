@@ -74,6 +74,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Typical month: choose the window's first and last month, and compare one month against it
 - Savings: a Saving category kind and a Savings account kind, shown as saved under Remaining on Typical month
 - Typical month's Remaining broken down into saved, one-offs, uncategorised, ignored and not accounted for
+- Open one-offs, uncategorised and ignored on Typical month to see the buckets and transactions behind them.
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions

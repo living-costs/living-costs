@@ -93,3 +93,16 @@ for (const name of SCREENS) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   });
 }
+
+test('One-offs opened from Typical month: axe, target size and 320px width', async () => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openScreen(page, 'Typical month');
+  await page.locator('#screen dl.summary').getByRole('button', { name: 'one-offs', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 3, name: 'One-offs', exact: true }).and(page.locator('.category-explorer h3'))).toBeFocused();
+  await expectNoAxeViolations(page);
+  expect(await shortTargets(page)).toEqual([]);
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole('button', { name: 'Back to Typical month', exact: true }).click();
+});
