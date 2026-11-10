@@ -139,6 +139,20 @@ test('moving the last transaction out empties the view, and it shows in Ignore a
   await back().click();
 });
 
+test('moving one of several transactions out updates the view and puts focus on Transactions', async () => {
+  await open('Groceries');
+  const before = await summary().textContent();
+  const rows = await listRows().count();
+  const select = listRows().first().getByRole('combobox', { name: /^Counts as for / });
+  // selectOption does not move focus, so focus the select as a keyboard user would have.
+  await select.focus();
+  await select.selectOption({ label: 'Gifts' });
+  await expect(summary()).not.toHaveText(before ?? '');
+  await expect(listRows()).toHaveCount(rows - 1);
+  await expect(page.getByRole('heading', { level: 4, name: 'Transactions', exact: true })).toBeFocused();
+  await back().click();
+});
+
 test('Groceries over two accounts: labelled rows, not covered months, and 320px with no sideways scroll', async () => {
   await open('Groceries');
   await expect(page.locator('#screen .month-cells')).toHaveCount(2);

@@ -30,6 +30,19 @@ const listKey = (categoryId) => `explore:${categoryId}`;
  */
 const view = { categoryId: '', month: null, shown: false };
 
+/** Whether the element that last took focus was in the view. Set once the view first draws. */
+let focusInView = false;
+let tracking = false;
+
+/** Note where focus goes, so a redraw can tell focus lost from the view from focus elsewhere. */
+function trackFocus() {
+  if (tracking) return;
+  tracking = true;
+  document.addEventListener('focusin', (e) => {
+    focusInView = e.target instanceof Element && e.target.closest('.category-explorer') !== null;
+  });
+}
+
 /** Forget the pressed month and the open category's list filters. */
 export function reset() {
   if (view.categoryId) forgetListView(listKey(view.categoryId));
@@ -77,6 +90,9 @@ export function summaryText(contents, category, money) {
  * @returns {void}
  */
 export function renderCategoryExplorer(screen, app, categoryId, onBack) {
+  trackFocus();
+  // Focus was in this category's view before the redraw that is now drawing it again.
+  const lostFrom = view.categoryId === categoryId && view.shown && focusInView;
   if (view.categoryId !== categoryId) {
     view.categoryId = categoryId;
     view.month = null;
@@ -148,6 +164,14 @@ export function renderCategoryExplorer(screen, app, categoryId, onBack) {
       key, ids, bucketIds: contents.buckets.map((b) => b.bucketId), categoryName: name, partMinor: contents.partMinor,
     },
   });
+  // An edit in the view, such as Counts as on a row, can remove the control that had focus, and
+  // App.rerender then puts focus on the screen heading. Land in the Transactions section instead.
+  if (lostFrom) {
+    queueMicrotask(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body || active === screen.querySelector('h2')) focusKey('explore-transactions');
+    });
+  }
 }
 
 /**
