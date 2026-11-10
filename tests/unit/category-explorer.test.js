@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summaryText } from '../../src/ui/category-explorer.js';
+import { summaryText, outAndIn } from '../../src/ui/category-explorer.js';
 
 /** A plain money formatter: minor units as "N.NN". */
 const m = (/** @type {number} */ minor) => (minor / 100).toFixed(2);
@@ -22,4 +22,9 @@ test('summaryText: a budget type follows the kind, an empty side is left out, on
 test('summaryText: a budget type left on a kind without one is not shown', () => {
   assert.equal(summaryText(base, /** @type {any} */ ({ kind: 'transfer', budgetType: 'variable' }), m),
     'Transfer · 23 transactions in 9 buckets, 1482.10 out and 1310.00 in, Nov 2025 to Oct 2026.');
+});
+
+test('outAndIn: out and in, and nothing when both are zero', () => {
+  assert.equal(outAndIn({ out: 500, in: 0 }, (n) => `£${(n / 100).toFixed(2)}`), '£5.00 out');
+  assert.equal(outAndIn({ out: 0, in: 0 }, m), '');
 });
