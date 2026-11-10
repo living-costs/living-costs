@@ -79,6 +79,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions
 - Upgrade stored data and older backups silently. If an upgrade fails, offer to save a copy or delete and start afresh
 - A simple list of uncategorised items for later updates
+- Open any category from the Categories screen to see its month totals, buckets and transactions
 - Category suggestions for spending buckets, from a bundled list of merchant names (`src/merchants.js`). They are shown on the categorise card and the Buckets screen, and only applied when accepted.
 
 ### Out of scope for now

@@ -358,7 +358,7 @@ table.typical td.change, table.summary-compare td.change { font-weight: 600; }
 
 /* An opened category. A pressed toggle (a month cell or a bucket name) is filled in. */
 button.secondary[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); }
-.category-view h4 { margin: 1rem 0 0.25rem; font-size: 1rem; }
+.category-view h4, .category-explorer h4 { margin: 1rem 0 0.25rem; font-size: 1rem; }
 .account-share { margin: 0.5rem 0 0.25rem; font-weight: 600; }
 /* Each month: one grid for all accounts, so a month's cells line up and each column is as wide
    as its widest cell. Too wide for the window, it scrolls sideways like the accounts table. */
@@ -384,6 +384,8 @@ button.secondary[aria-pressed="true"] { background: var(--accent); color: var(--
 }
 .month-cells .uncovered { border: 1px dashed var(--border); border-radius: 4px; }
 .month-cells .unusual { font-weight: 700; border-width: 2px; }
+.month-cells .partial { border-style: dotted; }
+.month-cells .part { font-size: 0.875em; }
 /* Muted, but no further than WCAG AA contrast allows: at .6 the bucket name and muted text fail it. */
 tr.stopped { opacity: .75; }
 .visually-hidden {

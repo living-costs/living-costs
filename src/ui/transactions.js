@@ -42,6 +42,15 @@ export function listView(key) {
 }
 
 /**
+ * Drop a list's stored search and filters, so it next opens empty.
+ * @param {string} key
+ * @returns {void}
+ */
+export function forgetListView(key) {
+  views.delete(key);
+}
+
+/**
  * @param {HTMLElement} root
  * @param {App} app
  * @returns {void}
