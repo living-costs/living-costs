@@ -33,6 +33,7 @@ export default [
   { id: 'salary', name: 'Salary', kind: 'income', budgetType: 'fixed' },
   { id: 'housing', name: 'Housing (rent or mortgage)', kind: 'spend', budgetType: 'fixed' },
   { id: 'household-maintenance', name: 'Household maintenance', kind: 'spend', budgetType: 'annual' },
+  { id: 'cleaner', name: 'Cleaner', kind: 'spend', budgetType: 'annual' },
   { id: 'other-income', name: 'Other income', kind: 'income', budgetType: 'variable' },
   { id: 'contributions', name: 'Contributions from others', kind: 'contribution', budgetType: 'fixed' },
   { id: 'joint-household', name: 'Joint household (contribution)', kind: 'spend', budgetType: 'fixed' },
@@ -43,4 +44,6 @@ export default [
   { id: 'between-accounts', name: 'Transferred to another account', kind: 'transfer' },
   { id: 'card-repayments', name: 'Credit Card repayments', kind: 'transfer' },
   { id: 'ignore', name: 'Ignore', kind: 'ignore' },
+  { id: 'work-expenses', name: 'Work expenses', kind: 'ignore' },
+  { id: 'unknown', name: 'Unknown', kind: 'ignore' },
 ];
