@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import tuning from '../../src/tuning.js';
 import { emptyState, applyToState } from '../../src/changes.js';
 import { addDays } from '../../src/dates.js';
-import { categoryContents, openableCategoryIds } from '../../src/explore.js';
+import { categoryContents, openableCategoryIds, summariseContents } from '../../src/explore.js';
 
 let seq = 0;
 /** @param {string} id @param {'bank'|'card'|'savings'|'placeholder'} [kind] */
@@ -89,10 +89,10 @@ test('categoryContents: an Ignore category with overrides, a split and a transac
     { month: '2026-01', total: null, partial: false }, { month: '2026-02', total: -5000, partial: true },
     { month: '2026-03', total: 0, partial: false }, { month: '2026-04', total: null, partial: false }]);
   assert.deepEqual(c.buckets, [
-    { bucketId: 'employer', count: 1, total: 7000, latestDate: '2026-02-20', moved: 0 },
-    { bucketId: 'hotel', count: 1, total: -5000, latestDate: '2026-02-15', moved: 0 },
-    { bucketId: 'trainline', count: 3, total: -3500, latestDate: '2026-04-02', moved: 0 },
-    { bucketId: 'cafe', count: 2, total: -900, latestDate: '2026-03-10', moved: 2 }]);
+    { bucketId: 'employer', categoryId: null, count: 1, total: 7000, latestDate: '2026-02-20', moved: 0 },
+    { bucketId: 'hotel', categoryId: null, count: 1, total: -5000, latestDate: '2026-02-15', moved: 0 },
+    { bucketId: 'trainline', categoryId: null, count: 3, total: -3500, latestDate: '2026-04-02', moved: 0 },
+    { bucketId: 'cafe', categoryId: null, count: 2, total: -900, latestDate: '2026-03-10', moved: 2 }]);
   assert.equal(c.partMinor.get(t7.id), -600);
   assert.equal(c.transactionIds.has(t6.id), false);
 });
@@ -145,4 +145,47 @@ test('categoryContents: mixed currencies give currency null, with counts and buc
 test('openableCategoryIds: categories with a part, and nothing else', () => {
   assert.deepEqual([...openableCategoryIds(S)].sort(), ['other', 'work', 'xfer']);
   assert.deepEqual([...openableCategoryIds(withoutT9)].sort(), ['other', 'work']);
+});
+
+/** @param {boolean} byCategory */
+function summarised(byCategory) {
+  const s = build({ accounts: [acct('A')], buckets: [bucket('b1')] });
+  const x = txn('A', '2026-01-05', -1000, 'b1'), y = txn('A', '2026-02-05', -500, 'b1');
+  const opts = { months: ['2026-01', '2026-02'], cell: (/** @type {string} */ _a, /** @type {string} */ month, /** @type {number|undefined} */ total) => ({ month, total: total ?? 0, partial: false }), byCategory };
+  const entries = [
+    { t: x, categoryId: 'ign1', amount: -600, moved: false },
+    { t: x, categoryId: 'ign2', amount: -400, moved: true },
+    { t: y, categoryId: 'ign1', amount: -500, moved: false },
+  ];
+  return { s, x, entries, opts };
+}
+
+test('summariseContents: one row per bucket and category when byCategory', () => {
+  const { s, x, entries, opts } = summarised(true);
+  const c = /** @type {any} */ (summariseContents(s, entries, opts));
+  assert.equal(c.count, 2);
+  assert.equal(c.partMinor.get(x.id), -1000);
+  assert.deepEqual(c.buckets.map((/** @type {any} */ b) => [b.categoryId, b.count, b.total, b.moved]),
+    [['ign1', 2, -1100, 0], ['ign2', 1, -400, 1]]);
+  assert.deepEqual(c.accounts[0].cells.map((/** @type {any} */ cell) => cell.total), [-1000, -500]);
+});
+
+test('summariseContents: rows merge across categories when not byCategory, and no entries is null', () => {
+  const { s, entries, opts } = summarised(false);
+  const c = /** @type {any} */ (summariseContents(s, entries, opts));
+  assert.deepEqual(c.buckets.map((/** @type {any} */ b) => [b.categoryId, b.count, b.total, b.moved]), [[null, 2, -1500, 1]]);
+  assert.equal(c.count, 2);
+  assert.equal(summariseContents(s, [], opts), null);
+});
+
+test('categoryContents bucket rows carry categoryId null', () => {
+  const c = contents(categoryContents(S, tuning, 'work'));
+  assert.ok(c.buckets.length > 0);
+  assert.ok(c.buckets.every((/** @type {any} */ b) => b.categoryId === null));
+});
+
+test('summariseContents: a transaction in two categories is one in a merged row', () => {
+  const { s, entries, opts } = summarised(false);
+  const c = /** @type {any} */ (summariseContents(s, entries.slice(0, 2), opts));
+  assert.deepEqual(c.buckets.map((/** @type {any} */ b) => [b.count, b.total, b.moved]), [[1, -1000, 1]]);
 });

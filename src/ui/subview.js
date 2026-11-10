@@ -1,5 +1,5 @@
 // Browser back closes an open sub-view (one bucket from Buckets, one category from Typical
-// month), the same as its "Back to" button.
+// month, or a category explorer or part view such as one-offs), the same as its "Back to" button.
 //
 // While a sub-view shows, there is one extra history entry with the same URL, marked in its
 // state. Nothing about what is open goes into the URL or the state. Leaving that entry (browser

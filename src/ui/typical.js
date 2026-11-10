@@ -1,10 +1,11 @@
 // Typical month screen: the window, stale-account notices, the summary, the uncategorised line,
 // one table each for regular spending, income, contributions and savings, and the one-offs list.
 // Every figure comes from typicalMonth; this only lays it out. A category name opens that
-// category's view (category-view.js) in place of the tables.
+// category's view (category-view.js) in place of the tables, and one-offs, uncategorised and
+// ignored on the summary open their buckets and transactions (part-view.js).
 
 /** @import {App} from '../main.js' */
-/** @import {Row, TypicalMonth} from '../typical.js' */
+/** @import {Row, TypicalMonth, PartName} from '../typical.js' */
 /** @import {MonthRange} from '../coverage.js' */
 /** @import {State} from '../types.js' */
 import { h } from '../dom.js';
@@ -14,12 +15,16 @@ import { formatMoney } from '../money.js';
 import { formatDate, formatMonth } from '../dates.js';
 import { help, plural, focusKey, keyed } from './form.js';
 import { renderCategoryView, reset as resetCategoryView } from './category-view.js';
+import { renderPartView } from './part-view.js';
+import { reset as resetExplorer } from './category-explorer.js';
 import { showing, back } from './subview.js';
 
 /** Screen state that is not saved. It survives redraws; reset() clears it. */
 const ui = {
   /** @type {string|null} the category opened from a table */
   openId: null,
+  /** @type {PartName|null} the part of Remaining opened from the summary */
+  openPart: null,
   /** @type {MonthRange|null} the chosen window, or null for the latest months */
   range: null,
   /** @type {string|null} the month compared against the window (YYYY-MM) */
@@ -34,7 +39,9 @@ const ui = {
  */
 export function reset() {
   ui.openId = null;
+  ui.openPart = null;
   resetCategoryView();
+  resetExplorer();
 }
 
 /** @param {string} id */
@@ -63,6 +70,19 @@ export function render(root, app) {
       else root.querySelector('h2')?.focus();
     });
     renderCategoryView(root, app, openId, back, ui.range);
+    return;
+  }
+  const openPart = ui.openPart;
+  if (openPart) {
+    root.append(heading);
+    showing(() => {
+      ui.openPart = null;
+      resetExplorer();
+      app.rerender();
+      if (keyed(`typical-part-${openPart}`)) focusKey(`typical-part-${openPart}`);
+      else root.querySelector('h2')?.focus();
+    });
+    renderPartView(root, app, openPart, ui.range, back);
     return;
   }
   if (state.transactions.length === 0) {
@@ -102,7 +122,14 @@ export function render(root, app) {
       `${formatMonth(cmp.month)} has no complete statement for ${account.name}. Its spending that month isn't included.`));
   }
 
-  root.append(summaryList(tm, money, ui.ticked));
+  /** @param {PartName} part */
+  const onOpenPart = (part) => {
+    ui.openPart = part;
+    ui.openId = null;
+    app.rerender();
+    focusKey('explore-heading');
+  };
+  root.append(summaryList(tm, money, ui.ticked, onOpenPart));
 
   const { spending, income } = tm.uncategorised;
   if (spending !== 0 || income !== 0) {
@@ -115,6 +142,7 @@ export function render(root, app) {
   /** @param {string} id */
   const onOpen = (id) => {
     ui.openId = id;
+    ui.openPart = null;
     app.rerender();
     focusKey('category-heading');
   };
@@ -255,12 +283,13 @@ const UNACCOUNTED_NOTE = 'typical month vs actual months, and money in accounts 
  * @param {TypicalMonth} tm
  * @param {(minor: number) => string} money
  * @param {Set<string>} ticked
+ * @param {(part: PartName) => void} onOpenPart
  * @returns {HTMLElement}
  */
-function summaryList(tm, money, ticked) {
+function summaryList(tm, money, ticked, onOpenPart) {
   const t = tm.totals;
   const c = tm.compare?.totals;
-  /** @typedef {{label:string, typical:number|null, month:number|null, cls?:string, note?:string}} Line */
+  /** @typedef {{label:string, typical:number|null, month:number|null, cls?:string, note?:string, part?:PartName}} Line */
   /** @type {Line[]} */
   const lines = [{ label: 'Income', typical: t.income, month: c?.income ?? 0 },
     { label: 'Regular spending', typical: t.living, month: c?.living ?? 0 }];
@@ -270,9 +299,9 @@ function summaryList(tm, money, ticked) {
   }
   lines.push({ label: 'Remaining', typical: t.remaining, month: c?.remaining ?? 0, cls: 'rule' },
     { label: 'saved', typical: t.saved, month: c?.saved ?? null, cls: 'sub' },
-    { label: 'one-offs', typical: t.oneOffs, month: c?.oneOffs ?? null, cls: 'sub' },
-    { label: 'uncategorised', typical: t.uncategorised, month: c?.uncategorised ?? null, cls: 'sub' },
-    { label: 'ignored', typical: t.ignored, month: c?.ignored ?? null, cls: 'sub' },
+    { label: 'one-offs', part: 'oneOffs', typical: t.oneOffs, month: c?.oneOffs ?? null, cls: 'sub' },
+    { label: 'uncategorised', part: 'uncategorised', typical: t.uncategorised, month: c?.uncategorised ?? null, cls: 'sub' },
+    { label: 'ignored', part: 'ignored', typical: t.ignored, month: c?.ignored ?? null, cls: 'sub' },
     { label: 'not accounted for', typical: t.unaccounted, month: c?.unaccounted ?? 0, cls: 'sub', note: UNACCOUNTED_NOTE });
 
   const tickedRows = [...tm.spend, ...tm.income, ...tm.contribution, ...tm.saving].filter((r) => ticked.has(r.categoryId));
@@ -284,8 +313,15 @@ function summaryList(tm, money, ticked) {
   const none = () => [h('span', { 'aria-hidden': 'true' }, '—'), h('span', { class: 'visually-hidden' }, 'none')];
   /** @param {number|null} minor */
   const figure = (minor) => (minor === null ? none() : [money(minor)]);
+  /** @param {Line} line the label, a button when it opens a part */
+  const name = (line) => {
+    const { part } = line;
+    return part && line.typical !== null
+      ? h('button', { type: 'button', class: 'secondary name', 'data-focus-key': `typical-part-${part}`, onClick: () => onOpenPart(part) }, line.label)
+      : line.label;
+  };
   /** @param {Line} line the label, with its note on a line of its own */
-  const label = (line) => (line.note ? [line.label, h('span', { class: 'note' }, line.note)] : [line.label]);
+  const label = (line) => (line.note ? [name(line), h('span', { class: 'note' }, line.note)] : [name(line)]);
   const which = h('p', { class: 'ticked-which' },
     any ? tickedRows.map((r) => r.name).join(', ') : 'Tick categories below to add them up here.');
 
@@ -305,7 +341,7 @@ function summaryList(tm, money, ticked) {
       h('tbody', null,
         // A note goes in a row of its own across the table, as the label column is too narrow for it.
         ...lines.flatMap((line) => [h('tr', { class: line.cls },
-          h('th', { scope: 'row' }, line.label),
+          h('th', { scope: 'row' }, name(line)),
           h('td', { class: 'num' }, ...figure(line.typical)),
           h('td', { class: 'num' }, ...figure(line.month)),
           change(line.typical, line.month)),

@@ -74,6 +74,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - Typical month: choose the window's first and last month, and compare one month against it
 - Savings: a Saving category kind and a Savings account kind, shown as saved under Remaining on Typical month
 - Typical month's Remaining broken down into saved, one-offs, uncategorised, ignored and not accounted for
+- Open one-offs, uncategorised and ignored on Typical month to see the buckets and transactions behind them.
 - Plain JSON backup and restore
 - Delete loaded data, to start afresh
 - Clear categorisation: remove every decision about transactions, keeping accounts, categories and imported transactions
@@ -81,6 +82,7 @@ Known limits: this does not stop data leaving through navigation, and meta-tag C
 - A simple list of uncategorised items for later updates
 - Open any category from the Categories screen to see its month totals, buckets and transactions
 - Category suggestions for spending buckets, from a bundled list of merchant names (`src/merchants.js`). They are shown on the categorise card and the Buckets screen, and only applied when accepted.
+- A Category filter on Transactions and Buckets: by category, kind or budget type, and Uncategorised on Transactions.
 
 ### Out of scope for now
 

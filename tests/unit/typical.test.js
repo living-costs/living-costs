@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import tuning from '../../src/tuning.js';
 import { emptyState, applyToState } from '../../src/changes.js';
 import { addDays, monthRange } from '../../src/dates.js';
-import { typicalMonth, median, percentile, unusualFlags, categoryDetail, settleChoices } from '../../src/typical.js';
+import { divRound } from '../../src/money.js';
+import { typicalMonth, partContents, median, percentile, unusualFlags, categoryDetail, settleChoices } from '../../src/typical.js';
 
 const YEAR = monthRange('2025-11', '2026-10');
 
@@ -966,6 +967,118 @@ test('Remaining parts for a compared month use that month only, null when it has
     income: 250000, living: 90000, contributions: 0, share: 90000, remaining: 160000,
     saved: null, oneOffs: 30000, uncategorised: 900, ignored: null, unaccounted: 160000 - 30000 - 900,
   });
+});
+
+/** Each account's net out over its own month count, summed: the figure's own rule. */
+const reconcile = (/** @type {any} */ c, /** @type {(id:string)=>number} */ monthsOf) =>
+  c.accounts.reduce((sum, /** @type {any} */ a) => sum + divRound(-(a.cells.reduce((s, /** @type {any} */ x) => s + (x.total ?? 0), 0)), monthsOf(a.accountId)), 0);
+const idsOf = (/** @type {any} */ p) => [...p.contents.transactionIds].sort();
+
+test('partContents reconciles with totals for every part', () => {
+  const tm = /** @type {any} */ (typicalMonth(parts, tuning));
+  for (const part of /** @type {const} */ (['oneOffs', 'uncategorised', 'ignored'])) {
+    const p = /** @type {any} */ (partContents(parts, tuning, part));
+    assert.equal(p.figure, tm.totals[part]);
+    assert.equal(reconcile(p.contents, (id) => (id === 'B' ? 3 : 12)), tm.totals[part]);
+    assert.deepEqual(p.contents.months, tm.months);
+    assert.equal(p.currency, 'GBP');
+  }
+});
+
+test('partContents: ignored includes a Savings-account transaction in an Ignore category', () => {
+  const t = txn('S', '2026-05-05', -1500, 'junk');
+  const state = build({ ...savingsAccounts, categories: [cat('ign', 'ignore')], buckets: [bucket('junk', 'ign')], transactions: [t] });
+  const p = /** @type {any} */ (partContents(state, tuning, 'ignored'));
+  assert.deepEqual(idsOf(p), [t.id]);
+  assert.equal(p.contents.partMinor.get(t.id), -1500);
+  assert.deepEqual(p.contents.buckets.map((/** @type {any} */ b) => [b.bucketId, b.categoryId]), [['junk', 'ign']]);
+});
+
+test('partContents: one-offs excludes a Saving one-off part inside a Savings account', () => {
+  const inSavings = txn('S', '2026-05-05', 5000, 'pot');
+  const lump = txn('A', '2026-05-06', -7000, 'boiler');
+  const state = build({
+    ...savingsAccounts, categories: [cat('sv', 'saving', 'oneoff'), cat('big', 'spend', 'oneoff')],
+    buckets: [bucket('pot', 'sv'), bucket('boiler', 'big')], transactions: [inSavings, lump],
+  });
+  const p = /** @type {any} */ (partContents(state, tuning, 'oneOffs'));
+  assert.deepEqual(idsOf(p), [lump.id]);
+});
+
+test('partContents: a confirmed non-savings pair is in no part', () => {
+  const pr = pair('A', 'B', '2026-05-10', 4000);
+  const mystery = txn('A', '2026-05-11', -100, 'mystery');
+  const state = build({
+    accounts: [acct('A'), acct('B')], batches: [yearBatch('A'), yearBatch('B')],
+    buckets: [bucket('xfer'), bucket('mystery')], transactions: [...pr.txns, mystery], transferPairs: [pr.link],
+  });
+  for (const part of /** @type {const} */ (['oneOffs', 'uncategorised', 'ignored'])) {
+    const p = /** @type {any} */ (partContents(state, tuning, part));
+    assert.ok(!p || !p.contents.transactionIds.has(pr.out.id));
+    assert.ok(!p || !p.contents.transactionIds.has(pr.into.id));
+  }
+  assert.deepEqual(idsOf(partContents(state, tuning, 'uncategorised')), [mystery.id]);
+});
+
+test('partContents: a savings pair whose side is in a Saving One-off category is in one-offs', () => {
+  const pr = pair('A', 'S', '2026-05-10', 10000, 'tosav');
+  const state = build({
+    ...savingsAccounts, categories: [cat('sv', 'saving', 'oneoff')], buckets: [bucket('tosav', 'sv'), bucket('xfer')],
+    ...paired([pr]),
+  });
+  const p = /** @type {any} */ (partContents(state, tuning, 'oneOffs'));
+  assert.deepEqual(idsOf(p), [pr.out.id]);
+  assert.equal(p.contents.partMinor.get(pr.out.id), -10000);
+  assert.equal(p.figure, typicalMonth(state, tuning).totals.oneOffs);
+  assert.equal(p.contents.buckets[0].moved, 0);
+});
+
+test('partContents: a split with one Ignore part counts only that part, in partMinor', () => {
+  const t = txn('A', '2026-05-05', -10000, 'shop');
+  const state = build({
+    categories: [cat('groc', 'spend', 'variable'), cat('ign', 'ignore')], buckets: [bucket('shop', 'groc')], transactions: [t],
+    overrides: [{ fingerprint: t.fingerprint, splits: [{ amountMinor: -6000, categoryId: 'groc' }, { amountMinor: -4000, categoryId: 'ign' }] }],
+  });
+  const p = /** @type {any} */ (partContents(state, tuning, 'ignored'));
+  assert.deepEqual(idsOf(p), [t.id]);
+  assert.equal(p.contents.partMinor.get(t.id), -4000);
+  assert.equal(p.contents.out, 4000);
+  assert.equal(p.contents.buckets[0].moved, 1);
+});
+
+test('partContents: an override into an Ignore category counts and is moved', () => {
+  const t = txn('A', '2026-05-05', -2500, 'shop');
+  const state = build({
+    categories: [cat('groc', 'spend', 'variable'), cat('ign', 'ignore')], buckets: [bucket('shop', 'groc')], transactions: [t],
+    overrides: [{ fingerprint: t.fingerprint, categoryId: 'ign' }],
+  });
+  const p = /** @type {any} */ (partContents(state, tuning, 'ignored'));
+  assert.deepEqual(idsOf(p), [t.id]);
+  assert.equal(p.contents.buckets[0].moved, 1);
+});
+
+test("partContents: a transaction outside its account's counted months is left out, and that month's cell is null", () => {
+  const inside = txn('B', '2026-09-05', -1000, 'junk');
+  const outside = txn('B', '2026-06-05', -2000, 'junk');
+  const state = build({
+    accounts: [acct('A'), acct('B')], batches: [yearBatch('A'), batch('B', '2026-08-01', '2026-10-31')],
+    categories: [cat('ign', 'ignore')], buckets: [bucket('junk', 'ign')], transactions: [inside, outside],
+  });
+  const p = /** @type {any} */ (partContents(state, tuning, 'ignored'));
+  assert.deepEqual(idsOf(p), [inside.id]);
+  const cells = p.contents.accounts[0].cells;
+  assert.equal(cells.find((/** @type {any} */ c) => c.month === '2026-06').total, null);
+  assert.equal(cells.find((/** @type {any} */ c) => c.month === '2026-09').total, -1000);
+  assert.equal(cells.find((/** @type {any} */ c) => c.month === '2026-10').total, 0);
+});
+
+test('partContents: null for a part with no transactions, and for mixed currencies', () => {
+  assert.equal(partContents(build(everyday), tuning, 'ignored'), null);
+  const mixed = build({
+    accounts: [acct('A'), acct('U', 'bank', 'USD')], batches: [yearBatch('A'), yearBatch('U')],
+    buckets: [bucket('mystery')], transactions: [txn('A', '2026-05-05', -100, 'mystery'), txn('U', '2026-05-05', -100, 'mystery', 'USD')],
+  });
+  assert.equal(partContents(mixed, tuning, 'uncategorised'), null);
 });
 
 test('a part whose transactions net to 0 is 0, not null', () => {

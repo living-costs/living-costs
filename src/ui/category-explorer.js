@@ -19,16 +19,13 @@ import { monthGrid } from './month-grid.js';
 /** The focus key of a category's name button on the Categories table. @param {string} id */
 export const openKey = (id) => `category-open-${id}`;
 
-/** @param {string} categoryId */
-const listKey = (categoryId) => `explore:${categoryId}`;
-
 /**
- * View state that is not saved: the category shown, the month cell pressed, if any, and whether
- * the last draw had anything to show. It survives redraws; Back, browser back and leaving the
- * screen reset it.
- * @type {{categoryId: string, month: PressedMonth|null, shown: boolean}}
+ * View state that is not saved: the view shown (its id and list key), the month cell pressed, if
+ * any, and whether the last draw had anything to show. It survives redraws; Back, browser back
+ * and leaving the screen reset it.
+ * @type {{viewId: string, listKey: string, month: PressedMonth|null, shown: boolean}}
  */
-const view = { categoryId: '', month: null, shown: false };
+const view = { viewId: '', listKey: '', month: null, shown: false };
 
 /** Whether the element that last took focus was in the view. Set once the view first draws. */
 let focusInView = false;
@@ -43,10 +40,11 @@ function trackFocus() {
   });
 }
 
-/** Forget the pressed month and the open category's list filters. */
+/** Forget the pressed month and the shown view's list filters. */
 export function reset() {
-  if (view.categoryId) forgetListView(listKey(view.categoryId));
-  view.categoryId = '';
+  if (view.listKey) forgetListView(view.listKey);
+  view.viewId = '';
+  view.listKey = '';
   view.month = null;
   view.shown = false;
 }
@@ -57,7 +55,7 @@ export function reset() {
  * @param {(minor: number) => string} money
  * @returns {string}
  */
-function outAndIn(sums, money) {
+export function outAndIn(sums, money) {
   const sides = [];
   if (sums.out !== 0) sides.push(`${money(sums.out)} out`);
   if (sums.in !== 0) sides.push(`${money(sums.in)} in`);
@@ -90,28 +88,50 @@ export function summaryText(contents, category, money) {
  * @returns {void}
  */
 export function renderCategoryExplorer(screen, app, categoryId, onBack) {
-  trackFocus();
-  // Focus was in this category's view before the redraw that is now drawing it again.
-  const lostFrom = view.categoryId === categoryId && view.shown && focusInView;
-  if (view.categoryId !== categoryId) {
-    view.categoryId = categoryId;
-    view.month = null;
-    view.shown = false;
-  }
   const state = app.store.state;
   const category = state.categories.find((c) => c.id === categoryId);
   const contents = categoryContents(state, app.tuning, categoryId);
   const name = category?.name ?? 'Category';
+  renderExplorer(screen, app, {
+    viewId: categoryId, heading: name, backLabel: 'Back to Categories', onBack, contents,
+    summary: (money) => (contents && category ? summaryText(contents, category, money) : ''),
+    emptyText: `Nothing counts as ${name} now.`, listKey: `explore:${categoryId}`,
+    categoryName: name, categoryColumn: false,
+  });
+}
+
+/**
+ * What is in a category, or in a group of them: a heading with Back, a summary line, Each month,
+ * By bucket and Transactions.
+ * @param {HTMLElement} screen
+ * @param {App} app
+ * @param {{viewId: string, heading: string, backLabel: string, onBack: () => void,
+ *   contents: CategoryContents|null, summary: (money: (minor: number) => string) => string,
+ *   emptyText: string, listKey: string, categoryName: string, categoryColumn: boolean}} o
+ * @returns {void}
+ */
+export function renderExplorer(screen, app, o) {
+  trackFocus();
+  // Focus was in this view before the redraw that is now drawing it again.
+  const lostFrom = view.viewId === o.viewId && view.shown && focusInView;
+  if (view.viewId !== o.viewId) {
+    view.viewId = o.viewId;
+    view.month = null;
+    view.shown = false;
+  }
+  view.listKey = o.listKey;
+  const state = app.store.state;
+  const { contents, categoryName: name } = o;
   const root = h('div', { class: 'category-explorer' });
   screen.append(root);
   root.append(h('div', { class: 'view-heading' },
-    h('h3', { tabindex: '-1', 'data-focus-key': 'explore-heading' }, name),
-    h('button', { type: 'button', class: 'secondary', 'data-focus-key': 'explore-back', onClick: onBack }, 'Back to Categories')));
+    h('h3', { tabindex: '-1', 'data-focus-key': 'explore-heading' }, o.heading),
+    h('button', { type: 'button', class: 'secondary', 'data-focus-key': 'explore-back', onClick: o.onBack }, o.backLabel)));
 
   const emptied = view.shown;
-  view.shown = !!(contents && category);
-  if (!contents || !category) {
-    root.append(h('p', { tabindex: '-1', 'data-focus-key': 'explore-empty' }, `Nothing counts as ${name} now.`));
+  view.shown = !!contents;
+  if (!contents) {
+    root.append(h('p', { tabindex: '-1', 'data-focus-key': 'explore-empty' }, o.emptyText));
     // The view has just emptied, usually by an edit made in it. Once App.rerender has put focus
     // back, move focus that is still in the view (or was lost) to the line that says why.
     if (emptied) {
@@ -127,7 +147,7 @@ export function renderCategoryExplorer(screen, app, categoryId, onBack) {
   /** @param {number} minor */
   const money = (minor) => formatMoney(minor, currency ?? '');
   const accountNames = new Map(state.accounts.map((a) => [a.id, a.name]));
-  const key = listKey(categoryId);
+  const key = o.listKey;
 
   const pressed = view.month;
   if (pressed && !contents.accounts.some((a) => a.accountId === pressed.accountId
@@ -135,7 +155,7 @@ export function renderCategoryExplorer(screen, app, categoryId, onBack) {
   if (!currency) view.month = null;
 
   if (currency) {
-    root.append(h('p', { id: 'explore-summary' }, summaryText(contents, category, money)));
+    root.append(h('p', { id: 'explore-summary' }, o.summary(money)));
     const sums = new Map(contents.accounts.map((a) => [a.accountId, a]));
     root.append(h('section', { 'aria-labelledby': 'explore-each-month' },
       h('h4', { id: 'explore-each-month' }, 'Each month'),
@@ -151,7 +171,7 @@ export function renderCategoryExplorer(screen, app, categoryId, onBack) {
     root.append(h('p', { id: 'explore-summary' }, 'Totals need a single currency.'));
   }
 
-  root.append(bucketSection(app, contents, money, key));
+  root.append(bucketSection(app, contents, money, key, o.categoryColumn));
 
   const month = view.month;
   const txns = state.transactions.filter((t) => contents.transactionIds.has(t.id));
@@ -181,18 +201,20 @@ export function renderCategoryExplorer(screen, app, categoryId, onBack) {
  * @param {CategoryContents} contents
  * @param {(minor: number) => string} money
  * @param {string} key the list's view key
+ * @param {boolean} categoryColumn whether to show each row's category
  * @returns {HTMLElement}
  */
-function bucketSection(app, contents, money, key) {
+function bucketSection(app, contents, money, key, categoryColumn) {
   const chosen = listView(key).bucketId;
   const names = new Map(app.store.state.buckets.map((b) => [b.id, b.displayName]));
+  const categoryNames = new Map(app.store.state.categories.map((c) => [c.id, c.name]));
   const totals = contents.currency !== null;
   /** @param {ContentsBucket} b */
   const bucketRow = (b) => h('tr', null,
     h('th', { scope: 'row' },
       h('button', {
         type: 'button', class: 'secondary name', 'aria-pressed': String(chosen === b.bucketId),
-        'data-focus-key': `explore-bucket-${b.bucketId}`,
+        'data-focus-key': `explore-bucket-${b.bucketId}${b.categoryId === null ? '' : `-${b.categoryId}`}`,
         onClick: () => {
           const v = listView(key);
           v.bucketId = v.bucketId === b.bucketId ? '' : b.bucketId;
@@ -200,6 +222,7 @@ function bucketSection(app, contents, money, key) {
         },
       }, names.get(b.bucketId) ?? b.bucketId),
       b.moved > 0 ? h('span', { class: 'muted' }, ` (${b.moved} moved here)`) : null),
+    categoryColumn ? h('td', null, b.categoryId === null ? '' : categoryNames.get(b.categoryId) ?? b.categoryId) : null,
     h('td', { class: 'num' }, String(b.count)),
     totals ? h('td', { class: 'num' }, money(b.total)) : null,
     h('td', null, formatDate(b.latestDate)));
@@ -209,6 +232,6 @@ function bucketSection(app, contents, money, key) {
     h('div', { class: 'scroll', tabindex: '0', role: 'region', 'aria-labelledby': 'explore-by-bucket' },
       h('table', { class: 'buckets', 'aria-labelledby': 'explore-by-bucket' },
         h('thead', null, h('tr', null,
-          col('Bucket'), col('Transactions', true), totals ? col('Total', true) : null, col('Last'))),
+          col('Bucket'), categoryColumn ? col('Category') : null, col('Transactions', true), totals ? col('Total', true) : null, col('Last'))),
         h('tbody', null, ...contents.buckets.map(bucketRow)))));
 }

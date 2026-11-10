@@ -4,12 +4,14 @@
 /** @import {State, Account, Transaction, BudgetType, Category} from './types.js' */
 /** @import {ResolveContext} from './resolve.js' */
 /** @import {Window, MonthRange} from './coverage.js' */
+/** @import {ContentsEntry, CategoryContents} from './explore.js' */
 import { analysisWindow, completeMonths, coveringAccounts, staleAccounts } from './coverage.js';
 import { buildContext, resolve } from './resolve.js';
 import { divRound, currenciesOf } from './money.js';
 import { cmp, compareNames } from './order.js';
 import { monthOf } from './dates.js';
 import { savingsContext, accountRowId, ACCOUNT_ROW_PREFIX } from './savings.js';
+import { summariseContents } from './explore.js';
 
 /**
  * Figures are positive in the category's natural direction: money out for spend and saving, money
@@ -72,13 +74,14 @@ import { savingsContext, accountRowId, ACCOUNT_ROW_PREFIX } from './savings.js';
 /** @typedef {{count:number,latestDate:string,latest:number,opposite:number}} BucketCharges */
 /** @typedef {{months:Map<string,number>,total:number,buckets:Map<string,BucketCharges>}} AccountSums */
 /** Each Remaining part's money out, by account. @typedef {Record<keyof Parts, Map<string, number>>} PartSums */
+/** @typedef {keyof Parts} PartName */
 /** @typedef {{byAccount:Map<string,AccountSums>,partMinor:Map<string,number>}} CategorySums */
 /**
  * rowCategories: ctx.categories plus one synthetic Variable saving category per savings-account
  * row seen, keyed accountRowId(account id) and named after the account.
  * @typedef {{ctx:ResolveContext,monthsOf:(accountId:string)=>Set<string>,rowCategories:Map<string,Category>,
  *   sums:Map<string,CategorySums>,oneOffs:OneOff[],uncategorised:{spending:number,income:number},
- *   out:PartSums}} Collected
+ *   out:PartSums,entries:Record<PartName, ContentsEntry[]>}} Collected
  */
 
 /**
@@ -185,6 +188,8 @@ function collect(state, window) {
   const out = { oneOffs: new Map(), uncategorised: new Map(), ignored: new Map() };
   /** @param {keyof Parts} part @param {string} accountId @param {number} amount money out */
   const addOut = (part, accountId, amount) => out[part].set(accountId, (out[part].get(accountId) ?? 0) + amount);
+  /** Each part's transactions, netted per category, recorded beside the addOut calls. @type {Record<PartName, ContentsEntry[]>} */
+  const entries = { oneOffs: [], uncategorised: [], ignored: [] };
 
   for (const t of state.transactions) {
     const month = monthOf(t.date);
@@ -204,15 +209,26 @@ function collect(state, window) {
     }
     /** @type {Map<string, {natural:number,signed:number}>} this transaction's net per category */
     const net = new Map();
+    /** @type {Map<string, number>} this transaction's net per Ignore category */
+    const ignoredNet = new Map();
+    let uncategorisedNet = 0;
+    let isUncategorised = false;
+    const viaChoice = res.source === 'override' || res.source === 'split';
+    const bucketCategory = rowCategories.get(ctx.buckets.get(t.bucketId)?.categoryId ?? '');
     for (const part of parts) {
       const category = part.categoryId ? rowCategories.get(part.categoryId) : undefined;
       if (!category) {
         if (part.amountMinor < 0) uncategorised.spending -= part.amountMinor;
         else uncategorised.income += part.amountMinor;
         addOut('uncategorised', t.accountId, -part.amountMinor);
+        uncategorisedNet += part.amountMinor;
+        isUncategorised = true;
         continue;
       }
-      if (category.kind === 'ignore') addOut('ignored', t.accountId, -part.amountMinor);
+      if (category.kind === 'ignore') {
+        addOut('ignored', t.accountId, -part.amountMinor);
+        ignoredNet.set(category.id, (ignoredNet.get(category.id) ?? 0) + part.amountMinor);
+      }
       if (!counted(category)) continue;
       // Inside a Savings account only confirmed pairs count as saving, so a deposit isn't counted twice.
       if (category.kind === 'saving' && savingsAccounts.has(t.accountId)) continue;
@@ -220,10 +236,16 @@ function collect(state, window) {
       const prev = net.get(category.id) ?? { natural: 0, signed: 0 };
       net.set(category.id, { natural: prev.natural + natural, signed: prev.signed + part.amountMinor });
     }
+    if (isUncategorised) entries.uncategorised.push({ t, categoryId: null, amount: uncategorisedNet, moved: false });
+    for (const [categoryId, amount] of ignoredNet) {
+      entries.ignored.push({ t, categoryId, amount, moved: viaChoice && bucketCategory?.kind !== 'ignore' });
+    }
     for (const [categoryId, { natural: amount, signed }] of net) {
       if (rowCategories.get(categoryId)?.budgetType === 'oneoff') {
         oneOffs.push({ txn: t, categoryId, amountMinor: amount });
         addOut('oneOffs', t.accountId, -signed);
+        const inOneOffs = bucketCategory !== undefined && counted(bucketCategory) && bucketCategory.budgetType === 'oneoff';
+        entries.oneOffs.push({ t, categoryId, amount: signed, moved: viaChoice && !inOneOffs });
         continue;
       }
       let c = sums.get(categoryId);
@@ -246,7 +268,7 @@ function collect(state, window) {
       }
     }
   }
-  return { ctx, monthsOf, rowCategories, sums, oneOffs, uncategorised, out };
+  return { ctx, monthsOf, rowCategories, sums, oneOffs, uncategorised, out, entries };
 }
 
 /**
@@ -493,4 +515,31 @@ export function categoryDetail(state, tuning, categoryId, range = null) {
     row, currency, months: window.months, accounts, buckets: lines,
     transactionIds: new Set(c.partMinor.keys()), partMinor: c.partMinor,
   };
+}
+
+/**
+ * The transactions behind one of Remaining's parts, from the same pass that makes its figure, with
+ * that figure. Null when currencies are mixed or nothing is in the part.
+ * @param {State} state
+ * @param {TypicalTuning} tuning
+ * @param {PartName} part
+ * @param {MonthRange|null} [range] the chosen window, as given to typicalMonth
+ * @returns {{contents:CategoryContents, figure:number, currency:string}|null}
+ */
+export function partContents(state, tuning, part, range = null) {
+  const currencies = currenciesOf(state.transactions);
+  if (currencies.length > 1) return null;
+  const currency = currencies[0] ?? state.accounts[0]?.currency ?? 'GBP';
+
+  const window = analysisWindow(state, tuning, range);
+  const { monthsOf, out, entries } = collect(state, window);
+  const figure = partsOf(out, monthsOf)[part];
+  const contents = summariseContents(state, entries[part], {
+    months: window.months,
+    byCategory: part !== 'uncategorised',
+    cell: (accountId, month, total) => (monthsOf(accountId).has(month)
+      ? { month, total: total ?? 0, partial: false } : { month, total: null, partial: false }),
+  });
+  if (!contents || figure === null) return null;
+  return { contents, figure, currency };
 }

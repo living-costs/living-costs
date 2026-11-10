@@ -23,6 +23,8 @@ import { field, focusKey, help, plural, valueOf, showModalWhenConnected } from '
 import { bucketSuggestions } from '../suggest.js';
 import { renderTransactionList } from './transactions.js';
 import { showing, back } from './subview.js';
+import { categoryMatcher, isValidFilter } from '../category-filter.js';
+import { categoryFilterField } from './category-filter.js';
 
 /** @typedef {'total'|'name'|'count'} SortKey */
 /** @typedef {'ascending'|'descending'} SortDir */
@@ -52,6 +54,8 @@ const ui = {
   query: '',
   /** @type {Show} A suggestion exists only while a bucket is uncategorised, so each narrows the last. */
   show: 'all',
+  /** The Category filter's value, as in category-filter.js. It matches the bucket's own category. */
+  category: '',
   /** @type {SortKey} */
   sortKey: 'total',
   /** @type {SortDir} */
@@ -102,6 +106,7 @@ export function render(root, app) {
     return;
   }
 
+  if (!isValidFilter(state, ui.category)) ui.category = '';
   const rows = bucketRows(app);
   const cats = sortedCategories(state);
   const { months } = analysisWindow(state, app.tuning);
@@ -121,7 +126,11 @@ export function render(root, app) {
         type: 'search', class: 'search', value: ui.query, autocomplete: 'off', 'data-focus-key': 'buckets-search',
         onInput: (/** @type {Event} */ e) => { ui.query = valueOf(e); update(); },
       }), { hint: 'Matches the name or any of its texts.' }),
-      showFilter(app, suggestions.size)),
+      showFilter(app, suggestions.size),
+      categoryFilterField(state, {
+        value: ui.category, uncategorised: false, focusKey: 'buckets-category',
+        onChange: (value) => { ui.category = value; app.rerender(); },
+      })),
     mergeBar(app),
     results);
   update();
@@ -223,13 +232,14 @@ function shownRows(app, rows, suggestions) {
     total: (a, b) => Math.abs(a.sum) - Math.abs(b.sum),
     count: (a, b) => a.count - b.count,
   };
+  const inCategory = categoryMatcher(app.store.state, ui.category);
   const sign = ui.sortDir === 'ascending' ? 1 : -1;
   /** @type {(a: Row, b: Row) => number} */
   const order = (a, b) => (ui.sortKey === 'total' && (a.mixed || b.mixed)
     ? Number(a.mixed) - Number(b.mixed)
     : sign * compare[ui.sortKey](a, b));
   return rows
-    .filter((r) => matches(r.bucket)
+    .filter((r) => matches(r.bucket) && inCategory(r.bucket.categoryId)
       && !(ui.show === 'uncategorised' && isCategorised(app, r.bucket))
       && !(ui.show === 'suggested' && !suggestions.has(r.bucket.id)))
     .sort((a, b) => order(a, b) || byName(a, b));
@@ -284,6 +294,19 @@ function drawList(app, results, rows, cats, suggestions) {
 }
 
 /**
+ * Whether giving a bucket this category hides its row. Under Uncategorised or Suggested, any
+ * category hides it, since only uncategorised buckets have a suggestion. The Category filter
+ * hides it when the category does not match.
+ * @param {App} app
+ * @param {string} value a category id, or '' for none
+ * @returns {boolean}
+ */
+function hides(app, value) {
+  return (ui.show !== 'all' && value !== '')
+    || !categoryMatcher(app.store.state, ui.category)(value || undefined);
+}
+
+/**
  * @param {App} app
  * @param {Row} r
  * @param {Category[]} cats
@@ -297,9 +320,8 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
   const current = cats.some((c) => c.id === b.categoryId) ? b.categoryId : '';
   /** @param {string} value a category id, or '' for none */
   const choose = (value) => {
-    // A row that the filter will hide hands focus to its neighbour before the redraw. Under
-    // Suggested, any category hides it, since only uncategorised buckets have a suggestion.
-    if (ui.show !== 'all' && value !== '') {
+    // A row that the filter will hide hands focus to its neighbour before the redraw.
+    if (hides(app, value)) {
       const next = shown[i + 1] ?? shown[i - 1];
       if (next) focusKey(categoryKey(next.bucket.id));
     }
@@ -344,7 +366,7 @@ function bucketRow(app, r, cats, shown, i, suggestions) {
       'data-focus-key': `bucket-accept-${b.id}`, 'data-saves': true,
       onClick: () => {
         // The row's own select keeps focus when it stays; with the filter on, choose() hands it on.
-        if (ui.show === 'all') focusKey(categoryKey(b.id));
+        if (!hides(app, suggestion.id)) focusKey(categoryKey(b.id));
         choose(suggestion.id);
       },
     }, 'Accept'))] : [])),

@@ -22,7 +22,8 @@ import { cmp, compareNames } from './order.js';
 /**
  * count: transactions with a part here. total: their signed net. latestDate: ISO date of the latest.
  * moved: how many are here through an override or split while the bucket's own category is another.
- * @typedef {{bucketId:string,count:number,total:number,latestDate:string,moved:number}} ContentsBucket
+ * categoryId: the category of the row when rows are split by category, else null.
+ * @typedef {{bucketId:string,categoryId:string|null,count:number,total:number,latestDate:string,moved:number}} ContentsBucket
  */
 /**
  * currency: null when the category's transactions use more than one. from and to: YYYY-MM of the
@@ -31,6 +32,12 @@ import { cmp, compareNames } from './order.js';
  * its parts here (every id in transactionIds has an entry).
  * @typedef {{currency:string|null,count:number,out:number,in:number,from:string,to:string,months:string[],
  *   accounts:ContentsAccount[],buckets:ContentsBucket[],transactionIds:Set<string>,partMinor:Map<string,number>}} CategoryContents
+ */
+
+/**
+ * One transaction's signed net in one category (null: none), and whether it is here by override or
+ * split while its bucket's own category is outside the group.
+ * @typedef {{t:Transaction,categoryId:string|null,amount:number,moved:boolean}} ContentsEntry
  */
 
 /**
@@ -64,36 +71,39 @@ export function openableCategoryIds(state) {
 }
 
 /**
- * What is in one category, or null when nothing counts as it.
+ * Summarises entries: totals by account and month, and rows by bucket (and by category when
+ * byCategory). Null when there are no entries.
  * @param {State} state
- * @param {{coverageGapDays:number}} tuning
- * @param {string} categoryId
+ * @param {ContentsEntry[]} entries
+ * @param {{months:string[],cell:(accountId:string,month:string,total:number|undefined)=>ContentsCell,byCategory:boolean}} opts
  * @returns {CategoryContents|null}
  */
-export function categoryContents(state, tuning, categoryId) {
-  /** @type {{t: Transaction, amount: number, source: string}[]} */
-  const found = [];
-  eachPart(state, (t, id, amount, source) => { if (id === categoryId) found.push({ t, amount, source }); });
-  if (found.length === 0) return null;
+export function summariseContents(state, entries, opts) {
+  if (entries.length === 0) return null;
 
-  const bucketCategory = new Map(state.buckets.map((b) => [b.id, b.categoryId]));
   const bucketName = new Map(state.buckets.map((b) => [b.id, b.displayName]));
+  const categoryName = new Map(state.categories.map((c) => [c.id, c.name]));
   /** @type {Map<string, {out:number,in:number,months:Map<string,number>}>} */
   const byAccount = new Map();
   /** @type {Map<string, ContentsBucket>} */
   const byBucket = new Map();
+  /** @type {Map<string, {all:Set<string>,moved:Set<string>}>} */
+  const rowIds = new Map();
   /** @type {Map<string, number>} */
   const partMinor = new Map();
+  /** @type {Map<string, Transaction>} */
+  const distinct = new Map();
   let out = 0;
   let inn = 0;
   let from = '9999-12';
   let to = '0000-01';
 
-  for (const { t, amount, source } of found) {
+  for (const { t, categoryId, amount, moved } of entries) {
     const month = monthOf(t.date);
     if (month < from) from = month;
     if (month > to) to = month;
-    partMinor.set(t.id, amount);
+    distinct.set(t.id, t);
+    partMinor.set(t.id, (partMinor.get(t.id) ?? 0) + amount);
     if (amount < 0) out -= amount; else inn += amount;
 
     let a = byAccount.get(t.accountId);
@@ -101,41 +111,79 @@ export function categoryContents(state, tuning, categoryId) {
     if (amount < 0) a.out -= amount; else a.in += amount;
     a.months.set(month, (a.months.get(month) ?? 0) + amount);
 
-    let b = byBucket.get(t.bucketId);
-    if (!b) byBucket.set(t.bucketId, b = { bucketId: t.bucketId, count: 0, total: 0, latestDate: '', moved: 0 });
-    b.count += 1;
+    const rowCategory = opts.byCategory ? categoryId : null;
+    const key = `${t.bucketId}\n${rowCategory ?? ''}`;
+    let b = byBucket.get(key);
+    if (!b) byBucket.set(key, b = { bucketId: t.bucketId, categoryId: rowCategory, count: 0, total: 0, latestDate: '', moved: 0 });
+    let ids = rowIds.get(key);
+    if (!ids) rowIds.set(key, ids = { all: new Set(), moved: new Set() });
+    ids.all.add(t.id);
+    if (moved) ids.moved.add(t.id);
+    b.count = ids.all.size;
+    b.moved = ids.moved.size;
     b.total += amount;
     if (t.date > b.latestDate) b.latestDate = t.date;
-    if ((source === 'override' || source === 'split') && bucketCategory.get(t.bucketId) !== categoryId) b.moved += 1;
   }
 
+  /** @type {ContentsAccount[]} */
+  const accounts = [];
+  for (const account of state.accounts) {
+    const a = byAccount.get(account.id);
+    if (!a) continue;
+    accounts.push({ accountId: account.id, out: a.out, in: a.in, cells: opts.months.map((month) => opts.cell(account.id, month, a.months.get(month))) });
+  }
+
+  const buckets = [...byBucket.values()].sort((x, y) => Math.abs(y.total) - Math.abs(x.total)
+    || compareNames(bucketName.get(x.bucketId) ?? '', bucketName.get(y.bucketId) ?? '') || cmp(x.bucketId, y.bucketId)
+    || compareNames(categoryName.get(x.categoryId ?? '') ?? '', categoryName.get(y.categoryId ?? '') ?? '') || cmp(x.categoryId ?? '', y.categoryId ?? ''));
+
+  return {
+    currency: soleCurrency([...distinct.values()]),
+    count: distinct.size, out, in: inn, from, to, months: opts.months, accounts, buckets,
+    transactionIds: new Set(partMinor.keys()), partMinor,
+  };
+}
+
+/**
+ * What is in one category, or null when nothing counts as it.
+ * @param {State} state
+ * @param {{coverageGapDays:number}} tuning
+ * @param {string} categoryId
+ * @returns {CategoryContents|null}
+ */
+export function categoryContents(state, tuning, categoryId) {
+  const bucketCategory = new Map(state.buckets.map((b) => [b.id, b.categoryId]));
+  /** @type {ContentsEntry[]} */
+  const entries = [];
+  eachPart(state, (t, id, amount, source) => {
+    if (id !== categoryId) return;
+    const moved = (source === 'override' || source === 'split') && bucketCategory.get(t.bucketId) !== categoryId;
+    entries.push({ t, categoryId: id, amount, moved });
+  });
+  if (entries.length === 0) return null;
+
+  let from = '9999-12';
+  let to = '0000-01';
+  for (const { t } of entries) {
+    const month = monthOf(t.date);
+    if (month < from) from = month;
+    if (month > to) to = month;
+  }
   const span = accountsByMonth(state, tuning).months;
   const first = span.length > 0 && span[0] < from ? span[0] : from;
   const last = span.length > 0 && span[span.length - 1] > to ? span[span.length - 1] : to;
   const months = monthRange(first, last);
 
   const ivs = intervalsByAccount(state, tuning);
-  /** @type {ContentsAccount[]} */
-  const accounts = [];
-  for (const account of state.accounts) {
-    const a = byAccount.get(account.id);
-    if (!a) continue;
-    const cells = months.map((month) => {
-      const status = account.kind === 'placeholder' ? 'missing' : accountMonthStatus(ivs.get(account.id) ?? [], month);
-      const total = a.months.get(month);
+  const kinds = new Map(state.accounts.map((a) => [a.id, a.kind]));
+  return summariseContents(state, entries, {
+    months,
+    byCategory: false,
+    cell: (accountId, month, total) => {
+      const status = kinds.get(accountId) === 'placeholder' ? 'missing' : accountMonthStatus(ivs.get(accountId) ?? [], month);
       if (status === 'covered') return { month, total: total ?? 0, partial: false };
       if (status === 'partial') return { month, total: total ?? 0, partial: true };
       return total === undefined ? { month, total: null, partial: false } : { month, total, partial: true };
-    });
-    accounts.push({ accountId: account.id, out: a.out, in: a.in, cells });
-  }
-
-  const buckets = [...byBucket.values()].sort((x, y) => Math.abs(y.total) - Math.abs(x.total)
-    || compareNames(bucketName.get(x.bucketId) ?? '', bucketName.get(y.bucketId) ?? '') || cmp(x.bucketId, y.bucketId));
-
-  return {
-    currency: soleCurrency(found.map((f) => f.t)),
-    count: found.length, out, in: inn, from, to, months, accounts, buckets,
-    transactionIds: new Set(partMinor.keys()), partMinor,
-  };
+    },
+  });
 }

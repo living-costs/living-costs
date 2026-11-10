@@ -72,9 +72,12 @@ function parseUnsigned(text, exp) {
  * @param {ResolveContext} ctx
  * @param {Category[]} cats in name order
  * @param {string} prefix the list's prefix for ids and focus keys
+ * @param {(categoryId: string|undefined) => void} [before] called before a change is saved, with the
+ *   category the transaction will count as (undefined for none), so a list can move focus off a row
+ *   the change will remove
  * @returns {HTMLElement}
  */
-export function countsAsCell(app, t, ctx, cats, prefix) {
+export function countsAsCell(app, t, ctx, cats, prefix, before) {
   const r = resolve(t, ctx);
   const sourceId = `${prefix}-source-${t.id}`;
   const sourceEl = h('span', { class: 'source muted', id: sourceId }, SOURCE_TEXT[r.source]);
@@ -87,7 +90,11 @@ export function countsAsCell(app, t, ctx, cats, prefix) {
   const select = h('select', {
     'aria-label': `Counts as for ${t.rawText} on ${formatDate(t.date)}`,
     'aria-describedby': sourceId, 'data-focus-key': selectKey(prefix, t),
-    onChange: (/** @type {Event} */ e) => choose(app, t, valueOf(e), prefix),
+    onChange: (/** @type {Event} */ e) => {
+      const value = valueOf(e);
+      if (before && value !== SPLIT) before(value === BUCKET ? bucketCategoryId : value);
+      choose(app, t, value, prefix);
+    },
   },
   ...cats.map((c) => h('option', { value: c.id, selected: c.id === selected }, c.name)),
   h('option', { value: BUCKET, selected: selected === BUCKET }, `Use bucket's category (${bucketCategory?.name ?? 'none'})`),
