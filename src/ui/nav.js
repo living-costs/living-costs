@@ -18,14 +18,14 @@ export const NAV_GROUPS = [
     { name: 'typical', label: 'Typical month' },
     { name: 'categorise', label: 'Categorise' },
   ] },
-  { id: 'review', label: 'Review', screens: [
+  { id: 'explore', label: 'Explore', screens: [
     { name: 'buckets', label: 'Buckets' },
     { name: 'transactions', label: 'Transactions' },
     { name: 'transfers', label: 'Transfers' },
+    { name: 'categories', label: 'Categories' },
   ] },
   { id: 'setup', label: 'Set up', screens: [
     { name: 'accounts', label: 'Accounts' },
-    { name: 'categories', label: 'Categories' },
     { name: 'backup', label: 'Backup' },
   ] },
 ];

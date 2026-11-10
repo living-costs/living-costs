@@ -51,7 +51,7 @@ Two threats drive the stack: a **compromised package**, and **keeping users' tru
   - The owner tries the app at `http://localhost` using the same dev static server Playwright uses.
 - **Look and accessibility follow Mortgage Split** (`~/git/shared-amortization-calculator`, https://mortgage-split.org/):
   - Style: system font stack, `#0b3d91` accent, white cards on a `#f4f4f2` page, and its colour tokens.
-  - Interaction: 3px focus outlines, 32px minimum targets (WCAG 2.2 AA asks for 24px; owner's decision, as all users are on macOS with a mouse), and reflow at 320px without horizontal scroll. One exception (owner's decision): the six small nav buttons in the Review and Set up groups are at least 24px, the WCAG 2.2 AA minimum.
+  - Interaction: 3px focus outlines, 32px minimum targets (WCAG 2.2 AA asks for 24px; owner's decision, as all users are on macOS with a mouse), and reflow at 320px without horizontal scroll. One exception (owner's decision): the six small nav buttons in the Explore and Set up groups are at least 24px, the WCAG 2.2 AA minimum.
   - Tests: axe against the WCAG 2.x A and AA tags, run on every screen and state the e2e tests reach.
   - Charts: decorative bars are `aria-hidden`, and the table is the data.
 - **Single-key shortcuts**, such as the category number keys, are active only while focus is inside the categorise card. This meets WCAG 2.1.4.
@@ -374,7 +374,7 @@ As in `CLAUDE.md`, with these additions:
 
 ## Screens
 
-There's a simple top navigation (owner's design). The three main screens, Help, Typical month and Categorise, are full-size tabs along the bottom of the header. The other six are smaller buttons in two labelled groups on the title row: **Review** (Buckets, Transactions, Transfers) and **Set up** (Accounts, Categories, Backup). The group names are Claude's call. Only the current screen is highlighted. While transfer suggestions remain, the Transfers button is yellow and shows their count, read as "Transfers, 3 suggestions". The Categorise tab shows the categorised percent from the Categorise screen, as "Categorise (at 56%)". It's hidden whenever that screen hides it. Both are refreshed on every redraw.
+There's a simple top navigation (owner's design). The three main screens, Help, Typical month and Categorise, are full-size tabs along the bottom of the header. The other six are smaller buttons in two labelled groups on the title row: **Explore** (Buckets, Transactions, Transfers, Categories) and **Set up** (Accounts, Backup). The owner chose the Explore name and moved Categories into it. Only the current screen is highlighted. While transfer suggestions remain, the Transfers button is yellow and shows their count, read as "Transfers, 3 suggestions". The Categorise tab shows the categorised percent from the Categorise screen, as "Categorise (at 56%)". It's hidden whenever that screen hides it. Both are refreshed on every redraw.
 
 
 - **Help:** the first panel (owner's request). It's a short, plain page covering:

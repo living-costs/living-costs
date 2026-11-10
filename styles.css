@@ -113,6 +113,10 @@ nav button:focus-visible { z-index: 2; }
 .nav-row button + button { border-left: 0; }
 .nav-row button:first-child { border-radius: 6px 0 0 6px; }
 .nav-row button:last-child { border-radius: 0 6px 6px 0; }
+/* A narrow window: less padding, so the four-button Explore row fits a 320px screen. */
+@media (max-width: 30rem) {
+  .nav-row button { padding-inline: 0.35rem; }
+}
 .nav-row button:hover { background: var(--intro-bg); }
 .nav-row button.attention { background: var(--attention-bg); color: var(--attention-text); }
 .nav-row button[aria-current="page"], .nav-row button[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); font-weight: bold; }

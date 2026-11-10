@@ -3,7 +3,7 @@ import { expectNoAxeViolations, trackCspViolations } from './helpers.js';
 
 const NAV_NAMES = [
   'Help', 'Typical month', 'Categorise', 'Buckets', 'Transactions',
-  'Transfers', 'Accounts', 'Categories', 'Backup',
+  'Transfers', 'Categories', 'Accounts', 'Backup',
 ];
 
 /** @param {import('@playwright/test').Page} page */
@@ -50,9 +50,9 @@ test('nav has every screen', async ({ page }) => {
   await expect(nav(page).getByRole('button')).toHaveText([...NAV_NAMES, 'Auto', 'Light', 'Dark']);
   // With nothing imported, no button carries a count or a percent.
   for (const [i, name] of NAV_NAMES.entries()) await expect(nav(page).getByRole('button').nth(i)).toHaveAccessibleName(name);
-  await expect(nav(page).getByRole('group', { name: 'Review' }).getByRole('button')).toHaveText(['Buckets', 'Transactions', 'Transfers']);
+  await expect(nav(page).getByRole('group', { name: 'Explore' }).getByRole('button')).toHaveText(['Buckets', 'Transactions', 'Transfers', 'Categories']);
   await expect(nav(page).getByRole('group', { name: 'Theme' }).getByRole('button')).toHaveText(['Auto', 'Light', 'Dark']);
-  await expect(nav(page).getByRole('group', { name: 'Set up' }).getByRole('button')).toHaveText(['Accounts', 'Categories', 'Backup']);
+  await expect(nav(page).getByRole('group', { name: 'Set up' }).getByRole('button')).toHaveText(['Accounts', 'Backup']);
   // Start away from Help so every click, Help included, is a real navigation.
   for (const name of [...NAV_NAMES.slice(1), 'Help']) {
     const button = nav(page).getByRole('button', { name, exact: true });
