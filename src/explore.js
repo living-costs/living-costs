@@ -87,6 +87,8 @@ export function summariseContents(state, entries, opts) {
   const byAccount = new Map();
   /** @type {Map<string, ContentsBucket>} */
   const byBucket = new Map();
+  /** @type {Map<string, {all:Set<string>,moved:Set<string>}>} */
+  const rowIds = new Map();
   /** @type {Map<string, number>} */
   const partMinor = new Map();
   /** @type {Map<string, Transaction>} */
@@ -113,10 +115,14 @@ export function summariseContents(state, entries, opts) {
     const key = `${t.bucketId}\n${rowCategory ?? ''}`;
     let b = byBucket.get(key);
     if (!b) byBucket.set(key, b = { bucketId: t.bucketId, categoryId: rowCategory, count: 0, total: 0, latestDate: '', moved: 0 });
-    b.count += 1;
+    let ids = rowIds.get(key);
+    if (!ids) rowIds.set(key, ids = { all: new Set(), moved: new Set() });
+    ids.all.add(t.id);
+    if (moved) ids.moved.add(t.id);
+    b.count = ids.all.size;
+    b.moved = ids.moved.size;
     b.total += amount;
     if (t.date > b.latestDate) b.latestDate = t.date;
-    if (moved) b.moved += 1;
   }
 
   /** @type {ContentsAccount[]} */

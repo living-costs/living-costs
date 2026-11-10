@@ -173,7 +173,7 @@ test('summariseContents: one row per bucket and category when byCategory', () =>
 test('summariseContents: rows merge across categories when not byCategory, and no entries is null', () => {
   const { s, entries, opts } = summarised(false);
   const c = /** @type {any} */ (summariseContents(s, entries, opts));
-  assert.deepEqual(c.buckets.map((/** @type {any} */ b) => [b.categoryId, b.count, b.total, b.moved]), [[null, 3, -1500, 1]]);
+  assert.deepEqual(c.buckets.map((/** @type {any} */ b) => [b.categoryId, b.count, b.total, b.moved]), [[null, 2, -1500, 1]]);
   assert.equal(c.count, 2);
   assert.equal(summariseContents(s, [], opts), null);
 });
@@ -182,4 +182,10 @@ test('categoryContents bucket rows carry categoryId null', () => {
   const c = contents(categoryContents(S, tuning, 'work'));
   assert.ok(c.buckets.length > 0);
   assert.ok(c.buckets.every((/** @type {any} */ b) => b.categoryId === null));
+});
+
+test('summariseContents: a transaction in two categories is one in a merged row', () => {
+  const { s, entries, opts } = summarised(false);
+  const c = /** @type {any} */ (summariseContents(s, entries.slice(0, 2), opts));
+  assert.deepEqual(c.buckets.map((/** @type {any} */ b) => [b.count, b.total, b.moved]), [[1, -1000, 1]]);
 });
